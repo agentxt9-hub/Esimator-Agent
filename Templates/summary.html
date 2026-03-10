@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Summary — {{ project.project_name }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
+        .container { max-width: 1100px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
+        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
+        .breadcrumb a { color: #e94560; text-decoration: none; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
+        h1 { color: #e94560; margin-bottom: 5px; }
+        h2 { color: #eee; font-size: 16px; margin: 25px 0 12px; }
+        .project-meta { color: #888; font-size: 14px; }
+        .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #c73652; }
+        .btn-secondary { background: #0f3460; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-group { display: flex; gap: 10px; }
+
+        /* Top summary cards */
+        .totals-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+        .total-card { background: #0f3460; padding: 20px; border-radius: 8px; text-align: center; }
+        .total-card h3 { color: #e94560; font-size: 22px; margin-bottom: 6px; }
+        .total-card p { color: #888; font-size: 12px; }
+
+        /* Hours stats */
+        .hours-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 30px; }
+        .hours-card { background: #0d1b2a; border: 1px solid #0f3460; padding: 15px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .hours-card .label { color: #888; font-size: 13px; }
+        .hours-card .value { color: #eee; font-size: 20px; font-weight: bold; }
+
+        /* Assembly breakdown table */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        table th { background: #0f3460; padding: 10px 12px; text-align: left; color: #aaa; font-weight: bold; }
+        table td { padding: 10px 12px; border-bottom: 1px solid #1a2a3a; color: #ccc; }
+        table tr:hover td { background: #1a2a3a; }
+        .assembly-label { background: #e94560; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; margin-right: 6px; }
+        .cost-total { color: #e94560; font-weight: bold; }
+        .subtotal-row td { background: #0f3460; color: #eee; font-weight: bold; border-top: 2px solid #e94560; }
+        .no-data { text-align: center; color: #555; padding: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="breadcrumb">
+            <a href="/">Home</a> &gt;
+            <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
+            Summary
+        </div>
+
+        <div class="header">
+            <div>
+                <h1>{{ project.project_name }}</h1>
+                <p class="project-meta">Project #: {{ project.project_number or 'N/A' }} &nbsp;|&nbsp; Location: {{ project.location or 'N/A' }}</p>
+                {% if project.description %}
+                    <p class="project-meta" style="margin-top: 5px;">{{ project.description }}</p>
+                {% endif %}
+            </div>
+            <div class="btn-group">
+                <a href="/project/{{ project.id }}" class="btn btn-secondary">Back to Project</a>
+                <a href="/project/{{ project.id }}/estimate" class="btn btn-secondary">Estimate</a>
+                <a href="/project/{{ project.id }}/report/csi" class="btn btn-secondary">CSI Report</a>
+                <a href="/project/{{ project.id }}/estimate/csv" class="btn btn-secondary">Export CSV</a>
+                <button class="btn btn-secondary" onclick="window.print()">Print</button>
+            </div>
+        </div>
+
+        <!-- Cost Summary Cards -->
+        <h2>Cost Summary</h2>
+        <div class="totals-grid">
+            <div class="total-card">
+                <h3>${{ "%.2f"|format(summary.total_material_cost) }}</h3>
+                <p>Total Material</p>
+            </div>
+            <div class="total-card">
+                <h3>${{ "%.2f"|format(summary.total_labor_cost) }}</h3>
+                <p>Total Labor</p>
+            </div>
+            <div class="total-card">
+                <h3>${{ "%.2f"|format(summary.total_equipment_cost) }}</h3>
+                <p>Total Equipment</p>
+            </div>
+            <div class="total-card">
+                <h3>${{ "%.2f"|format(summary.total_cost) }}</h3>
+                <p>Total Project Cost</p>
+            </div>
+        </div>
+
+        <!-- Hours Cards -->
+        <div class="hours-grid">
+            <div class="hours-card">
+                <span class="label">Total Labor Hours</span>
+                <span class="value">{{ "%.1f"|format(summary.total_labor_hours) }} hrs</span>
+            </div>
+            <div class="hours-card">
+                <span class="label">Total Equipment Hours</span>
+                <span class="value">{{ "%.1f"|format(summary.total_equipment_hours) }} hrs</span>
+            </div>
+        </div>
+
+        <!-- Assembly Breakdown -->
+        <h2>Assembly Breakdown</h2>
+        {% if assemblies %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Assembly</th>
+                        <th>Line Items</th>
+                        <th>Labor Hrs</th>
+                        <th>Equip Hrs</th>
+                        <th>Material</th>
+                        <th>Labor</th>
+                        <th>Equipment</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in assemblies %}
+                        <tr>
+                            <td>
+                                <span class="assembly-label">{{ row.assembly.assembly_label }}</span>
+                                {{ row.assembly.assembly_name }}
+                            </td>
+                            <td>{{ row.item_count }}</td>
+                            <td>{{ "%.1f"|format(row.labor_hours) }}</td>
+                            <td>{{ "%.1f"|format(row.equipment_hours) }}</td>
+                            <td>${{ "%.2f"|format(row.material_cost) }}</td>
+                            <td>${{ "%.2f"|format(row.labor_cost) }}</td>
+                            <td>${{ "%.2f"|format(row.equipment_cost) }}</td>
+                            <td class="cost-total">${{ "%.2f"|format(row.total_cost) }}</td>
+                        </tr>
+                    {% endfor %}
+                    <tr class="subtotal-row">
+                        <td colspan="2">Project Total</td>
+                        <td>{{ "%.1f"|format(summary.total_labor_hours) }}</td>
+                        <td>{{ "%.1f"|format(summary.total_equipment_hours) }}</td>
+                        <td>${{ "%.2f"|format(summary.total_material_cost) }}</td>
+                        <td>${{ "%.2f"|format(summary.total_labor_cost) }}</td>
+                        <td>${{ "%.2f"|format(summary.total_equipment_cost) }}</td>
+                        <td>${{ "%.2f"|format(summary.total_cost) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        {% else %}
+            <p class="no-data">No assemblies or line items found for this project.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

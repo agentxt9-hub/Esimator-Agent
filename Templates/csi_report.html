@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSI Report — {{ project.project_name }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; }
+
+        .page  { padding: 20px; }
+        .inner { background: #16213e; border-radius: 8px; padding: 28px; }
+
+        .breadcrumb   { color: #888; margin-bottom: 16px; font-size: 13px; }
+        .breadcrumb a { color: #e94560; text-decoration: none; }
+
+        .report-header { display: flex; justify-content: space-between; align-items: flex-start;
+                         margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid #0f3460; }
+        .report-header h1 { color: #e94560; font-size: 22px; margin-bottom: 4px; }
+        .report-meta  { color: #888; font-size: 13px; line-height: 1.6; }
+        .report-date  { color: #555; font-size: 12px; margin-top: 4px; }
+
+        .btn          { display: inline-block; padding: 8px 16px; background: #e94560; color: white;
+                        text-decoration: none; border-radius: 4px; border: none; cursor: pointer;
+                        font-size: 13px; font-family: Arial, sans-serif; }
+        .btn:hover    { background: #c73652; }
+        .btn-secondary { background: #0f3460; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-row      { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        /* Grand total summary */
+        .grand-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+        .gs-card       { background: #0f3460; padding: 14px 16px; border-radius: 8px; text-align: center; }
+        .gs-card h3    { color: #e94560; font-size: 16px; margin-bottom: 4px; }
+        .gs-card p     { color: #888; font-size: 11px; }
+
+        /* Division block */
+        .division      { margin-bottom: 28px; border: 1px solid #0f3460; border-radius: 6px; overflow: hidden; }
+        .div-header    { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
+                         border-left: 5px solid #888; }
+        .div-title     { font-weight: bold; font-size: 14px; color: #eee; }
+        .div-code      { color: #aaa; font-size: 12px; margin-top: 2px; }
+        .div-totals    { display: flex; gap: 24px; font-size: 12px; text-align: right; }
+        .div-totals span { color: #888; }
+        .div-totals strong { color: #eee; display: block; font-size: 14px; }
+
+        /* Section block */
+        .section       { border-top: 1px solid #0f3460; }
+        .sec-header    { padding: 8px 16px; background: #0d1b2a; display: flex;
+                         justify-content: space-between; align-items: center; }
+        .sec-title     { color: #ccc; font-size: 13px; font-weight: bold; }
+        .sec-subtotal  { color: #e94560; font-size: 13px; font-weight: bold; }
+
+        /* Line items table */
+        table          { width: 100%; border-collapse: collapse; font-size: 12px; }
+        thead th       { background: #111e2e; color: #888; padding: 7px 10px; text-align: left;
+                         white-space: nowrap; border-right: 1px solid #1a2a3a; }
+        thead th:last-child { border-right: none; }
+        tbody tr       { border-bottom: 1px solid #1a2a3a; }
+        tbody tr:hover td { background: #1a2a3a; }
+        td             { padding: 7px 10px; color: #ccc; white-space: nowrap; border-right: 1px solid #162030; }
+        td:last-child  { border-right: none; }
+        td.num         { text-align: right; color: #ddd; }
+        td.grand       { text-align: right; color: #e94560; font-weight: bold; }
+        td.asm-badge   { }
+        .badge         { display: inline-block; background: #e94560; color: white; padding: 1px 6px;
+                         border-radius: 3px; font-size: 10px; font-weight: bold; margin-right: 4px; }
+        .desc          { min-width: 180px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+        .trade-pill    { display: inline-block; background: #0f3460; color: #aaa; padding: 1px 6px;
+                         border-radius: 10px; font-size: 10px; }
+
+        /* Subtotal rows */
+        tr.subtotal td { background: #0d1b2a; color: #eee; font-weight: bold;
+                         border-top: 1px solid #0f3460; padding: 7px 10px; }
+        tr.subtotal td.grand { color: #e94560; }
+
+        /* Division total row */
+        .div-total-row { background: #0f3460; padding: 10px 16px; display: flex;
+                         justify-content: flex-end; gap: 32px; font-size: 13px;
+                         border-top: 2px solid #e94560; }
+        .div-total-row .lbl { color: #888; margin-right: 6px; }
+        .div-total-row .val { color: #eee; font-weight: bold; }
+        .div-total-row .total-val { color: #e94560; font-weight: bold; font-size: 15px; }
+
+        /* Uncategorized */
+        .uncat-header  { padding: 12px 16px; background: #0d1b2a; border-left: 5px solid #555;
+                         color: #888; font-size: 13px; font-style: italic; }
+
+        /* Grand total block */
+        .grand-total   { background: #0f3460; border: 2px solid #e94560; border-radius: 6px;
+                         padding: 16px 20px; margin-top: 28px; display: flex;
+                         justify-content: space-between; align-items: center; }
+        .grand-total h2 { color: #eee; font-size: 15px; }
+        .grand-total-grid { display: flex; gap: 40px; }
+        .gt-item .lbl { color: #888; font-size: 11px; }
+        .gt-item .val { color: #eee; font-size: 16px; font-weight: bold; }
+        .gt-item.highlight .val { color: #e94560; font-size: 20px; }
+
+        /* No data */
+        .no-data { text-align: center; color: #555; padding: 40px; font-size: 14px; }
+
+        /* ── Print ── */
+        @media print {
+            body { background: white; color: #000; }
+            .page { padding: 0; }
+            .inner { background: white; padding: 16px; border-radius: 0; }
+            .breadcrumb, .btn-row { display: none !important; }
+            .gs-card { background: #f0f0f0; border: 1px solid #ccc; }
+            .gs-card h3 { color: #c00; font-size: 14px; }
+            .gs-card p { color: #555; }
+            .report-header h1 { color: #c00; }
+            .report-header { border-color: #ccc; }
+            .division { border-color: #ccc; page-break-inside: avoid; }
+            .div-header { background: #f5f5f5 !important; }
+            .div-title, .div-code { color: #000; }
+            .div-totals span, .div-totals strong { color: #333; }
+            .sec-header { background: #ebebeb !important; }
+            .sec-title { color: #333; }
+            .sec-subtotal { color: #c00; }
+            thead th { background: #e8e8e8 !important; color: #333; }
+            tbody tr:hover td { background: transparent; }
+            td { color: #333; border-color: #ddd; }
+            td.num { color: #333; }
+            td.grand { color: #c00; }
+            tr.subtotal td { background: #ebebeb; color: #000; border-color: #ccc; }
+            tr.subtotal td.grand { color: #c00; }
+            .div-total-row { background: #e8e8e8; border-color: #c00; }
+            .div-total-row .lbl, .div-total-row .val { color: #333; }
+            .div-total-row .total-val { color: #c00; }
+            .grand-total { background: #f0f0f0; border-color: #c00; }
+            .grand-total h2 { color: #000; }
+            .gt-item .lbl { color: #555; }
+            .gt-item .val { color: #000; }
+            .gt-item.highlight .val { color: #c00; }
+            .badge { background: #c00; }
+            .trade-pill { background: #e0e0e0; color: #555; }
+            .uncat-header { background: #f5f5f5; color: #555; border-left-color: #999; }
+        }
+    </style>
+</head>
+<body>
+<div class="page"><div class="inner">
+
+    <div class="breadcrumb no-print">
+        <a href="/">Home</a> &gt;
+        <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
+        <a href="/project/{{ project.id }}/estimate">Estimate</a> &gt;
+        CSI Report
+    </div>
+
+    <div class="report-header">
+        <div>
+            <h1>{{ project.project_name }} — CSI Cost Report</h1>
+            <p class="report-meta">
+                Project #: {{ project.project_number or 'N/A' }} &nbsp;|&nbsp;
+                Location: {{ project.location or 'N/A' }}
+                {% if project.description %}<br>{{ project.description }}{% endif %}
+            </p>
+            <p class="report-date">Generated: {{ now.strftime('%B %d, %Y') }}</p>
+        </div>
+        <div class="btn-row">
+            <a href="/project/{{ project.id }}/estimate" class="btn btn-secondary">← Estimate</a>
+            <a href="/project/{{ project.id }}/estimate/csv" class="btn btn-secondary">Export CSV</a>
+            <button class="btn btn-secondary" onclick="window.print()">Print / PDF</button>
+        </div>
+    </div>
+
+    <!-- Grand summary cards -->
+    <div class="grand-summary">
+        <div class="gs-card">
+            <h3>${{ "%.2f"|format(grand_total.material_cost) }}</h3>
+            <p>Total Material</p>
+        </div>
+        <div class="gs-card">
+            <h3>${{ "%.2f"|format(grand_total.labor_cost) }}</h3>
+            <p>Total Labor</p>
+        </div>
+        <div class="gs-card">
+            <h3>${{ "%.2f"|format(grand_total.equipment_cost) }}</h3>
+            <p>Total Equipment</p>
+        </div>
+        <div class="gs-card">
+            <h3>{{ "%.1f"|format(grand_total.labor_hours) }}</h3>
+            <p>Labor Hours</p>
+        </div>
+        <div class="gs-card">
+            <h3>${{ "%.2f"|format(grand_total.total_cost) }}</h3>
+            <p>Project Total</p>
+        </div>
+    </div>
+
+    {% if not divisions and not uncategorized %}
+        <div class="no-data">No line items found for this project.</div>
+    {% endif %}
+
+    <!-- CSI Divisions -->
+    {% for div_block in divisions %}
+    <div class="division">
+        <div class="div-header" style="border-left-color: {{ div_block.color }}; background: {{ div_block.color }}18;">
+            <div>
+                <div class="div-title">Division {{ div_block.div.code }} — {{ div_block.div.title }}</div>
+            </div>
+            <div class="div-totals">
+                <div>
+                    <span>Material</span>
+                    <strong>${{ "%.2f"|format(div_block.total.material_cost) }}</strong>
+                </div>
+                <div>
+                    <span>Labor</span>
+                    <strong>${{ "%.2f"|format(div_block.total.labor_cost) }}</strong>
+                </div>
+                <div>
+                    <span>Equipment</span>
+                    <strong>${{ "%.2f"|format(div_block.total.equipment_cost) }}</strong>
+                </div>
+                <div>
+                    <span>Division Total</span>
+                    <strong style="color: #e94560; font-size: 15px;">${{ "%.2f"|format(div_block.total.total_cost) }}</strong>
+                </div>
+            </div>
+        </div>
+
+        {% for sec_block in div_block.sections %}
+        <div class="section">
+            <div class="sec-header">
+                <span class="sec-title">
+                    {% if sec_block.sec %}
+                        {{ sec_block.sec.code }} — {{ sec_block.sec.title }}
+                    {% else %}
+                        (No CSI Section)
+                    {% endif %}
+                </span>
+                <span class="sec-subtotal">${{ "%.2f"|format(sec_block.total.total_cost) }}</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="desc">Description</th>
+                        <th>Assembly</th>
+                        <th>Trade</th>
+                        <th style="text-align:right">Qty</th>
+                        <th>Unit</th>
+                        <th style="text-align:right">Prod Rate</th>
+                        <th style="text-align:right">Labor Hrs</th>
+                        <th style="text-align:right">Mat $/Unit</th>
+                        <th style="text-align:right">Material $</th>
+                        <th style="text-align:right">Labor $/Hr</th>
+                        <th style="text-align:right">Labor $</th>
+                        <th style="text-align:right">Equip $/Hr</th>
+                        <th style="text-align:right">Equipment $</th>
+                        <th style="text-align:right">Total $</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in sec_block.rows %}
+                    <tr>
+                        <td class="desc" title="{{ row.item.description }}">{{ row.item.description }}</td>
+                        <td><span class="badge">{{ row.asm_label }}</span>{{ row.asm_name }}</td>
+                        <td>{% if row.item.trade %}<span class="trade-pill">{{ row.item.trade }}</span>{% endif %}</td>
+                        <td class="num">{{ "%.2f"|format(row.item.quantity or 0) }}</td>
+                        <td>{{ row.item.unit or '' }}</td>
+                        <td class="num">{{ "%.2f"|format(row.item.production_rate or 0) if row.item.production_rate else '—' }}</td>
+                        <td class="num">{{ "%.1f"|format(row.item.labor_hours or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.material_cost_per_unit or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.material_cost or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.labor_cost_per_hour or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.labor_cost or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.equipment_cost_per_hour or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.equipment_cost or 0) }}</td>
+                        <td class="grand">${{ "%.2f"|format(row.item.total_cost or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="subtotal">
+                        <td colspan="6">Section Subtotal — {{ sec_block.rows|length }} item{{ 's' if sec_block.rows|length != 1 }}</td>
+                        <td class="num">{{ "%.1f"|format(sec_block.total.labor_hours) }}</td>
+                        <td></td>
+                        <td class="num">${{ "%.2f"|format(sec_block.total.material_cost) }}</td>
+                        <td></td>
+                        <td class="num">${{ "%.2f"|format(sec_block.total.labor_cost) }}</td>
+                        <td></td>
+                        <td class="num">${{ "%.2f"|format(sec_block.total.equipment_cost) }}</td>
+                        <td class="grand">${{ "%.2f"|format(sec_block.total.total_cost) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <!-- Uncategorized -->
+    {% if uncategorized %}
+    <div class="division" style="margin-top: 20px;">
+        <div class="uncat-header">No CSI Division Assigned — {{ uncategorized|length }} item{{ 's' if uncategorized|length != 1 }}</div>
+        <div class="section">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="desc">Description</th>
+                        <th>Assembly</th>
+                        <th>Trade</th>
+                        <th style="text-align:right">Qty</th>
+                        <th>Unit</th>
+                        <th style="text-align:right">Prod Rate</th>
+                        <th style="text-align:right">Labor Hrs</th>
+                        <th style="text-align:right">Mat $/Unit</th>
+                        <th style="text-align:right">Material $</th>
+                        <th style="text-align:right">Labor $/Hr</th>
+                        <th style="text-align:right">Labor $</th>
+                        <th style="text-align:right">Equip $/Hr</th>
+                        <th style="text-align:right">Equipment $</th>
+                        <th style="text-align:right">Total $</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in uncategorized %}
+                    <tr>
+                        <td class="desc" title="{{ row.item.description }}">{{ row.item.description }}</td>
+                        <td><span class="badge">{{ row.asm_label }}</span>{{ row.asm_name }}</td>
+                        <td>{% if row.item.trade %}<span class="trade-pill">{{ row.item.trade }}</span>{% endif %}</td>
+                        <td class="num">{{ "%.2f"|format(row.item.quantity or 0) }}</td>
+                        <td>{{ row.item.unit or '' }}</td>
+                        <td class="num">{{ "%.2f"|format(row.item.production_rate or 0) if row.item.production_rate else '—' }}</td>
+                        <td class="num">{{ "%.1f"|format(row.item.labor_hours or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.material_cost_per_unit or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.material_cost or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.labor_cost_per_hour or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.labor_cost or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.equipment_cost_per_hour or 0) }}</td>
+                        <td class="num">${{ "%.2f"|format(row.item.equipment_cost or 0) }}</td>
+                        <td class="grand">${{ "%.2f"|format(row.item.total_cost or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="subtotal">
+                        <td colspan="6">Subtotal</td>
+                        <td class="num">{{ "%.1f"|format(uncategorized_total.labor_hours) }}</td>
+                        <td></td>
+                        <td class="num">${{ "%.2f"|format(uncategorized_total.material_cost) }}</td>
+                        <td></td>
+                        <td class="num">${{ "%.2f"|format(uncategorized_total.labor_cost) }}</td>
+                        <td></td>
+                        <td class="num">${{ "%.2f"|format(uncategorized_total.equipment_cost) }}</td>
+                        <td class="grand">${{ "%.2f"|format(uncategorized_total.total_cost) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Grand Total -->
+    {% if divisions or uncategorized %}
+    <div class="grand-total">
+        <h2>PROJECT GRAND TOTAL</h2>
+        <div class="grand-total-grid">
+            <div class="gt-item">
+                <div class="lbl">Material</div>
+                <div class="val">${{ "%.2f"|format(grand_total.material_cost) }}</div>
+            </div>
+            <div class="gt-item">
+                <div class="lbl">Labor</div>
+                <div class="val">${{ "%.2f"|format(grand_total.labor_cost) }}</div>
+            </div>
+            <div class="gt-item">
+                <div class="lbl">Equipment</div>
+                <div class="val">${{ "%.2f"|format(grand_total.equipment_cost) }}</div>
+            </div>
+            <div class="gt-item">
+                <div class="lbl">Labor Hours</div>
+                <div class="val">{{ "%.1f"|format(grand_total.labor_hours) }} hrs</div>
+            </div>
+            <div class="gt-item highlight">
+                <div class="lbl">Total Cost</div>
+                <div class="val">${{ "%.2f"|format(grand_total.total_cost) }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div></div>
+</body>
+</html>

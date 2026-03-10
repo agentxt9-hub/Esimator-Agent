@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Line Item Library - Construction Estimator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
+        .container { max-width: 1400px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
+        h1 { color: #e94560; margin-bottom: 5px; }
+        .subtitle { color: #888; font-size: 14px; }
+        .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #c73652; }
+        .btn-secondary { background: #0f3460; color: #eee; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-danger { background: #3a0a12; color: #e94560; border: 1px solid #e94560; }
+        .btn-danger:hover { background: #e94560; color: white; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-group { display: flex; gap: 10px; align-items: center; }
+        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
+        .breadcrumb a { color: #e94560; text-decoration: none; }
+
+        /* Stats bar */
+        .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: #0f3460; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-card h3 { color: #e94560; font-size: 28px; }
+        .stat-card p { color: #888; font-size: 12px; margin-top: 4px; }
+
+        /* Search bar */
+        .search-bar { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; }
+        .search-input { flex: 1; padding: 10px 14px; background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; color: #eee; font-size: 14px; }
+        .search-input:focus { outline: none; border-color: #e94560; }
+        .search-input::placeholder { color: #555; }
+        .filter-select { padding: 10px 14px; background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; color: #eee; font-size: 14px; min-width: 200px; }
+        .filter-select:focus { outline: none; border-color: #e94560; }
+        .result-count { color: #888; font-size: 13px; white-space: nowrap; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table th { background: #0f3460; padding: 10px 12px; text-align: left; color: #aaa; font-weight: bold; white-space: nowrap; }
+        table td { padding: 10px 12px; border-bottom: 1px solid #1a2a3a; color: #ccc; vertical-align: middle; }
+        table tr:hover td { background: #1a2a3a; }
+        .csi-badge { display: inline-block; background: #0f3460; color: #aaa; padding: 2px 8px; border-radius: 3px; font-size: 11px; white-space: nowrap; }
+        .cost-cell { color: #eee; font-variant-numeric: tabular-nums; }
+        .no-data { color: #555; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #555; }
+        .empty-state p { font-size: 16px; margin-bottom: 10px; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 700px; border: 1px solid #0f3460; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h2 { color: #e94560; }
+        .close { color: #888; font-size: 28px; cursor: pointer; line-height: 1; }
+        .close:hover { color: #eee; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 14px; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
+        .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .section-label { color: #e94560; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 12px; padding-bottom: 6px; border-bottom: 1px solid #0f3460; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="breadcrumb"><a href="/">Home</a> &rsaquo; Line Item Library</div>
+
+    <div class="header">
+        <div>
+            <h1>Line Item Library</h1>
+            <p class="subtitle">Reusable line items shared across all projects. Pull items into any assembly or estimate.</p>
+        </div>
+        <div class="btn-group">
+            <a href="/" class="btn btn-secondary">Home</a>
+            <button class="btn" onclick="openNewItemModal()">+ New Item</button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+        <div class="stat-card">
+            <h3 id="statTotal">{{ items|length }}</h3>
+            <p>Library Items</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="statVisible">{{ items|length }}</h3>
+            <p>Showing</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ items | selectattr('csi_level_1_id') | list | map(attribute='csi_level_1_id') | unique | list | length }}</h3>
+            <p>CSI Divisions Covered</p>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="search-bar">
+        <input type="text" class="search-input" id="searchInput" placeholder="Search by description, CSI code, unit..." oninput="filterItems()">
+        <select class="filter-select" id="csiFilter" onchange="filterItems()">
+            <option value="">All CSI Divisions</option>
+            {% for d in csi1_list %}
+            <option value="{{ d.id }}">{{ d.code }} — {{ d.title }}</option>
+            {% endfor %}
+        </select>
+        <span class="result-count" id="resultCount"></span>
+    </div>
+
+    <!-- Table -->
+    {% if items %}
+    <table id="libraryTable">
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>CSI Division</th>
+                <th>CSI Section</th>
+                <th>Unit</th>
+                <th>Prod. Rate</th>
+                <th>Mat $/Unit</th>
+                <th>Labor $/Hr</th>
+                <th>Equip $/Hr</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="libraryBody">
+            {% for item in items %}
+            {% set d1 = csi1_map.get(item.csi_level_1_id) %}
+            {% set d2 = csi2_map.get(item.csi_level_2_id) %}
+            <tr data-id="{{ item.id }}"
+                data-description="{{ item.description | lower }}"
+                data-csi1="{{ item.csi_level_1_id or '' }}"
+                data-csi1text="{{ (d1.code ~ ' ' ~ d1.title) | lower if d1 else '' }}"
+                data-unit="{{ (item.unit or '') | lower }}">
+                <td><strong style="color:#eee;">{{ item.description }}</strong>
+                    {% if item.notes %}<br><span style="color:#666;font-size:11px;">{{ item.notes }}</span>{% endif %}
+                </td>
+                <td>{% if d1 %}<span class="csi-badge">{{ d1.code }} — {{ d1.title }}</span>{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td>{% if d2 %}<span class="csi-badge">{{ d2.code }} — {{ d2.title }}</span>{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td>{{ item.unit or '—' }}</td>
+                <td>{{ item.production_rate or '—' }}{% if item.production_rate and item.production_unit %} / {{ item.production_unit }}{% endif %}</td>
+                <td class="cost-cell">{% if item.material_cost_per_unit %}${{ "%.2f"|format(item.material_cost_per_unit) }}{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td class="cost-cell">{% if item.labor_cost_per_hour %}${{ "%.2f"|format(item.labor_cost_per_hour) }}{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td class="cost-cell">{% if item.equipment_cost_per_hour %}${{ "%.2f"|format(item.equipment_cost_per_hour) }}{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary btn-sm" onclick="openEditItemModal({{ item.id }})">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteItem({{ item.id }}, '{{ item.description }}')">✕</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No library items yet.</p>
+        <p style="font-size:13px; margin-bottom:20px;">Add reusable line items here to pull into any project's assemblies.</p>
+        <button class="btn" onclick="openNewItemModal()">+ Add First Item</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Create / Edit Modal -->
+<div id="itemModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="itemModalTitle">New Library Item</h2>
+            <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <form id="itemForm" onsubmit="saveItem(event)">
+            <input type="hidden" id="itemEditId" value="">
+
+            <div class="section-label">Item Details</div>
+            <div class="form-group">
+                <label>Description *</label>
+                <input type="text" name="description" placeholder="e.g., Drywall 5/8&quot; Type X" required>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Unit *</label>
+                    <input type="text" name="unit" placeholder="e.g., SF, CY, LF, EA" required>
+                </div>
+                <div class="form-group">
+                    <label>Production Rate (units/hr)</label>
+                    <input type="number" name="production_rate" step="0.01" placeholder="e.g., 200">
+                </div>
+            </div>
+            <div class="form-group" style="display:none">
+                <!-- production_unit hidden — can expand later -->
+                <input type="hidden" name="production_unit" value="">
+            </div>
+
+            <div class="section-label">CSI Classification</div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>CSI Division</label>
+                    <select name="csi_level_1_id" id="libCsi1" onchange="filterLibCsi2()">
+                        <option value="">— None —</option>
+                        {% for d in csi1_list %}
+                        <option value="{{ d.id }}">{{ d.code }} — {{ d.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>CSI Section</label>
+                    <select name="csi_level_2_id" id="libCsi2">
+                        <option value="">— Select Division first —</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-label">Default Costs</div>
+            <div class="form-grid-3">
+                <div class="form-group">
+                    <label>Material Cost / Unit ($)</label>
+                    <input type="number" name="material_cost_per_unit" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Labor Cost / Hour ($)</label>
+                    <input type="number" name="labor_cost_per_hour" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Equipment Cost / Hour ($)</label>
+                    <input type="number" name="equipment_cost_per_hour" step="0.01" placeholder="0.00">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" rows="2" placeholder="Optional notes, spec references, assumptions..."></textarea>
+            </div>
+            <button type="submit" id="itemSubmitBtn" class="btn" style="width:100%; margin-top:10px;">Add to Library</button>
+        </form>
+    </div>
+</div>
+
+<script id="csi2Data" type="application/json">{{ csi2_json | safe }}</script>
+<script id="libraryItemsData" type="application/json">{{ items_json | safe }}</script>
+<script>
+    const csi2All = JSON.parse(document.getElementById('csi2Data').textContent);
+    const libraryItems = JSON.parse(document.getElementById('libraryItemsData').textContent);
+
+    // ── CSI Level 2 filtering ──
+    function filterLibCsi2() {
+        const parentId = parseInt(document.getElementById('libCsi1').value);
+        const sel = document.getElementById('libCsi2');
+        sel.innerHTML = '<option value="">— None —</option>';
+        if (!parentId) return;
+        csi2All.filter(s => s.parent === parentId).forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.code + ' — ' + s.title;
+            sel.appendChild(opt);
+        });
+    }
+
+    // ── Search & Filter ──
+    function filterItems() {
+        const query = document.getElementById('searchInput').value.toLowerCase().trim();
+        const csi1Filter = document.getElementById('csiFilter').value;
+        const rows = document.querySelectorAll('#libraryBody tr');
+        let visible = 0;
+
+        rows.forEach(row => {
+            const desc = row.dataset.description || '';
+            const csi1text = row.dataset.csi1text || '';
+            const unit = row.dataset.unit || '';
+            const rowCsi1 = row.dataset.csi1 || '';
+
+            const matchesText = !query || desc.includes(query) || csi1text.includes(query) || unit.includes(query);
+            const matchesCsi = !csi1Filter || rowCsi1 === csi1Filter;
+
+            if (matchesText && matchesCsi) {
+                row.style.display = '';
+                visible++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        document.getElementById('statVisible').textContent = visible;
+        document.getElementById('resultCount').textContent = visible + ' of ' + rows.length + ' items';
+    }
+
+    // ── Modal open/close ──
+    function openNewItemModal() {
+        document.getElementById('itemEditId').value = '';
+        document.getElementById('itemModalTitle').textContent = 'New Library Item';
+        document.getElementById('itemSubmitBtn').textContent = 'Add to Library';
+        document.getElementById('itemForm').reset();
+        document.getElementById('libCsi1').value = '';
+        document.getElementById('libCsi2').innerHTML = '<option value="">— Select Division first —</option>';
+        document.getElementById('itemModal').style.display = 'block';
+    }
+
+    function openEditItemModal(itemId) {
+        const item = libraryItems.find(i => i.id === itemId);
+        if (!item) return;
+
+        document.getElementById('itemEditId').value = item.id;
+        document.getElementById('itemModalTitle').textContent = 'Edit Library Item';
+        document.getElementById('itemSubmitBtn').textContent = 'Save Changes';
+
+        document.querySelector('#itemForm [name="description"]').value = item.description;
+        document.querySelector('#itemForm [name="unit"]').value = item.unit || '';
+        document.querySelector('#itemForm [name="production_rate"]').value = item.production_rate || '';
+        document.querySelector('#itemForm [name="material_cost_per_unit"]').value = item.material_cost_per_unit || '';
+        document.querySelector('#itemForm [name="labor_cost_per_hour"]').value = item.labor_cost_per_hour || '';
+        document.querySelector('#itemForm [name="equipment_cost_per_hour"]').value = item.equipment_cost_per_hour || '';
+        document.querySelector('#itemForm [name="notes"]').value = item.notes || '';
+
+        document.getElementById('libCsi1').value = item.csi_level_1_id || '';
+        filterLibCsi2();
+        if (item.csi_level_2_id) {
+            document.getElementById('libCsi2').value = item.csi_level_2_id;
+        }
+
+        document.getElementById('itemModal').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.getElementById('itemModal').style.display = 'none';
+    }
+
+    window.onclick = function(e) {
+        if (e.target === document.getElementById('itemModal')) closeModal();
+    };
+
+    // ── Save (create or update) ──
+    function saveItem(event) {
+        event.preventDefault();
+        const editId = document.getElementById('itemEditId').value;
+        const url = editId ? '/library/item/' + editId + '/update' : '/library/item/new';
+        fetch(url, { method: 'POST', body: new FormData(event.target) })
+            .then(r => r.json())
+            .then(data => { if (data.success) window.location.reload(); });
+    }
+
+    // ── Delete ──
+    function deleteItem(id, description) {
+        if (!confirm('Remove "' + description + '" from the library?\n\nThis will not affect existing project line items.')) return;
+        fetch('/library/item/' + id + '/delete', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => { if (data.success) window.location.reload(); });
+    }
+
+    // Init result count
+    filterItems();
+</script>
+</body>
+</html>

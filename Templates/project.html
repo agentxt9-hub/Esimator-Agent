@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ project.project_name }} - Construction Estimator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
+        .container { max-width: 1200px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
+        h1 { color: #e94560; margin-bottom: 5px; }
+        h2 { color: #eee; margin-bottom: 20px; font-size: 18px; }
+        .project-meta { color: #888; font-size: 14px; }
+        .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #c73652; }
+        .btn-secondary { background: #0f3460; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-group { display: flex; gap: 10px; }
+        .assembly-card { border: 1px solid #0f3460; padding: 20px; margin-top: 20px; border-radius: 8px; background: #0d1b2a; }
+        .assembly-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .assembly-label { background: #e94560; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 10px; }
+        .assembly-name { color: #eee; font-size: 16px; font-weight: bold; }
+        .assembly-meta { color: #888; font-size: 13px; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        table th { background: #0f3460; padding: 10px; text-align: left; color: #aaa; font-weight: bold; }
+        table td { padding: 10px; border-bottom: 1px solid #1a2a3a; color: #ccc; }
+        table tr:hover td { background: #1a2a3a; }
+        .cost-total { color: #e94560; font-weight: bold; }
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid #0f3460; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h2 { color: #e94560; }
+        .close { color: #888; font-size: 28px; cursor: pointer; }
+        .close:hover { color: #eee; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 14px; }
+        input:focus, textarea:focus { outline: none; border-color: #e94560; }
+        .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .empty-state { text-align: center; padding: 40px; color: #555; }
+        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
+        .breadcrumb a { color: #e94560; text-decoration: none; }
+        .btn-danger { background: #3a0a12; color: #e94560; border: 1px solid #e94560; }
+        .btn-danger:hover { background: #e94560; color: white; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .totals-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+        .total-card { background: #0f3460; padding: 15px; border-radius: 8px; text-align: center; }
+        .total-card h3 { color: #e94560; font-size: 20px; }
+        .total-card p { color: #888; font-size: 12px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="breadcrumb"><a href="/">Home</a> > {{ project.project_name }}</div>
+
+        <div class="header">
+            <div>
+                <h1>{{ project.project_name }}</h1>
+                <p class="project-meta">Project #: {{ project.project_number or 'N/A' }} &nbsp;|&nbsp; Location: {{ project.location or 'N/A' }}</p>
+                <p class="project-meta" style="margin-top: 5px;">{{ project.description or '' }}</p>
+            </div>
+            <div class="btn-group">
+                <a href="/" class="btn btn-secondary">Back</a>
+                <a href="/library" class="btn btn-secondary">Library</a>
+                <a href="/templates" class="btn btn-secondary">Templates</a>
+                <a href="/project/{{ project.id }}/estimate" class="btn btn-secondary">Estimate</a>
+                <a href="/project/{{ project.id }}/report" class="btn btn-secondary">Summary</a>
+                <a href="/project/{{ project.id }}/assembly/builder" class="btn">+ Assembly Builder</a>
+                <button class="btn btn-secondary" onclick="openAssemblyModal()">+ Quick Assembly</button>
+            </div>
+        </div>
+
+        <div class="totals-bar">
+            <div class="total-card"><h3 id="total-material">$0</h3><p>Material Cost</p></div>
+            <div class="total-card"><h3 id="total-labor">$0</h3><p>Labor Cost</p></div>
+            <div class="total-card"><h3 id="total-equipment">$0</h3><p>Equipment Cost</p></div>
+            <div class="total-card"><h3 id="total-cost">$0</h3><p>Total Cost</p></div>
+        </div>
+
+        {% if assemblies %}
+            {% for assembly in assemblies %}
+                <div class="assembly-card">
+                    <div class="assembly-header">
+                        <div>
+                            <span class="assembly-label">{{ assembly.assembly_label }}</span>
+                            <span class="assembly-name">{{ assembly.assembly_name }}</span>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn" onclick="openLineItemModal({{ assembly.id }})">+ Add Line Item</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openEditAssemblyModal({{ assembly.id }})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteAssembly({{ assembly.id }}, '{{ assembly.assembly_name }}')">Delete Assembly</button>
+                        </div>
+                    </div>
+                    <div class="assembly-meta">
+                        {% set d1 = csi1_map.get(assembly.csi_level_1_id) %}
+                        {% set d2 = csi2_map.get(assembly.csi_level_2_id) %}
+                        CSI Div: {{ (d1.code ~ ' — ' ~ d1.title) if d1 else 'N/A' }} &nbsp;|&nbsp;
+                        CSI Sec: {{ (d2.code ~ ' — ' ~ d2.title) if d2 else 'N/A' }} &nbsp;|&nbsp;
+                        Qty: {{ assembly.quantity or 0 }} {{ assembly.unit or '' }}
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>Unit</th>
+                                <th>Prod. Rate</th>
+                                <th>Labor Hrs</th>
+                                <th>Material</th>
+                                <th>Labor</th>
+                                <th>Equipment</th>
+                                <th>Total</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if assembly.line_items %}
+                                {% for item in assembly.line_items %}
+                                    <tr>
+                                        <td>{{ item.description }}</td>
+                                        <td>{{ item.quantity }}</td>
+                                        <td>{{ item.unit }}</td>
+                                        <td>{{ item.production_rate or '-' }}</td>
+                                        <td>{{ "%.1f"|format(item.labor_hours or 0) }}</td>
+                                        <td>${{ "%.2f"|format(item.material_cost or 0) }}</td>
+                                        <td>${{ "%.2f"|format(item.labor_cost or 0) }}</td>
+                                        <td>${{ "%.2f"|format(item.equipment_cost or 0) }}</td>
+                                        <td class="cost-total">${{ "%.2f"|format(item.total_cost or 0) }}</td>
+                                        <td><button class="btn btn-danger btn-sm" onclick="deleteLineItem({{ item.id }}, '{{ item.description }}')">✕</button></td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="10" style="text-align:center; color:#555; padding: 20px;">No line items yet</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <p style="font-size: 18px; margin-bottom: 15px;">No assemblies yet</p>
+                <p>Click "+ Add Assembly" to start building your estimate</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Assembly Modal -->
+    <div id="assemblyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="assemblyModalTitle">Add Assembly</h2>
+                <span class="close" onclick="closeModal('assemblyModal')">&times;</span>
+            </div>
+            <form id="assemblyForm" onsubmit="saveAssembly(event, {{ project.id }})">
+                <input type="hidden" id="assemblyEditId" value="">
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label>Assembly Label *</label>
+                        <input type="text" name="assembly_label" placeholder="e.g., A1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Assembly Name *</label>
+                        <input type="text" name="assembly_name" placeholder="e.g., Foundation Excavation" required>
+                    </div>
+                </div>
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" name="quantity" step="0.01" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Unit</label>
+                        <input type="text" name="unit" placeholder="e.g., LS, SF, CY">
+                    </div>
+                </div>
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label>CSI Division</label>
+                        <select name="csi_level_1_id" id="asmCsi1" onchange="filterCsi2()">
+                            <option value="">— None —</option>
+                            {% for d in csi1_list %}
+                            <option value="{{ d.id }}">{{ d.code }} — {{ d.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>CSI Section</label>
+                        <select name="csi_level_2_id" id="asmCsi2">
+                            <option value="">— Select Division first —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="2" placeholder="Optional description..."></textarea>
+                </div>
+                <button type="submit" id="assemblySubmitBtn" class="btn" style="width:100%; margin-top:10px;">Add Assembly</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Line Item Modal -->
+    <div id="lineItemModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Line Item</h2>
+                <span class="close" onclick="closeModal('lineItemModal')">&times;</span>
+            </div>
+            <form id="lineItemForm" onsubmit="createLineItem(event)">
+                <input type="hidden" id="lineItemAssemblyId">
+                <div class="form-group">
+                    <label>Description *</label>
+                    <input type="text" name="description" placeholder="e.g., Excavate trench" required>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Quantity *</label>
+                        <input type="number" name="quantity" step="0.01" placeholder="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Unit *</label>
+                        <input type="text" name="unit" placeholder="e.g., CY" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Production Rate (units/hr)</label>
+                        <input type="number" name="production_rate" step="0.01" placeholder="1">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Material Cost / Unit ($)</label>
+                        <input type="number" name="material_cost_per_unit" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Labor Cost / Hour ($)</label>
+                        <input type="number" name="labor_cost_per_hour" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Equipment Cost / Hour ($)</label>
+                        <input type="number" name="equipment_cost_per_hour" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea name="notes" rows="2" placeholder="Optional notes..."></textarea>
+                </div>
+                <button type="submit" class="btn" style="width:100%; margin-top:10px;">Add Line Item</button>
+            </form>
+        </div>
+    </div>
+
+    <script id="csi2Data" type="application/json">{{ csi2_json | safe }}</script>
+    <script id="assembliesData" type="application/json">{{ assemblies_json | safe }}</script>
+    <script>
+        const csi2All = JSON.parse(document.getElementById('csi2Data').textContent);
+        const assembliesData = JSON.parse(document.getElementById('assembliesData').textContent);
+
+        function filterCsi2() {
+            const parentId = parseInt(document.getElementById('asmCsi1').value);
+            const sel = document.getElementById('asmCsi2');
+            sel.innerHTML = '<option value="">— None —</option>';
+            if (!parentId) return;
+            csi2All.filter(s => s.parent === parentId).forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.code + ' — ' + s.title;
+                sel.appendChild(opt);
+            });
+        }
+
+        // Populate totals bar on load
+        fetch('/project/{{ project.id }}/summary')
+            .then(r => r.json())
+            .then(data => {
+                const s = data.summary;
+                const fmt = n => '$' + n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('total-material').textContent = fmt(s.total_material_cost);
+                document.getElementById('total-labor').textContent = fmt(s.total_labor_cost);
+                document.getElementById('total-equipment').textContent = fmt(s.total_equipment_cost);
+                document.getElementById('total-cost').textContent = fmt(s.total_cost);
+            });
+
+        function openAssemblyModal() {
+            // Reset to create mode
+            document.getElementById('assemblyEditId').value = '';
+            document.getElementById('assemblyModalTitle').textContent = 'Add Assembly';
+            document.getElementById('assemblySubmitBtn').textContent = 'Add Assembly';
+            document.getElementById('assemblyForm').reset();
+            document.getElementById('asmCsi1').value = '';
+            document.getElementById('asmCsi2').innerHTML = '<option value="">— Select Division first —</option>';
+            document.getElementById('assemblyModal').style.display = 'block';
+        }
+
+        function openEditAssemblyModal(assemblyId) {
+            const assembly = assembliesData.find(a => a.id === assemblyId);
+            if (!assembly) return;
+
+            // Switch modal to edit mode
+            document.getElementById('assemblyEditId').value = assembly.id;
+            document.getElementById('assemblyModalTitle').textContent = 'Edit Assembly';
+            document.getElementById('assemblySubmitBtn').textContent = 'Save Changes';
+
+            // Populate fields
+            document.querySelector('#assemblyForm [name="assembly_label"]').value = assembly.label;
+            document.querySelector('#assemblyForm [name="assembly_name"]').value = assembly.name;
+            document.querySelector('#assemblyForm [name="quantity"]').value = assembly.quantity || '';
+            document.querySelector('#assemblyForm [name="unit"]').value = assembly.unit || '';
+            document.querySelector('#assemblyForm [name="description"]').value = assembly.description || '';
+
+            // Set CSI dropdowns
+            document.getElementById('asmCsi1').value = assembly.csi_level_1_id || '';
+            filterCsi2();
+            if (assembly.csi_level_2_id) {
+                document.getElementById('asmCsi2').value = assembly.csi_level_2_id;
+            }
+
+            document.getElementById('assemblyModal').style.display = 'block';
+        }
+
+        function openLineItemModal(assemblyId) {
+            document.getElementById('lineItemAssemblyId').value = assemblyId;
+            document.getElementById('lineItemModal').style.display = 'block';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // Close on backdrop click
+        window.onclick = function(e) {
+            if (e.target.classList.contains('modal')) closeModal(e.target.id);
+        };
+
+        function saveAssembly(event, projectId) {
+            event.preventDefault();
+            const editId = document.getElementById('assemblyEditId').value;
+            const url = editId
+                ? '/assembly/' + editId + '/update'
+                : '/project/' + projectId + '/assembly/new';
+            fetch(url, { method: 'POST', body: new FormData(event.target) })
+                .then(r => r.json())
+                .then(data => { if (data.success) window.location.reload(); });
+        }
+
+        function createLineItem(event) {
+            event.preventDefault();
+            const assemblyId = document.getElementById('lineItemAssemblyId').value;
+            fetch('/assembly/' + assemblyId + '/lineitem/new', { method: 'POST', body: new FormData(event.target) })
+                .then(r => r.json())
+                .then(data => { if (data.success) window.location.reload(); });
+        }
+
+        function deleteLineItem(id, description) {
+            if (!confirm('Delete line item "' + description + '"?\n\nThis cannot be undone.')) return;
+            fetch('/lineitem/' + id + '/delete', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => { if (data.success) window.location.reload(); });
+        }
+
+        function deleteAssembly(id, name) {
+            if (!confirm('Delete assembly "' + name + '" and ALL its line items?\n\nThis cannot be undone.')) return;
+            fetch('/assembly/' + id + '/delete', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => { if (data.success) window.location.reload(); });
+        }
+    </script>
+</body>
+</html>

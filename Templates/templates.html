@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Assembly Templates</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
+        .container { max-width: 1200px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
+        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
+        .breadcrumb a { color: #e94560; text-decoration: none; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
+        h1 { color: #e94560; margin-bottom: 5px; }
+        .subtitle { color: #888; font-size: 14px; }
+        .btn { display: inline-block; padding: 9px 18px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #c73652; }
+        .btn-secondary { background: #0f3460; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+        /* Toolbar */
+        .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 22px; }
+        .search-box { flex: 1; max-width: 380px; }
+        .search-box input { width: 100%; padding: 9px 12px; background: #0d1b2a; border: 1px solid #0f3460;
+                            border-radius: 4px; color: #eee; font-size: 14px; }
+        .search-box input:focus { outline: none; border-color: #e94560; }
+        .count-badge { color: #888; font-size: 13px; }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 80px 20px; color: #555; }
+        .empty-state h2 { font-size: 22px; margin-bottom: 12px; color: #888; }
+        .empty-state p  { font-size: 14px; line-height: 1.6; }
+
+        /* Template grid */
+        .templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+
+        /* Template card */
+        .tpl-card { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 8px; overflow: hidden;
+                    display: flex; flex-direction: column; }
+        .tpl-card:hover { border-color: #e94560; }
+        .tpl-header { padding: 14px 16px 10px; border-bottom: 1px solid #0f3460; }
+        .tpl-label-badge { background: #e94560; color: white; padding: 2px 8px; border-radius: 3px;
+                           font-size: 11px; font-weight: bold; margin-right: 7px; }
+        .tpl-name { color: #eee; font-size: 15px; font-weight: bold; }
+        .tpl-desc { color: #666; font-size: 12px; margin-top: 5px; }
+        .tpl-meta { padding: 10px 16px; border-bottom: 1px solid #0d1b2a; display: flex; gap: 16px; flex-wrap: wrap; }
+        .tpl-meta-item { font-size: 12px; }
+        .tpl-meta-item .key { color: #555; }
+        .tpl-meta-item .val { color: #aaa; font-weight: bold; }
+        .tpl-measurements { padding: 8px 16px; border-bottom: 1px solid #0d1b2a; display: flex; gap: 12px; flex-wrap: wrap; }
+        .meas-chip { background: #0f3460; border-radius: 3px; padding: 3px 8px; font-size: 11px; color: #888; }
+        .meas-chip span { color: #eee; font-weight: bold; }
+        .tpl-items { padding: 10px 16px; flex: 1; }
+        .tpl-items .item-row { display: flex; align-items: center; gap: 6px; padding: 3px 0;
+                                border-bottom: 1px solid #0d1b2a; font-size: 12px; color: #888; }
+        .tpl-items .item-row:last-child { border-bottom: none; }
+        .formula-tag { background: #1a2a3a; color: #7bde9b; padding: 1px 5px; border-radius: 2px; font-size: 10px; white-space: nowrap; }
+        .more-items { color: #555; font-size: 11px; padding-top: 5px; }
+        .tpl-footer { padding: 12px 16px; border-top: 1px solid #0f3460; display: flex; align-items: center; justify-content: space-between; }
+        .tpl-cost { color: #e94560; font-weight: bold; font-size: 15px; }
+        .tpl-cost-label { color: #555; font-size: 11px; }
+        .tpl-actions { display: flex; gap: 8px; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: #16213e; margin: 8% auto; padding: 28px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #0f3460; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+        .modal-header h2 { color: #e94560; font-size: 17px; }
+        .close { color: #888; font-size: 26px; cursor: pointer; line-height: 1; }
+        .close:hover { color: #eee; }
+        .form-group { margin-bottom: 14px; }
+        label { display: block; margin-bottom: 5px; color: #aaa; font-size: 12px; font-weight: bold; }
+        input, select { width: 100%; padding: 9px; border: 1px solid #0f3460; border-radius: 4px;
+                        background: #0d1b2a; color: #eee; font-size: 14px; }
+        input:focus, select:focus { outline: none; border-color: #e94560; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-actions .btn { flex: 1; text-align: center; }
+        .selected-tpl-name { color: #eee; font-size: 13px; padding: 8px 12px; background: #0d1b2a;
+                              border-radius: 4px; border-left: 3px solid #e94560; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="breadcrumb">
+        <a href="/">Home</a> &gt; Assembly Templates
+    </div>
+
+    <div class="header">
+        <div>
+            <h1>Assembly Templates</h1>
+            <p class="subtitle">Reusable assemblies — load into any project or open in Builder to customize</p>
+        </div>
+        <a href="/" class="btn btn-secondary">← Home</a>
+    </div>
+
+    {% if templates_data %}
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search templates…" oninput="filterTemplates()">
+            </div>
+            <span class="count-badge" id="countBadge">{{ template_count }} template{{ 's' if template_count != 1 else '' }}</span>
+        </div>
+
+        <div class="templates-grid" id="templatesGrid">
+            <!-- rendered by JS -->
+        </div>
+
+    {% else %}
+        <div class="empty-state">
+            <h2>No Templates Yet</h2>
+            <p>
+                Mark an assembly as a template when saving it in the Assembly Builder<br>
+                (check "Save as reusable template") — it will appear here.
+            </p>
+        </div>
+    {% endif %}
+
+</div>
+
+<!-- Use Template Modal -->
+<div id="useModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Use Template</h2>
+            <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <div id="modalTplName" class="selected-tpl-name"></div>
+        <div class="form-group">
+            <label>Target Project *</label>
+            <select id="modalProject">
+                <option value="">— Select a project —</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Assembly Label (in the project)</label>
+            <input type="text" id="modalLabel" placeholder="e.g., A1">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="doLoadDirect()">Load Directly</button>
+            <button class="btn" onclick="doOpenBuilder()">Customize in Builder</button>
+        </div>
+    </div>
+</div>
+
+<script id="templatesRaw" type="application/json">{{ templates_data | tojson | safe }}</script>
+<script id="projectsRaw"  type="application/json">{{ projects_data | tojson | safe }}</script>
+<script>
+const allTemplates = JSON.parse(document.getElementById('templatesRaw').textContent);
+const allProjects  = JSON.parse(document.getElementById('projectsRaw').textContent);
+let filtered = [...allTemplates];
+let activeTpl = null;
+
+// Populate project dropdown
+const projSel = document.getElementById('modalProject');
+allProjects.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.name + (p.number ? ` (#${p.number})` : '');
+    projSel.appendChild(o);
+});
+
+// ── Formula display labels ──
+const FORMULA_LABELS = {
+    'fixed':     'Fixed',
+    'lf':        '= LF',
+    'lf_x_2':   '= LF×2',
+    'sf':        '= SF',
+    'sf_div':    '= SF÷N',
+    'depth':     '= LF×D',
+    'volume_cy': '= Vol CY',
+};
+
+const fmt$ = n => '$' + Number(n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function filterTemplates() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    filtered = allTemplates.filter(t =>
+        t.name.toLowerCase().includes(q) ||
+        t.label.toLowerCase().includes(q) ||
+        t.csi_code.toLowerCase().includes(q) ||
+        t.csi_title.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q)
+    );
+    document.getElementById('countBadge').textContent =
+        filtered.length + ' template' + (filtered.length !== 1 ? 's' : '');
+    renderGrid();
+}
+
+function renderGrid() {
+    const grid = document.getElementById('templatesGrid');
+    if (!grid) return;
+    if (!filtered.length) {
+        grid.innerHTML = '<p style="color:#555; text-align:center; padding:40px; grid-column:1/-1;">No templates match your search.</p>';
+        return;
+    }
+    grid.innerHTML = filtered.map(t => {
+        const csiLine = t.csi_code ? `<span class="val">${esc(t.csi_code)}</span> <span style="color:#555">${esc(t.csi_title)}</span>` : '<span style="color:#444">No CSI</span>';
+
+        // Measurements chips
+        const chips = [];
+        if (t.lf)     chips.push(`LF: <span>${t.lf}</span>`);
+        if (t.height) chips.push(`H: <span>${t.height} ft</span>`);
+        if (t.depth)  chips.push(`D: <span>${t.depth} ft</span>`);
+        if (t.width)  chips.push(`W: <span>${t.width} ft</span>`);
+        const measureHtml = chips.length
+            ? chips.map(c => `<div class="meas-chip">${c}</div>`).join('')
+            : '<div class="meas-chip" style="color:#444">No measurements</div>';
+
+        // Composition items (show up to 4)
+        const showItems = t.composition.slice(0, 4);
+        const moreCount = t.composition.length - showItems.length;
+        const itemsHtml = showItems.map(c =>
+            `<div class="item-row">
+                <span class="formula-tag">${esc(FORMULA_LABELS[c.formula] || c.formula)}</span>
+                <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${esc(c.description)}</span>
+                <span style="color:#555; font-size:10px;">${esc(c.unit)}</span>
+            </div>`
+        ).join('');
+        const moreHtml = moreCount > 0 ? `<div class="more-items">+ ${moreCount} more item${moreCount !== 1 ? 's' : ''}</div>` : '';
+
+        return `
+        <div class="tpl-card" id="tpl-${t.id}">
+            <div class="tpl-header">
+                <div>
+                    <span class="tpl-label-badge">${esc(t.label)}</span><span class="tpl-name">${esc(t.name)}</span>
+                </div>
+                ${t.description ? `<div class="tpl-desc">${esc(t.description)}</div>` : ''}
+            </div>
+            <div class="tpl-meta">
+                <div class="tpl-meta-item"><span class="key">CSI: </span>${csiLine}</div>
+                <div class="tpl-meta-item"><span class="key">Items: </span><span class="val">${t.item_count}</span></div>
+            </div>
+            <div class="tpl-measurements">${measureHtml}</div>
+            <div class="tpl-items">${itemsHtml}${moreHtml}</div>
+            <div class="tpl-footer">
+                <div>
+                    <div class="tpl-cost">${fmt$(t.total_cost)}</div>
+                    <div class="tpl-cost-label">Estimated total</div>
+                </div>
+                <div class="tpl-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="openUseModal(${t.id})">Use Template</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ── Modal ──
+function openUseModal(tplId) {
+    activeTpl = allTemplates.find(t => t.id === tplId);
+    if (!activeTpl) return;
+    document.getElementById('modalTplName').textContent = activeTpl.label + ' — ' + activeTpl.name;
+    document.getElementById('modalLabel').value = activeTpl.label;
+    document.getElementById('modalProject').value = '';
+    document.getElementById('useModal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('useModal').style.display = 'none';
+    activeTpl = null;
+}
+window.onclick = e => { if (e.target.id === 'useModal') closeModal(); };
+
+function getSelectedProjectId() {
+    const pid = document.getElementById('modalProject').value;
+    if (!pid) { alert('Please select a project.'); return null; }
+    return parseInt(pid);
+}
+
+function doLoadDirect() {
+    const pid = getSelectedProjectId();
+    if (!pid) return;
+    const label = document.getElementById('modalLabel').value.trim() || activeTpl.label;
+    const fd = new FormData();
+    fd.append('assembly_label', label);
+    fetch(`/project/${pid}/assembly/load-template/${activeTpl.id}`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) window.location.href = '/project/' + d.project_id;
+            else alert('Error loading template.');
+        });
+}
+
+function doOpenBuilder() {
+    const pid = getSelectedProjectId();
+    if (!pid) return;
+    window.location.href = `/project/${pid}/assembly/builder?from_template=${activeTpl.id}`;
+}
+
+// ── Init ──
+renderGrid();
+</script>
+</body>
+</html>

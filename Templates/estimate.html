@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Estimate — {{ project.project_name }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; }
+
+        .page  { padding: 20px; }
+        .inner { background: #16213e; border-radius: 8px; padding: 24px; }
+
+        .breadcrumb     { color: #888; margin-bottom: 16px; font-size: 13px; }
+        .breadcrumb a   { color: #e94560; text-decoration: none; }
+
+        .header         { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #0f3460; }
+        h1              { color: #e94560; margin-bottom: 4px; font-size: 22px; }
+        .project-meta   { color: #888; font-size: 13px; }
+
+        .btn            { display: inline-block; padding: 8px 16px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; }
+        .btn:hover      { background: #c73652; }
+        .btn-sm         { padding: 5px 10px; font-size: 11px; }
+        .btn-secondary  { background: #0f3460; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-row        { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+        .grp-toggle     { display: flex; }
+        .grp-toggle .btn { border-radius: 0; border-right: 1px solid rgba(255,255,255,0.1); }
+        .grp-toggle .btn:first-child { border-radius: 4px 0 0 4px; }
+        .grp-toggle .btn:last-child  { border-radius: 0 4px 4px 0; border-right: none; }
+        .grp-toggle .btn.active      { background: #e94560; }
+        .grp-toggle .btn:not(.active){ background: #0f3460; }
+
+        /* Totals bar */
+        .totals-bar    { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+        .total-card    { background: #0f3460; padding: 14px 16px; border-radius: 8px; text-align: center; }
+        .total-card h3 { color: #e94560; font-size: 18px; margin-bottom: 4px; }
+        .total-card p  { color: #888; font-size: 11px; }
+
+        /* Toolbar */
+        .toolbar       { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+        .toolbar-left  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .toolbar-label { color: #888; font-size: 12px; white-space: nowrap; }
+
+        /* Table */
+        .table-wrapper { overflow-x: auto; border-radius: 6px; border: 1px solid #0f3460; max-height: 70vh; overflow-y: auto; }
+        table          { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1640px; }
+
+        thead th {
+            background: #0f3460; color: #aaa; padding: 9px 8px;
+            text-align: left; white-space: nowrap;
+            position: sticky; top: 0; z-index: 2;
+            cursor: pointer; user-select: none;
+            border-right: 1px solid #1a2a3a;
+        }
+        thead th:hover { background: #1a3a5a; color: #eee; }
+        .sort-icon     { color: #e94560; margin-left: 3px; font-size: 10px; }
+
+        tbody tr       { border-bottom: 1px solid #1a2a3a; }
+        tbody tr:hover td { background: #1a2a3a; }
+
+        td {
+            padding: 7px 8px; color: #ccc;
+            vertical-align: middle; border-right: 1px solid #162030;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* Column widths */
+        .c-desc  { min-width: 200px; max-width: 240px; }
+        .c-asm   { min-width: 130px; max-width: 160px; }
+        .c-csi1  { width: 90px; }
+        .c-csi2  { width: 130px; }
+        .c-qty   { width: 72px;  text-align: right; }
+        .c-unit  { width: 62px; }
+        .c-pr    { width: 82px;  text-align: right; }
+        .c-lh    { width: 82px;  text-align: right; }
+        .c-mpu   { width: 92px;  text-align: right; }
+        .c-mat   { width: 105px; text-align: right; }
+        .c-lph   { width: 92px;  text-align: right; }
+        .c-lab   { width: 105px; text-align: right; }
+        .c-eph   { width: 92px;  text-align: right; }
+        .c-equ   { width: 105px; text-align: right; }
+        .c-tot   { width: 115px; text-align: right; }
+        .c-trade { width: 120px; display: none; }
+
+        /* Show trade column when in trade view */
+        .show-trade th.c-trade,
+        .show-trade td.c-trade { display: table-cell; }
+
+        /* Editable cells */
+        td.editable         { cursor: pointer; }
+        td.editable:hover   { background: #1f3050 !important; }
+        td.editing          { padding: 0 !important; }
+        td.editing input    { width: 100%; height: 100%; padding: 7px 8px; background: #0d1b2a; border: 2px solid #e94560; color: #eee; font-size: 13px; font-family: Arial, sans-serif; outline: none; }
+
+        /* Calculated cells */
+        td.calc { color: #999; }
+        td.cost { color: #ddd; }
+        td.grand{ color: #e94560; font-weight: bold; }
+
+        /* Group header */
+        tr.grp-hdr td    { background: #0d1b2a; color: #eee; font-weight: bold; padding: 8px 10px; border-top: 2px solid #0f3460; cursor: pointer; }
+        tr.grp-hdr:hover td { background: #111f2e !important; }
+        .grp-badge       { background: #e94560; color: white; padding: 2px 7px; border-radius: 3px; font-size: 10px; margin-right: 5px; }
+        .grp-count       { color: #888; font-size: 11px; font-weight: normal; margin-left: 8px; }
+        .collapse-icon   { color: #888; margin-right: 5px; font-size: 10px; display: inline-block; width: 10px; }
+        tr.grp-hdr td.cost  { color: #ddd; }
+        tr.grp-hdr td.grand { color: #e94560; }
+
+        /* Project total row */
+        tr.proj-total td      { background: #0f3460; color: #eee; font-weight: bold; padding: 9px 8px; border-top: 2px solid #e94560; }
+        tr.proj-total td.grand{ color: #e94560; font-size: 15px; }
+
+        .empty-msg { text-align: center; color: #555; padding: 50px; font-size: 15px; }
+
+        /* Modals */
+        .modal         { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: #16213e; margin: 4% auto; padding: 28px; border-radius: 8px; width: 90%; max-width: 640px; border: 1px solid #0f3460; }
+        .modal-header  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+        .modal-header h2 { color: #e94560; }
+        .close         { color: #888; font-size: 26px; cursor: pointer; line-height: 1; }
+        .close:hover   { color: #eee; }
+        .form-group    { margin-bottom: 14px; }
+        label          { display: block; margin-bottom: 5px; color: #aaa; font-size: 12px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 9px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 13px; font-family: Arial, sans-serif; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
+        .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+        /* AI button column */
+        .c-ai  { width: 36px; text-align: center; padding: 3px !important; }
+        .ai-btn { background: none; border: none; cursor: pointer; font-size: 15px; padding: 3px 5px; border-radius: 3px; opacity: 0.4; transition: opacity 0.15s; }
+        .ai-btn:hover { opacity: 1; background: #1f3050; }
+
+        /* AI slide-in panel */
+        .ai-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; }
+        .ai-panel   { display: none; position: fixed; right: 0; top: 0; height: 100vh; width: 380px;
+                      background: #16213e; border-left: 1px solid #0f3460; z-index: 201;
+                      padding: 24px; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,0.6); }
+        .ai-overlay.open, .ai-panel.open { display: block; }
+        .ai-panel-header { display: flex; justify-content: space-between; align-items: center;
+                           margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #0f3460; }
+        .ai-panel-header .ai-title { color: #e94560; font-size: 15px; font-weight: bold; }
+        .ai-item-name { color: #eee; font-size: 13px; margin-bottom: 20px; padding: 10px 12px;
+                        background: #0d1b2a; border-radius: 4px; border-left: 3px solid #e94560; }
+        .ai-loading   { text-align: center; padding: 48px 0; color: #888; }
+        .ai-spinner   { width: 34px; height: 34px; border: 3px solid #0f3460; border-top-color: #e94560;
+                        border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .ai-label     { color: #888; font-size: 10px; font-weight: bold; text-transform: uppercase;
+                        letter-spacing: 1px; margin-bottom: 6px; }
+        .ai-reasoning { color: #ccc; font-size: 13px; line-height: 1.6; margin-bottom: 20px;
+                        padding: 12px; background: #0d1b2a; border-radius: 4px;
+                        border-left: 3px solid #7bde9b; }
+        .ai-tbl       { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
+        .ai-tbl th    { background: #0f3460; color: #aaa; padding: 7px 10px; text-align: left; }
+        .ai-tbl td    { padding: 8px 10px; border-bottom: 1px solid #1a2a3a; color: #ccc; }
+        .ai-tbl td.ai-val { color: #7bde9b; font-weight: bold; }
+        .ai-disclaimer { color: #555; font-size: 11px; font-style: italic; margin-bottom: 16px; }
+        .ai-error     { color: #e94560; background: #1a0a10; padding: 12px; border-radius: 4px; font-size: 13px; }
+
+        @media print {
+            body { background: white; color: #000; }
+            .page { padding: 0; }
+            .inner { background: white; padding: 12px; border-radius: 0; }
+            .breadcrumb, .btn-row, .toolbar, .ai-overlay, .ai-panel, .modal { display: none !important; }
+            .totals-bar { display: grid; margin-bottom: 12px; }
+            .total-card { background: #f0f0f0; border: 1px solid #ccc; }
+            .total-card h3 { color: #c00; font-size: 15px; }
+            .total-card p { color: #555; }
+            h1 { color: #c00; }
+            .table-wrapper { overflow: visible; max-height: none; border: 1px solid #ccc; }
+            table { font-size: 10px; min-width: unset; }
+            thead th { background: #eee; color: #333; position: static; }
+            tbody tr:hover td { background: transparent; }
+            td, th { color: #333; border-color: #ddd; }
+            td.grand { color: #c00; }
+            td.cost { color: #444; }
+            td.calc { color: #666; }
+            tr.grp-hdr td { background: #f0f0f0; color: #000; border-top: 2px solid #999; }
+            tr.proj-total td { background: #e0e0e0; color: #000; }
+            .grp-badge { background: #c00; }
+            .c-ai { display: none !important; }
+            .c-trade { display: table-cell !important; }
+        }
+    </style>
+</head>
+<body>
+<div class="page"><div class="inner">
+
+    <div class="breadcrumb">
+        <a href="/">Home</a> &gt;
+        <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
+        Estimate
+    </div>
+
+    <div class="header">
+        <div>
+            <h1>{{ project.project_name }} — Estimate</h1>
+            <p class="project-meta">Project #: {{ project.project_number or 'N/A' }} &nbsp;|&nbsp; Location: {{ project.location or 'N/A' }}</p>
+        </div>
+        <div class="btn-row">
+            <a href="/project/{{ project.id }}" class="btn btn-secondary">← Project</a>
+            <a href="/project/{{ project.id }}/report" class="btn btn-secondary">Summary</a>
+            <a href="/project/{{ project.id }}/report/csi" class="btn btn-secondary">CSI Report</a>
+            <a href="/project/{{ project.id }}/estimate/csv" class="btn btn-secondary">Export CSV</a>
+            <button class="btn btn-secondary" onclick="window.print()" id="printBtn">Print</button>
+            <button class="btn btn-secondary" onclick="openAssemblyModal()">+ Assembly</button>
+            <button class="btn" onclick="openAddItemModal(null)">+ Line Item</button>
+        </div>
+    </div>
+
+    <!-- Totals bar -->
+    <div class="totals-bar">
+        <div class="total-card"><h3 id="tot-mat">$0</h3><p>Material</p></div>
+        <div class="total-card"><h3 id="tot-lab">$0</h3><p>Labor</p></div>
+        <div class="total-card"><h3 id="tot-equ">$0</h3><p>Equipment</p></div>
+        <div class="total-card"><h3 id="tot-tot">$0</h3><p>Total Cost</p></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <span class="toolbar-label">Group by:</span>
+            <div class="grp-toggle">
+                <button class="btn active" id="gb-assembly" onclick="setGroup('assembly')">Assembly</button>
+                <button class="btn"        id="gb-csi1"     onclick="setGroup('csi1')">CSI Division</button>
+                <button class="btn"        id="gb-csi2"     onclick="setGroup('csi2')">CSI Section</button>
+                <button class="btn"        id="gb-trade"    onclick="setGroup('trade')">Trade</button>
+                <button class="btn"        id="gb-none"     onclick="setGroup('none')">Flat</button>
+            </div>
+        </div>
+        <span style="color:#888; font-size:12px;">Click any cell to edit &nbsp;·&nbsp; Click column header to sort</span>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrapper" id="tableWrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th class="c-desc" onclick="setSort('description')">Description <span class="sort-icon" id="si-description"></span></th>
+                    <th class="c-asm"  onclick="setSort('assembly_label')">Assembly <span class="sort-icon" id="si-assembly_label"></span></th>
+                    <th class="c-csi1" onclick="setSort('csi_level_1_code')">CSI Div <span class="sort-icon" id="si-csi_level_1_code"></span></th>
+                    <th class="c-csi2" onclick="setSort('csi_level_2_code')">CSI Section <span class="sort-icon" id="si-csi_level_2_code"></span></th>
+                    <th class="c-qty"  onclick="setSort('quantity')">Qty <span class="sort-icon" id="si-quantity"></span></th>
+                    <th class="c-unit" onclick="setSort('unit')">Unit <span class="sort-icon" id="si-unit"></span></th>
+                    <th class="c-pr"   onclick="setSort('production_rate')">Prod Rate <span class="sort-icon" id="si-production_rate"></span></th>
+                    <th class="c-lh"   onclick="setSort('labor_hours')">Labor Hrs <span class="sort-icon" id="si-labor_hours"></span></th>
+                    <th class="c-mpu"  onclick="setSort('material_cost_per_unit')">Mat $/Unit <span class="sort-icon" id="si-material_cost_per_unit"></span></th>
+                    <th class="c-mat"  onclick="setSort('material_cost')">Material $ <span class="sort-icon" id="si-material_cost"></span></th>
+                    <th class="c-lph"  onclick="setSort('labor_cost_per_hour')">Labor $/Hr <span class="sort-icon" id="si-labor_cost_per_hour"></span></th>
+                    <th class="c-lab"  onclick="setSort('labor_cost')">Labor $ <span class="sort-icon" id="si-labor_cost"></span></th>
+                    <th class="c-eph"  onclick="setSort('equipment_cost_per_hour')">Equip $/Hr <span class="sort-icon" id="si-equipment_cost_per_hour"></span></th>
+                    <th class="c-equ"  onclick="setSort('equipment_cost')">Equip $ <span class="sort-icon" id="si-equipment_cost"></span></th>
+                    <th class="c-tot"  onclick="setSort('total_cost')">Total $ <span class="sort-icon" id="si-total_cost"></span></th>
+                    <th class="c-trade" onclick="setSort('trade')">Trade <span class="sort-icon" id="si-trade"></span></th>
+                    <th class="c-ai" title="AI Suggest">✨</th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+
+</div></div>
+
+<!-- Embedded data -->
+<script id="itemsData"      type="application/json">{{ items_json | safe }}</script>
+<script id="assembliesData" type="application/json">{{ assemblies_json | safe }}</script>
+<script id="csi1Data"       type="application/json">{{ csi1_json | safe }}</script>
+<script id="csi2Data"       type="application/json">{{ csi2_json | safe }}</script>
+<script id="projectMeta"    type="application/json">{"location": {{ (project.location or '') | tojson }}}</script>
+
+<!-- Assembly Modal -->
+<div id="assemblyModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Assembly</h2>
+            <span class="close" onclick="closeModal('assemblyModal')">&times;</span>
+        </div>
+        <form onsubmit="submitAssembly(event, {{ project.id }})">
+            <div class="fg2">
+                <div class="form-group">
+                    <label>Assembly Label *</label>
+                    <input type="text" name="assembly_label" placeholder="e.g., A1" required>
+                </div>
+                <div class="form-group">
+                    <label>Assembly Name *</label>
+                    <input type="text" name="assembly_name" placeholder="e.g., Foundation" required>
+                </div>
+            </div>
+            <div class="fg2">
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" name="quantity" step="0.01" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label>Unit</label>
+                    <input type="text" name="unit" placeholder="e.g., LS, SF, CY">
+                </div>
+            </div>
+            <div class="fg2">
+                <div class="form-group">
+                    <label>CSI Division</label>
+                    <select name="csi_level_1_id" id="estAsmCsi1" onchange="estFilterCsi2()">
+                        <option value="">— None —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>CSI Section</label>
+                    <select name="csi_level_2_id" id="estAsmCsi2">
+                        <option value="">— Select Division first —</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" rows="2" placeholder="Optional..."></textarea>
+            </div>
+            <button type="submit" class="btn" style="width:100%; margin-top:10px;">Add Assembly</button>
+        </form>
+    </div>
+</div>
+
+<!-- Line Item Modal -->
+<div id="lineItemModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Line Item</h2>
+            <span class="close" onclick="closeModal('lineItemModal')">&times;</span>
+        </div>
+        <form id="liForm" onsubmit="submitLineItem(event)">
+            <input type="hidden" id="liAsmId">
+            <div class="form-group">
+                <label>Assembly *</label>
+                <select id="liAsmSelect" required onchange="document.getElementById('liAsmId').value=this.value">
+                    <option value="">— Select Assembly —</option>
+                </select>
+            </div>
+            <div class="fg2">
+                <div class="form-group">
+                    <label>Description *</label>
+                    <input type="text" name="description" placeholder="e.g., Excavate trench" required>
+                </div>
+                <div class="form-group">
+                    <label>Trade</label>
+                    <input type="text" name="trade" placeholder="e.g., Concrete, Framing">
+                </div>
+            </div>
+            <div class="fg3">
+                <div class="form-group">
+                    <label>Quantity *</label>
+                    <input type="number" name="quantity" step="0.01" placeholder="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Unit *</label>
+                    <input type="text" name="unit" placeholder="e.g., CY" required>
+                </div>
+                <div class="form-group">
+                    <label>Prod Rate (units/hr)</label>
+                    <input type="number" name="production_rate" step="0.01" placeholder="1">
+                </div>
+            </div>
+            <div class="fg3">
+                <div class="form-group">
+                    <label>Mat Cost / Unit ($)</label>
+                    <input type="number" name="material_cost_per_unit" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Labor Cost / Hr ($)</label>
+                    <input type="number" name="labor_cost_per_hour" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Equip Cost / Hr ($)</label>
+                    <input type="number" name="equipment_cost_per_hour" step="0.01" placeholder="0.00">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" rows="2" placeholder="Optional..."></textarea>
+            </div>
+            <button type="submit" class="btn" style="width:100%; margin-top:10px;">Add Line Item</button>
+        </form>
+    </div>
+</div>
+
+<!-- AI Panel -->
+<div id="aiOverlay" class="ai-overlay" onclick="closeAiPanel()"></div>
+<div id="aiPanel" class="ai-panel">
+    <div class="ai-panel-header">
+        <span class="ai-title">✨ AI Cost Suggestion</span>
+        <span class="close" onclick="closeAiPanel()">&times;</span>
+    </div>
+    <div id="aiItemName" class="ai-item-name"></div>
+    <div id="aiLoading" class="ai-loading">
+        <div class="ai-spinner"></div>
+        <p>Analyzing with Llama 3.2…</p>
+    </div>
+    <div id="aiResult" style="display:none">
+        <div class="ai-label">Reasoning</div>
+        <div id="aiReasoning" class="ai-reasoning"></div>
+        <table class="ai-tbl">
+            <thead><tr><th>Field</th><th>Current</th><th>AI Suggests</th></tr></thead>
+            <tbody id="aiSuggestions"></tbody>
+        </table>
+        <p class="ai-disclaimer">AI suggestions are estimates only. Always review before applying.</p>
+        <button class="btn" onclick="applyAiSuggestion()" style="width:100%">Apply Suggestions</button>
+    </div>
+    <div id="aiError" style="display:none" class="ai-error"></div>
+</div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+let items = JSON.parse(document.getElementById('itemsData').textContent);
+const assemblies = JSON.parse(document.getElementById('assembliesData').textContent);
+const csi1List = JSON.parse(document.getElementById('csi1Data').textContent);
+const csi2All  = JSON.parse(document.getElementById('csi2Data').textContent);
+const projectLocation = JSON.parse(document.getElementById('projectMeta').textContent).location || '';
+
+// Populate assembly dropdown in line item modal
+const asmSel = document.getElementById('liAsmSelect');
+assemblies.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id;
+    o.textContent = `${a.label} — ${a.name}`;
+    asmSel.appendChild(o);
+});
+
+// Populate CSI Division dropdown in assembly modal
+const csi1Sel = document.getElementById('estAsmCsi1');
+csi1List.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.id;
+    o.textContent = `${d.code} — ${d.title}`;
+    csi1Sel.appendChild(o);
+});
+
+function estFilterCsi2() {
+    const parentId = parseInt(document.getElementById('estAsmCsi1').value);
+    const sel = document.getElementById('estAsmCsi2');
+    sel.innerHTML = '<option value="">— None —</option>';
+    if (!parentId) return;
+    csi2All.filter(s => s.parent === parentId).forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id;
+        o.textContent = `${s.code} — ${s.title}`;
+        sel.appendChild(o);
+    });
+}
+
+// ── CSI Division Colors (left-border accent per division) ─────────────────────
+const CSI_COLORS = {
+    '01': '#7b8cde', '02': '#de9b7b', '03': '#7bde9b', '04': '#de7b9b',
+    '05': '#7bbdde', '06': '#c4de7b', '07': '#de7bbd', '08': '#7bdec4',
+    '09': '#debd7b', '10': '#9b7bde', '11': '#7bde7b', '12': '#de9b9b',
+    '13': '#7bcfde', '14': '#debf7b', '21': '#de7b7b', '22': '#7bb8de',
+    '23': '#b87bde', '25': '#de7bde', '26': '#ffd070', '27': '#7bffd4',
+    '28': '#ff8a7b', '31': '#a8e6cf', '32': '#dcedc1', '33': '#ffd3b6',
+    '34': '#ffaaa5', '35': '#a29bfe',
+};
+
+function csiColor(code) {
+    if (!code) return null;
+    return CSI_COLORS[String(code).substring(0, 2)] || null;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = { groupBy: 'assembly', sortCol: null, sortDir: 'asc', collapsed: {} };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const esc  = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmt$ = n => '$' + Number(n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtN = (n, d=1) => Number(n||0).toLocaleString('en-US', {minimumFractionDigits:d, maximumFractionDigits:d});
+
+function rollup(arr) {
+    return arr.reduce((s, i) => ({
+        labor_hours:    s.labor_hours    + i.labor_hours,
+        material_cost:  s.material_cost  + i.material_cost,
+        labor_cost:     s.labor_cost     + i.labor_cost,
+        equipment_cost: s.equipment_cost + i.equipment_cost,
+        total_cost:     s.total_cost     + i.total_cost,
+    }), { labor_hours:0, material_cost:0, labor_cost:0, equipment_cost:0, total_cost:0 });
+}
+
+// ── Grouping ──────────────────────────────────────────────────────────────────
+function getGrp(item) {
+    switch (S.groupBy) {
+        case 'assembly':
+            return { key: 'a'+item.assembly_id, addId: item.assembly_id,
+                     label: `<span class="grp-badge">${esc(item.assembly_label)}</span>${esc(item.assembly_name)}`,
+                     color: null };
+        case 'csi1':
+            return { key: 'c1'+(item.csi_level_1_id||'x'), addId: null,
+                     label: item.csi_level_1_code ? `${esc(item.csi_level_1_code)} — ${esc(item.csi_level_1_title)}` : '<em style="color:#555">No CSI Division</em>',
+                     color: csiColor(item.csi_level_1_code) };
+        case 'csi2':
+            return { key: 'c2'+(item.csi_level_2_id||'x'), addId: null,
+                     label: item.csi_level_2_code ? `${esc(item.csi_level_2_code)} — ${esc(item.csi_level_2_title)}` : '<em style="color:#555">No CSI Section</em>',
+                     color: csiColor(item.csi_level_1_code) };
+        case 'trade': {
+            const t = item.trade || '';
+            return { key: 'tr'+(t.toLowerCase().replace(/\s+/g,'_') || 'none'), addId: null,
+                     label: t ? esc(t) : '<em style="color:#555">No Trade Assigned</em>',
+                     color: null };
+        }
+        default:
+            return { key: 'all', addId: null, label: 'All Items', color: null };
+    }
+}
+
+function groupItems(arr) {
+    const groups = {}, order = [];
+    for (const item of arr) {
+        const g = getGrp(item);
+        if (!groups[g.key]) { groups[g.key] = {...g, items: []}; order.push(g.key); }
+        groups[g.key].items.push(item);
+    }
+    return order.map(k => groups[k]);
+}
+
+// ── Sorting ───────────────────────────────────────────────────────────────────
+function sortItems(arr) {
+    if (!S.sortCol) return arr;
+    return [...arr].sort((a, b) => {
+        let va = a[S.sortCol] ?? '', vb = b[S.sortCol] ?? '';
+        const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+        return S.sortDir === 'asc' ? cmp : -cmp;
+    });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+    const tbody = document.getElementById('tbody');
+
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="99" class="empty-msg">No line items yet — add an assembly, then add line items.</td></tr>`;
+        ['tot-mat','tot-lab','tot-equ','tot-tot'].forEach(id => document.getElementById(id).textContent = '$0.00');
+        return;
+    }
+
+    const sorted = sortItems(items);
+    const groups = groupItems(sorted);
+    const proj   = rollup(items);
+    const showGrp = S.groupBy !== 'none';
+    let html = '';
+
+    for (const grp of groups) {
+        const gr  = rollup(grp.items);
+        const col = S.collapsed[grp.key];
+        const ico = col ? '▶' : '▼';
+        const borderStyle = grp.color ? `border-left: 4px solid ${grp.color};` : 'border-left: 4px solid #0f3460;';
+
+        if (showGrp) {
+            const addBtn = grp.addId
+                ? `<button class="btn btn-sm" style="margin-left:10px;" onclick="event.stopPropagation();openAddItemModal(${grp.addId})">+ Item</button>`
+                : '';
+            html += `
+            <tr class="grp-hdr" onclick="toggleGrp('${grp.key}')">
+                <td colspan="4" style="${borderStyle}"><span class="collapse-icon">${ico}</span>${grp.label}<span class="grp-count">${grp.items.length} item${grp.items.length!==1?'s':''}</span>${addBtn}</td>
+                <td class="c-qty"></td><td class="c-unit"></td><td class="c-pr"></td>
+                <td class="c-lh"  style="text-align:right">${fmtN(gr.labor_hours)}</td>
+                <td class="c-mpu"></td>
+                <td class="c-mat cost" style="text-align:right">${fmt$(gr.material_cost)}</td>
+                <td class="c-lph"></td>
+                <td class="c-lab cost" style="text-align:right">${fmt$(gr.labor_cost)}</td>
+                <td class="c-eph"></td>
+                <td class="c-equ cost" style="text-align:right">${fmt$(gr.equipment_cost)}</td>
+                <td class="c-tot grand" style="text-align:right">${fmt$(gr.total_cost)}</td>
+                <td class="c-trade"></td>
+                <td class="c-ai"></td>
+            </tr>`;
+        }
+
+        if (!col) {
+            for (const item of grp.items) html += rowHtml(item);
+        }
+    }
+
+    // Project total
+    html += `
+    <tr class="proj-total">
+        <td colspan="7"><strong>PROJECT TOTAL</strong></td>
+        <td class="c-lh"  style="text-align:right">${fmtN(proj.labor_hours)}</td>
+        <td></td>
+        <td class="c-mat" style="text-align:right">${fmt$(proj.material_cost)}</td>
+        <td></td>
+        <td class="c-lab" style="text-align:right">${fmt$(proj.labor_cost)}</td>
+        <td></td>
+        <td class="c-equ" style="text-align:right">${fmt$(proj.equipment_cost)}</td>
+        <td class="c-tot grand" style="text-align:right">${fmt$(proj.total_cost)}</td>
+        <td class="c-trade"></td>
+        <td class="c-ai"></td>
+    </tr>`;
+
+    tbody.innerHTML = html;
+
+    // Attach editable handlers
+    tbody.querySelectorAll('td.editable').forEach(td => td.addEventListener('click', () => startEdit(td)));
+
+    updateTotals(proj);
+    updateSortIcons();
+}
+
+function rowHtml(item) {
+    const id = item.id;
+    const asmBadge = `<span class="grp-badge" style="font-size:9px">${esc(item.assembly_label)}</span>${esc(item.assembly_name)}`;
+    return `
+    <tr data-iid="${id}">
+        <td class="c-desc editable" data-id="${id}" data-f="description"   data-t="text"   title="${esc(item.description)}">${esc(item.description)}</td>
+        <td class="c-asm"  title="${esc(item.assembly_label)} ${esc(item.assembly_name)}">${asmBadge}</td>
+        <td class="c-csi1">${esc(item.csi_level_1_code)||'<span style="color:#444">—</span>'}</td>
+        <td class="c-csi2" title="${esc(item.csi_level_2_code)} ${esc(item.csi_level_2_title)}">${esc(item.csi_level_2_code)||'<span style="color:#444">—</span>'}</td>
+        <td class="c-qty  editable" data-id="${id}" data-f="quantity"               data-t="number" style="text-align:right">${fmtN(item.quantity,2)}</td>
+        <td class="c-unit editable" data-id="${id}" data-f="unit"                   data-t="text"  >${esc(item.unit)}</td>
+        <td class="c-pr   editable" data-id="${id}" data-f="production_rate"         data-t="number" style="text-align:right">${item.production_rate ? fmtN(item.production_rate,2) : '—'}</td>
+        <td class="c-lh   calc"     data-id="${id}" data-f="labor_hours"             style="text-align:right">${fmtN(item.labor_hours)}</td>
+        <td class="c-mpu  editable" data-id="${id}" data-f="material_cost_per_unit"  data-t="number" style="text-align:right">${fmt$(item.material_cost_per_unit)}</td>
+        <td class="c-mat  calc cost"data-id="${id}" data-f="material_cost"           style="text-align:right">${fmt$(item.material_cost)}</td>
+        <td class="c-lph  editable" data-id="${id}" data-f="labor_cost_per_hour"     data-t="number" style="text-align:right">${fmt$(item.labor_cost_per_hour)}</td>
+        <td class="c-lab  calc cost"data-id="${id}" data-f="labor_cost"              style="text-align:right">${fmt$(item.labor_cost)}</td>
+        <td class="c-eph  editable" data-id="${id}" data-f="equipment_cost_per_hour" data-t="number" style="text-align:right">${fmt$(item.equipment_cost_per_hour)}</td>
+        <td class="c-equ  calc cost"data-id="${id}" data-f="equipment_cost"          style="text-align:right">${fmt$(item.equipment_cost)}</td>
+        <td class="c-tot  grand"    data-id="${id}" data-f="total_cost"              style="text-align:right">${fmt$(item.total_cost)}</td>
+        <td class="c-trade editable" data-id="${id}" data-f="trade" data-t="text">${esc(item.trade)}</td>
+        <td class="c-ai"><button class="ai-btn" onclick="openAiPanel(${id})" title="Get AI cost suggestion">✨</button></td>
+    </tr>`;
+}
+
+// ── Inline editing ────────────────────────────────────────────────────────────
+let activeEdit = null;
+
+function startEdit(td) {
+    if (activeEdit) commitEdit(activeEdit, true);
+
+    const itemId = +td.dataset.id;
+    const field  = td.dataset.f;
+    const isNum  = td.dataset.t === 'number';
+    const item   = items.find(i => i.id === itemId);
+    if (!item) return;
+
+    const raw = item[field] ?? '';
+    td.classList.add('editing');
+    td.innerHTML = `<input type="${isNum ? 'number' : 'text'}" step="any" value="${esc(String(raw))}" />`;
+    const inp = td.querySelector('input');
+    inp.focus(); inp.select();
+
+    activeEdit = { td, itemId, field, isNum, orig: raw };
+
+    inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); commitEdit(activeEdit, true); }
+        if (e.key === 'Escape') cancelEdit(activeEdit);
+    });
+    inp.addEventListener('blur', () => { if (activeEdit?.td === td) commitEdit(activeEdit, true); });
+}
+
+function commitEdit(edit, save) {
+    if (!edit) return;
+    const { td, itemId, field, isNum, orig } = edit;
+    const inp = td.querySelector('input');
+    if (!inp) { activeEdit = null; return; }
+    const newVal = inp.value;
+    activeEdit = null;
+    td.classList.remove('editing');
+
+    if (!save || String(newVal) === String(orig)) { restoreCell(td, itemId, field, isNum); return; }
+
+    // Optimistic local update
+    const item = items.find(i => i.id === itemId);
+    if (item) {
+        item[field] = isNum ? (parseFloat(newVal) || 0) : newVal;
+        recalcItem(item);
+    }
+    restoreCell(td, itemId, field, isNum);
+    updateRowCalcs(itemId);
+    updateTotals(rollup(items));
+
+    // Persist to server
+    fetch(`/lineitem/${itemId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: newVal })
+    }).then(r => r.json()).then(data => {
+        if (data.success && item) {
+            item.labor_hours = data.labor_hours; item.material_cost = data.material_cost;
+            item.labor_cost  = data.labor_cost;  item.equipment_hours = data.equipment_hours;
+            item.equipment_cost = data.equipment_cost; item.total_cost = data.total_cost;
+            updateRowCalcs(itemId);
+            updateTotals(rollup(items));
+        }
+    });
+}
+
+function cancelEdit(edit) {
+    if (!edit) return;
+    activeEdit = null;
+    edit.td.classList.remove('editing');
+    restoreCell(edit.td, edit.itemId, edit.field, edit.isNum);
+}
+
+function recalcItem(item) {
+    const qty  = item.quantity || 0;
+    const rate = item.production_rate || 0;
+    item.labor_hours     = rate > 0 ? qty / rate : 0;
+    item.equipment_hours = item.labor_hours;
+    item.material_cost   = qty * (item.material_cost_per_unit || 0);
+    item.labor_cost      = item.labor_hours * (item.labor_cost_per_hour || 0);
+    item.equipment_cost  = item.equipment_hours * (item.equipment_cost_per_hour || 0);
+    item.total_cost      = item.material_cost + item.labor_cost + item.equipment_cost;
+}
+
+function restoreCell(td, itemId, field, isNum) {
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    const v = item[field];
+    switch (field) {
+        case 'description': case 'unit': case 'notes': case 'trade': td.textContent = v || ''; break;
+        case 'production_rate': td.textContent = v ? fmtN(v, 2) : '—'; break;
+        case 'quantity':        td.textContent = fmtN(v, 2); break;
+        default: td.textContent = isNum ? fmt$(v) : (v || '');
+    }
+}
+
+function updateRowCalcs(itemId) {
+    const item = items.find(i => i.id === itemId);
+    const row  = document.querySelector(`tr[data-iid="${itemId}"]`);
+    if (!item || !row) return;
+    const set = (f, txt) => { const td = row.querySelector(`td[data-f="${f}"]`); if (td && !td.classList.contains('editing')) td.textContent = txt; };
+    set('labor_hours',    fmtN(item.labor_hours));
+    set('material_cost',  fmt$(item.material_cost));
+    set('labor_cost',     fmt$(item.labor_cost));
+    set('equipment_cost', fmt$(item.equipment_cost));
+    set('total_cost',     fmt$(item.total_cost));
+}
+
+// ── Totals bar ────────────────────────────────────────────────────────────────
+function updateTotals(r) {
+    document.getElementById('tot-mat').textContent = fmt$(r.material_cost);
+    document.getElementById('tot-lab').textContent = fmt$(r.labor_cost);
+    document.getElementById('tot-equ').textContent = fmt$(r.equipment_cost);
+    document.getElementById('tot-tot').textContent = fmt$(r.total_cost);
+}
+
+// ── Group / Sort controls ─────────────────────────────────────────────────────
+function setGroup(g) {
+    S.groupBy = g; S.collapsed = {};
+    ['assembly','csi1','csi2','trade','none'].forEach(id =>
+        document.getElementById('gb-'+id).classList.toggle('active', id === g));
+    // Show Trade column only in trade view
+    document.getElementById('tableWrapper').classList.toggle('show-trade', g === 'trade');
+    render();
+}
+
+function toggleGrp(key) { S.collapsed[key] = !S.collapsed[key]; render(); }
+
+function setSort(col) {
+    S.sortDir = S.sortCol === col && S.sortDir === 'asc' ? 'desc' : 'asc';
+    S.sortCol = col;
+    render();
+}
+
+function updateSortIcons() {
+    document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
+    if (S.sortCol) {
+        const el = document.getElementById('si-' + S.sortCol);
+        if (el) el.textContent = S.sortDir === 'asc' ? ' ▲' : ' ▼';
+    }
+}
+
+// ── Modals ────────────────────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).style.display = 'block'; }
+function openAssemblyModal() {
+    document.getElementById('estAsmCsi1').value = '';
+    document.getElementById('estAsmCsi2').innerHTML = '<option value="">— Select Division first —</option>';
+    openModal('assemblyModal');
+}
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+window.onclick = e => { if (e.target.classList.contains('modal')) closeModal(e.target.id); };
+
+function openAddItemModal(asmId) {
+    document.getElementById('liForm').reset();
+    openModal('lineItemModal');
+    const sel = document.getElementById('liAsmSelect');
+    sel.value = asmId || '';
+    document.getElementById('liAsmId').value = asmId || '';
+}
+
+function submitAssembly(event, projectId) {
+    event.preventDefault();
+    fetch('/project/' + projectId + '/assembly/new', { method: 'POST', body: new FormData(event.target) })
+        .then(r => r.json()).then(d => { if (d.success) window.location.reload(); });
+}
+
+function submitLineItem(event) {
+    event.preventDefault();
+    const asmId = document.getElementById('liAsmId').value;
+    if (!asmId) { alert('Please select an assembly.'); return; }
+    fetch('/assembly/' + asmId + '/lineitem/new', { method: 'POST', body: new FormData(event.target) })
+        .then(r => r.json()).then(d => { if (d.success) window.location.reload(); });
+}
+
+// ── AI Panel ──────────────────────────────────────────────────────────────────
+let aiCurrentItemId = null;
+let aiSuggestionData = null;
+
+function openAiPanel(itemId) {
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    aiCurrentItemId = itemId;
+    aiSuggestionData = null;
+
+    document.getElementById('aiItemName').textContent = item.description;
+    document.getElementById('aiLoading').style.display = 'block';
+    document.getElementById('aiResult').style.display = 'none';
+    document.getElementById('aiError').style.display = 'none';
+    document.getElementById('aiPanel').classList.add('open');
+    document.getElementById('aiOverlay').classList.add('open');
+
+    fetch('/agent/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            description:   item.description,
+            unit:          item.unit,
+            quantity:      item.quantity,
+            location:      projectLocation,
+            csi_code:      item.csi_level_1_code,
+            csi_title:     item.csi_level_1_title,
+            current_mat:   item.material_cost_per_unit,
+            current_labor: item.labor_cost_per_hour,
+            current_equip: item.equipment_cost_per_hour,
+            production_rate: item.production_rate,
+        })
+    }).then(r => r.json()).then(data => {
+        document.getElementById('aiLoading').style.display = 'none';
+        if (data.success) {
+            aiSuggestionData = data.suggestion;
+            showAiResult(item, data.suggestion);
+        } else {
+            document.getElementById('aiError').style.display = 'block';
+            document.getElementById('aiError').textContent = data.error || 'Unknown error.';
+        }
+    }).catch(() => {
+        document.getElementById('aiLoading').style.display = 'none';
+        document.getElementById('aiError').style.display = 'block';
+        document.getElementById('aiError').textContent = 'Could not reach the server.';
+    });
+}
+
+function showAiResult(item, s) {
+    document.getElementById('aiReasoning').textContent = s.reasoning || 'No reasoning provided.';
+    const rows = [
+        ['Mat Cost / Unit',  fmt$(item.material_cost_per_unit),  fmt$(s.material_cost_per_unit)],
+        ['Labor Cost / Hr',  fmt$(item.labor_cost_per_hour),     fmt$(s.labor_cost_per_hour)],
+        ['Equip Cost / Hr',  fmt$(item.equipment_cost_per_hour), fmt$(s.equipment_cost_per_hour)],
+        ['Production Rate',  fmtN(item.production_rate, 2) + ' u/hr', fmtN(s.production_rate, 2) + ' u/hr'],
+    ];
+    document.getElementById('aiSuggestions').innerHTML = rows.map(([label, cur, ai]) =>
+        `<tr><td>${label}</td><td style="color:#888">${cur}</td><td class="ai-val">${ai}</td></tr>`
+    ).join('');
+    document.getElementById('aiResult').style.display = 'block';
+}
+
+function closeAiPanel() {
+    document.getElementById('aiPanel').classList.remove('open');
+    document.getElementById('aiOverlay').classList.remove('open');
+    aiCurrentItemId = null;
+    aiSuggestionData = null;
+}
+
+function applyAiSuggestion() {
+    if (!aiCurrentItemId || !aiSuggestionData) return;
+    const s = aiSuggestionData;
+    const item = items.find(i => i.id === aiCurrentItemId);
+    if (!item) return;
+
+    const fields = {
+        material_cost_per_unit:  s.material_cost_per_unit,
+        labor_cost_per_hour:     s.labor_cost_per_hour,
+        equipment_cost_per_hour: s.equipment_cost_per_hour,
+        production_rate:         s.production_rate,
+    };
+    Object.assign(item, fields);
+    recalcItem(item);
+
+    fetch(`/lineitem/${aiCurrentItemId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields)
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            Object.assign(item, {
+                labor_hours:     data.labor_hours,
+                material_cost:   data.material_cost,
+                labor_cost:      data.labor_cost,
+                equipment_hours: data.equipment_hours,
+                equipment_cost:  data.equipment_cost,
+                total_cost:      data.total_cost,
+            });
+            updateRowCalcs(aiCurrentItemId);
+            updateTotals(rollup(items));
+        }
+    });
+
+    closeAiPanel();
+    render();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>

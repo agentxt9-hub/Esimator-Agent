@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Assembly Builder — {{ project.project_name }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; }
+
+        /* Layout */
+        .top-bar { background: #16213e; border-bottom: 1px solid #0f3460; padding: 12px 24px;
+                   display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50; }
+        .top-bar h1 { color: #e94560; font-size: 18px; }
+        .top-bar .breadcrumb { color: #888; font-size: 13px; }
+        .top-bar .breadcrumb a { color: #e94560; text-decoration: none; }
+        .top-bar-actions { display: flex; gap: 10px; align-items: center; }
+
+        .page { display: grid; grid-template-columns: 1fr; gap: 0; }
+        .main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+        /* Cards / Sections */
+        .section { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .section-title { color: #e94560; font-size: 13px; font-weight: bold; text-transform: uppercase;
+                         letter-spacing: 1px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #0f3460; }
+
+        /* Forms */
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+        .form-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        label { color: #aaa; font-size: 12px; font-weight: bold; }
+        input[type="text"], input[type="number"], textarea, select {
+            padding: 9px 11px; background: #0d1b2a; border: 1px solid #0f3460;
+            border-radius: 4px; color: #eee; font-size: 14px; width: 100%; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
+        .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: #e94560; cursor: pointer; }
+        .checkbox-row label { color: #ccc; font-size: 14px; font-weight: normal; cursor: pointer; }
+
+        /* Measurements derived display */
+        .derived { background: #0d1b2a; border-radius: 4px; padding: 10px 14px; margin-top: 10px;
+                   color: #888; font-size: 13px; display: flex; gap: 20px; flex-wrap: wrap; }
+        .derived span { color: #eee; font-weight: bold; }
+
+        /* Two-panel builder */
+        .builder-panels { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+
+        /* Library panel */
+        .library-panel { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; overflow: hidden; }
+        .library-panel .panel-header { background: #0f3460; padding: 12px 16px; font-size: 13px;
+                                       font-weight: bold; color: #aaa; display: flex; justify-content: space-between; }
+        .lib-search { padding: 12px; border-bottom: 1px solid #0f3460; }
+        .lib-search input { padding: 8px 11px; background: #0d1b2a; border: 1px solid #0f3460;
+                            border-radius: 4px; color: #eee; font-size: 13px; width: 100%; }
+        .lib-search input:focus { outline: none; border-color: #e94560; }
+        .lib-items { max-height: 460px; overflow-y: auto; }
+        .lib-item { padding: 10px 14px; border-bottom: 1px solid #0d1b2a; cursor: pointer; transition: background 0.1s; }
+        .lib-item:hover { background: #1a2a3a; }
+        .lib-item .lib-desc { color: #eee; font-size: 13px; font-weight: bold; }
+        .lib-item .lib-meta { color: #666; font-size: 11px; margin-top: 3px; }
+        .lib-item .csi-tag { display: inline-block; background: #0f3460; color: #888; padding: 1px 6px;
+                              border-radius: 3px; font-size: 10px; margin-right: 4px; }
+        .lib-empty { padding: 30px; text-align: center; color: #555; font-size: 13px; }
+        .add-custom-btn { display: block; width: 100%; padding: 10px; background: none; border: none;
+                          border-top: 1px solid #0f3460; color: #e94560; cursor: pointer; font-size: 13px; }
+        .add-custom-btn:hover { background: #0d1b2a; }
+
+        /* Composition panel */
+        .comp-panel { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; overflow: hidden; }
+        .comp-panel .panel-header { background: #0f3460; padding: 12px 16px; font-size: 13px;
+                                    font-weight: bold; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
+        .comp-empty { padding: 40px; text-align: center; color: #555; font-size: 14px; }
+
+        /* Composition table */
+        .comp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .comp-table th { background: #0d1b2a; padding: 9px 10px; text-align: left; color: #888;
+                         font-weight: bold; white-space: nowrap; border-bottom: 1px solid #0f3460; }
+        .comp-table td { padding: 8px 10px; border-bottom: 1px solid #0d1b2a; vertical-align: middle; }
+        .comp-table tr:last-child td { border-bottom: none; }
+        .comp-table input { padding: 5px 8px; font-size: 12px; }
+        .comp-table select { padding: 5px 6px; font-size: 12px; }
+        .qty-display { color: #e94560; font-weight: bold; font-size: 13px; white-space: nowrap; }
+        .remove-btn { background: none; border: none; color: #e94560; cursor: pointer; font-size: 16px;
+                      padding: 2px 6px; border-radius: 3px; }
+        .remove-btn:hover { background: #3a0a12; }
+
+        /* Preview totals */
+        .totals-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .total-box { background: #0d1b2a; border-radius: 6px; padding: 14px; text-align: center; }
+        .total-box h3 { color: #e94560; font-size: 20px; }
+        .total-box p { color: #888; font-size: 11px; margin-top: 4px; }
+
+        /* Buttons */
+        .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white;
+               text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #c73652; }
+        .btn-secondary { background: #0f3460; color: #eee; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-lg { padding: 13px 32px; font-size: 15px; }
+        .actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; padding-top: 8px; }
+        .hint { color: #666; font-size: 12px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0d1b2a; }
+        ::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+
+        /* Divisor / manual qty inline inputs */
+        .formula-extra { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+        .formula-extra label { color: #888; font-size: 11px; white-space: nowrap; }
+        .formula-extra input { width: 70px; }
+    </style>
+</head>
+<body>
+
+<!-- Sticky top bar -->
+<div class="top-bar">
+    <div>
+        <div class="breadcrumb"><a href="/">Home</a> &rsaquo; <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &rsaquo; Assembly Builder</div>
+        <h1>Assembly Builder</h1>
+    </div>
+    <div class="top-bar-actions">
+        <span class="hint" id="statusMsg"></span>
+        <a href="/project/{{ project.id }}" class="btn btn-secondary">Cancel</a>
+        <button class="btn btn-lg" onclick="saveAssembly()">Save Assembly</button>
+    </div>
+</div>
+
+<div class="main">
+
+    <!-- SECTION 1: Assembly Info -->
+    <div class="section">
+        <div class="section-title">Assembly Information</div>
+        <div class="form-grid-3">
+            <div class="form-group">
+                <label>Assembly Label *</label>
+                <input type="text" id="fLabel" placeholder="e.g., A100, W-EAST" required>
+            </div>
+            <div class="form-group">
+                <label>Assembly Name *</label>
+                <input type="text" id="fName" placeholder="e.g., Exterior Wall — Level 1" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="fDesc" placeholder="Optional notes about this assembly">
+            </div>
+        </div>
+        <div class="checkbox-row" style="margin-top: 12px;">
+            <input type="checkbox" id="fTemplate">
+            <label for="fTemplate">Save as reusable template (available across all projects)</label>
+        </div>
+    </div>
+
+    <!-- SECTION 2: Measurements -->
+    <div class="section">
+        <div class="section-title">Assembly Measurements</div>
+        <div class="form-grid-4">
+            <div class="form-group">
+                <label>Linear Feet (LF)</label>
+                <input type="number" id="mLF" step="0.01" placeholder="0" oninput="updateDerived(); updateAllQtys();">
+            </div>
+            <div class="form-group">
+                <label>Height (ft)</label>
+                <input type="number" id="mHeight" step="0.01" placeholder="0" oninput="updateDerived(); updateAllQtys();">
+            </div>
+            <div class="form-group">
+                <label>Depth (ft)</label>
+                <input type="number" id="mDepth" step="0.01" placeholder="0" oninput="updateDerived(); updateAllQtys();">
+            </div>
+            <div class="form-group">
+                <label>Width (ft)</label>
+                <input type="number" id="mWidth" step="0.01" placeholder="0" oninput="updateDerived(); updateAllQtys();">
+            </div>
+        </div>
+        <div class="derived" id="derived">
+            Enter measurements above to see derived values.
+        </div>
+    </div>
+
+    <!-- SECTION 3: Build Components -->
+    <div class="builder-panels">
+
+        <!-- Left: Library -->
+        <div class="library-panel">
+            <div class="panel-header">
+                <span>Line Item Library</span>
+                <span id="libCount" style="color:#888; font-weight:normal;"></span>
+            </div>
+            <div class="lib-search">
+                <input type="text" id="libSearch" placeholder="Search description, CSI, unit..." oninput="filterLibrary()">
+            </div>
+            <div class="lib-items" id="libItems"></div>
+            <button class="add-custom-btn" onclick="addCustomItem()">+ Add Custom Line Item</button>
+        </div>
+
+        <!-- Right: Composition -->
+        <div class="comp-panel">
+            <div class="panel-header">
+                <span>Composition</span>
+                <span id="compCount" style="color:#888; font-weight:normal;">0 items</span>
+            </div>
+            <div id="compBody">
+                <div class="comp-empty" id="compEmpty">
+                    Select items from the library to build this assembly.
+                </div>
+                <table class="comp-table" id="compTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th style="width:30%">Description</th>
+                            <th style="width:22%">Qty Formula</th>
+                            <th style="width:8%">Qty</th>
+                            <th style="width:6%">Unit</th>
+                            <th style="width:10%">Mat $/Unit</th>
+                            <th style="width:10%">Labor $/Hr</th>
+                            <th style="width:10%">Equip $/Hr</th>
+                            <th style="width:4%"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="compRows"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECTION 4: Preview Totals -->
+    <div class="section">
+        <div class="section-title">Estimate Preview</div>
+        <div class="totals-row">
+            <div class="total-box"><h3 id="prevMat">$0</h3><p>Material Cost</p></div>
+            <div class="total-box"><h3 id="prevLab">$0</h3><p>Labor Cost</p></div>
+            <div class="total-box"><h3 id="prevEqu">$0</h3><p>Equipment Cost</p></div>
+            <div class="total-box"><h3 id="prevTot">$0</h3><p>Total Cost</p></div>
+        </div>
+        <div class="actions" style="margin-top: 16px;">
+            <a href="/project/{{ project.id }}" class="btn btn-secondary">Cancel</a>
+            <button class="btn btn-lg" onclick="saveAssembly()">Save Assembly to Project</button>
+        </div>
+    </div>
+</div>
+
+<script id="libraryData"  type="application/json">{{ library_json | safe }}</script>
+<script id="templateData" type="application/json">{{ template_json | safe }}</script>
+<script>
+const PROJECT_ID = {{ project.id }};
+const allLibraryItems = JSON.parse(document.getElementById('libraryData').textContent);
+const templatePreload = JSON.parse(document.getElementById('templateData').textContent);
+let composition = [];   // array of component objects
+let filteredLib = [...allLibraryItems];
+
+// ── FORMULA DEFINITIONS ──
+const FORMULAS = [
+    { key: 'fixed',     label: 'Fixed Qty',              needsDivisor: false, needsManual: true  },
+    { key: 'lf',        label: '= LF',                   needsDivisor: false, needsManual: false },
+    { key: 'lf_x_2',   label: '= LF × 2',               needsDivisor: false, needsManual: false },
+    { key: 'sf',        label: '= Area SF (LF × H)',     needsDivisor: false, needsManual: false },
+    { key: 'sf_div',    label: '= Area SF ÷ N',          needsDivisor: true,  needsManual: false },
+    { key: 'depth',     label: '= LF × Depth',           needsDivisor: false, needsManual: false },
+    { key: 'volume_cy', label: '= Volume CY (LF×W×D÷27)',needsDivisor: false, needsManual: false },
+];
+
+function getMeasurements() {
+    return {
+        lf:     parseFloat(document.getElementById('mLF').value)     || 0,
+        height: parseFloat(document.getElementById('mHeight').value) || 0,
+        depth:  parseFloat(document.getElementById('mDepth').value)  || 0,
+        width:  parseFloat(document.getElementById('mWidth').value)  || 0,
+    };
+}
+
+// ── DERIVED MEASUREMENTS DISPLAY ──
+function updateDerived() {
+    const m = getMeasurements();
+    const sf = m.lf * m.height;
+    const vol = m.lf * (m.width || 1) * m.depth / 27;
+    const parts = [];
+    if (m.lf)     parts.push('LF: <span>' + fmt(m.lf) + '</span>');
+    if (sf)       parts.push('Area SF: <span>' + fmt(sf) + ' SF</span>');
+    if (m.depth)  parts.push('LF × Depth: <span>' + fmt(m.lf * m.depth) + ' SF</span>');
+    if (m.depth && m.lf) parts.push('Volume: <span>' + fmt(vol) + ' CY</span>');
+    document.getElementById('derived').innerHTML = parts.length
+        ? parts.join(' &nbsp;|&nbsp; ')
+        : 'Enter measurements above to see derived values.';
+}
+
+// ── QTY CALCULATION ──
+function calcQty(comp) {
+    const m = getMeasurements();
+    const sf  = m.lf * m.height;
+    const div = parseFloat(comp.divisor) || 1;
+    switch (comp.formula) {
+        case 'fixed':     return parseFloat(comp.manual_qty) || 0;
+        case 'lf':        return m.lf;
+        case 'lf_x_2':   return m.lf * 2;
+        case 'sf':        return sf;
+        case 'sf_div':    return sf / div;
+        case 'depth':     return m.lf * m.depth;
+        case 'volume_cy': return m.lf * (m.width || 1) * m.depth / 27;
+        default:          return parseFloat(comp.manual_qty) || 0;
+    }
+}
+
+function updateAllQtys() {
+    composition.forEach((_, i) => updateRowQty(i));
+    updateTotals();
+}
+
+function updateRowQty(i) {
+    const qty = calcQty(composition[i]);
+    composition[i].qty = qty;
+    const el = document.getElementById('qty_' + i);
+    if (el) el.textContent = fmtQty(qty);
+}
+
+// ── LIBRARY PANEL ──
+function filterLibrary() {
+    const q = document.getElementById('libSearch').value.toLowerCase();
+    filteredLib = allLibraryItems.filter(item =>
+        item.description.toLowerCase().includes(q) ||
+        item.csi_code.toLowerCase().includes(q) ||
+        item.csi_title.toLowerCase().includes(q) ||
+        item.unit.toLowerCase().includes(q)
+    );
+    renderLibrary();
+}
+
+function renderLibrary() {
+    const el = document.getElementById('libItems');
+    document.getElementById('libCount').textContent = filteredLib.length + ' items';
+    if (!filteredLib.length) {
+        el.innerHTML = '<div class="lib-empty">No matching items</div>';
+        return;
+    }
+    el.innerHTML = filteredLib.map(item => `
+        <div class="lib-item" onclick="addFromLibrary(${item.id})">
+            <div class="lib-desc">${escHtml(item.description)}</div>
+            <div class="lib-meta">
+                ${item.csi_code ? `<span class="csi-tag">${item.csi_code}</span>` : ''}
+                ${item.unit || '—'}
+                ${item.material_cost_per_unit ? ' · $' + item.material_cost_per_unit.toFixed(2) + '/unit' : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function addFromLibrary(itemId) {
+    const item = allLibraryItems.find(i => i.id === itemId);
+    if (!item) return;
+    composition.push({
+        library_item_id: item.id,
+        description: item.description,
+        unit: item.unit || '',
+        formula: 'fixed',
+        divisor: 1,
+        manual_qty: 0,
+        production_rate: item.production_rate || 1,
+        mat_cost: item.material_cost_per_unit || 0,
+        labor_rate: item.labor_cost_per_hour || 0,
+        equip_rate: item.equipment_cost_per_hour || 0,
+        qty: 0,
+    });
+    renderComposition();
+    updateAllQtys();
+}
+
+function addCustomItem() {
+    composition.push({
+        library_item_id: null,
+        description: 'New Item',
+        unit: '',
+        formula: 'fixed',
+        divisor: 1,
+        manual_qty: 0,
+        production_rate: 1,
+        mat_cost: 0,
+        labor_rate: 0,
+        equip_rate: 0,
+        qty: 0,
+    });
+    renderComposition();
+}
+
+// ── COMPOSITION RENDERING ──
+function renderComposition() {
+    const empty = document.getElementById('compEmpty');
+    const table = document.getElementById('compTable');
+    const rows  = document.getElementById('compRows');
+    document.getElementById('compCount').textContent = composition.length + ' item' + (composition.length !== 1 ? 's' : '');
+
+    if (!composition.length) {
+        empty.style.display = 'block';
+        table.style.display = 'none';
+        updateTotals();
+        return;
+    }
+    empty.style.display = 'none';
+    table.style.display = 'table';
+
+    rows.innerHTML = composition.map((c, i) => {
+        const fDef = FORMULAS.find(f => f.key === c.formula) || FORMULAS[0];
+        const formulaOptions = FORMULAS.map(f =>
+            `<option value="${f.key}" ${f.key === c.formula ? 'selected' : ''}>${f.label}</option>`
+        ).join('');
+
+        const extras = fDef.needsDivisor
+            ? `<div class="formula-extra"><label>÷ N =</label><input type="number" step="0.01" value="${c.divisor || 32}"
+                 onchange="composition[${i}].divisor=this.value; updateRowQty(${i}); updateTotals();" style="width:65px;"></div>`
+            : fDef.needsManual
+            ? `<div class="formula-extra"><label>Qty =</label><input type="number" step="0.01" value="${c.manual_qty || ''}"
+                 placeholder="0"
+                 onchange="composition[${i}].manual_qty=this.value; updateRowQty(${i}); updateTotals();" style="width:80px;"></div>`
+            : '';
+
+        return `
+        <tr>
+            <td><input type="text" value="${escHtml(c.description)}"
+                 onchange="composition[${i}].description=this.value;"
+                 style="font-weight:bold; color:#eee;"></td>
+            <td>
+                <select onchange="composition[${i}].formula=this.value; renderComposition(); updateAllQtys();">
+                    ${formulaOptions}
+                </select>
+                ${extras}
+            </td>
+            <td><span class="qty-display" id="qty_${i}">${fmtQty(c.qty)}</span></td>
+            <td><input type="text" value="${escHtml(c.unit)}" style="width:60px;"
+                 onchange="composition[${i}].unit=this.value;"></td>
+            <td><input type="number" step="0.01" value="${c.mat_cost || ''}" placeholder="0.00"
+                 onchange="composition[${i}].mat_cost=parseFloat(this.value)||0; updateTotals();"></td>
+            <td><input type="number" step="0.01" value="${c.labor_rate || ''}" placeholder="0.00"
+                 onchange="composition[${i}].labor_rate=parseFloat(this.value)||0; updateTotals();"></td>
+            <td><input type="number" step="0.01" value="${c.equip_rate || ''}" placeholder="0.00"
+                 onchange="composition[${i}].equip_rate=parseFloat(this.value)||0; updateTotals();"></td>
+            <td><button class="remove-btn" onclick="removeItem(${i})" title="Remove">✕</button></td>
+        </tr>`;
+    }).join('');
+    updateTotals();
+}
+
+function removeItem(i) {
+    composition.splice(i, 1);
+    renderComposition();
+    updateAllQtys();
+}
+
+// ── TOTALS ──
+function updateTotals() {
+    let mat = 0, lab = 0, equ = 0;
+    composition.forEach(c => {
+        const qty = c.qty || 0;
+        const pr  = parseFloat(c.production_rate) || 1;
+        const lh  = pr > 0 ? qty / pr : 0;
+        mat += qty * (parseFloat(c.mat_cost)    || 0);
+        lab += lh  * (parseFloat(c.labor_rate)  || 0);
+        equ += lh  * (parseFloat(c.equip_rate)  || 0);
+    });
+    const tot = mat + lab + equ;
+    document.getElementById('prevMat').textContent = fmtDollar(mat);
+    document.getElementById('prevLab').textContent = fmtDollar(lab);
+    document.getElementById('prevEqu').textContent = fmtDollar(equ);
+    document.getElementById('prevTot').textContent = fmtDollar(tot);
+}
+
+// ── SAVE ──
+function saveAssembly() {
+    const label = document.getElementById('fLabel').value.trim();
+    const name  = document.getElementById('fName').value.trim();
+    if (!label || !name) { alert('Assembly Label and Name are required.'); return; }
+    if (!composition.length) { alert('Add at least one line item to the composition.'); return; }
+
+    document.getElementById('statusMsg').textContent = 'Saving...';
+
+    const payload = new FormData();
+    payload.append('assembly_label', label);
+    payload.append('assembly_name', name);
+    payload.append('description', document.getElementById('fDesc').value);
+    if (document.getElementById('fTemplate').checked) payload.append('is_template', 'on');
+    payload.append('measurement_params', JSON.stringify(getMeasurements()));
+    payload.append('composition', JSON.stringify(composition));
+
+    fetch('/project/' + PROJECT_ID + '/assembly/builder/save', { method: 'POST', body: payload })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '/project/' + PROJECT_ID;
+            } else {
+                document.getElementById('statusMsg').textContent = 'Error: ' + (data.error || 'Save failed');
+            }
+        })
+        .catch(() => {
+            document.getElementById('statusMsg').textContent = 'Network error — try again';
+        });
+}
+
+// ── UTILITIES ──
+function fmt(n)        { return Number(n).toLocaleString('en-US', {maximumFractionDigits: 2}); }
+function fmtQty(n)     { return n ? Number(n).toLocaleString('en-US', {maximumFractionDigits: 2}) : '—'; }
+function fmtDollar(n)  { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function escHtml(s)    { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── INIT ──
+renderLibrary();
+updateDerived();
+
+// Pre-load from template if provided
+if (templatePreload) {
+    document.getElementById('fLabel').value = templatePreload.label || '';
+    document.getElementById('fName').value  = templatePreload.name  || '';
+    document.getElementById('fDesc').value  = templatePreload.description || '';
+    if (templatePreload.lf)     document.getElementById('mLF').value     = templatePreload.lf;
+    if (templatePreload.height) document.getElementById('mHeight').value = templatePreload.height;
+    if (templatePreload.depth)  document.getElementById('mDepth').value  = templatePreload.depth;
+    if (templatePreload.width)  document.getElementById('mWidth').value  = templatePreload.width;
+    composition = templatePreload.composition.map(c => ({ ...c }));
+    updateDerived();
+    renderComposition();
+    updateAllQtys();
+}
+</script>
+</body>
+</html>
