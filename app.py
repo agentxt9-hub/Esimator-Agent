@@ -1,166 +1,579 @@
 # app.py - Construction Estimating Tool
-# Install required packages first by running in terminal:
-# pip install flask psycopg2-binary sqlalchemy flask-sqlalchemy
+# pip install flask psycopg2-binary sqlalchemy flask-sqlalchemy flask-login
 
-from flask import Flask, render_template, request, jsonify, Response
+from flask import (Flask, render_template, request, jsonify, Response,
+                   send_from_directory, redirect, url_for, abort, flash)
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from flask_login import (LoginManager, UserMixin, login_user, logout_user,
+                         login_required, current_user)
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from datetime import datetime, timezone
+from functools import wraps
 import os
 import json
 import io
 import csv
-import urllib.request
-import urllib.error
 import re
+import anthropic
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
-# Database connection - update password to match your PostgreSQL setup
+# ─────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Builder@localhost:5432/estimator_db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'logo')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
+
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
 
 # ─────────────────────────────────────────
 # DATABASE MODELS
 # ─────────────────────────────────────────
 
+class Company(db.Model):
+    __tablename__ = 'companies'
+    id           = db.Column(db.Integer, primary_key=True)
+    company_name = db.Column(db.String(255), nullable=False)
+    created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    users        = db.relationship('User', backref='company', lazy=True)
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id            = db.Column(db.Integer, primary_key=True)
+    company_id    = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    username      = db.Column(db.String(100), unique=True, nullable=False)
+    email         = db.Column(db.String(255))
+    password_hash = db.Column(db.String(255), nullable=False)
+    role          = db.Column(db.String(20), default='estimator')  # admin | estimator | viewer
+    created_at    = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 class CSILevel1(db.Model):
     __tablename__ = 'csi_level_1'
-    id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(10), unique=True, nullable=False)
-    title = db.Column(db.String(255), nullable=False)
+    id          = db.Column(db.Integer, primary_key=True)
+    code        = db.Column(db.String(10), unique=True, nullable=False)
+    title       = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    subcodes = db.relationship('CSILevel2', backref='division', lazy=True)
+    created_at  = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    subcodes    = db.relationship('CSILevel2', backref='division', lazy=True)
 
 class CSILevel2(db.Model):
     __tablename__ = 'csi_level_2'
-    id = db.Column(db.Integer, primary_key=True)
-    csi_level_1_id = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'), nullable=False)
-    code = db.Column(db.String(20), unique=True, nullable=False)
-    title = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id              = db.Column(db.Integer, primary_key=True)
+    csi_level_1_id  = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'), nullable=False)
+    code            = db.Column(db.String(20), unique=True, nullable=False)
+    title           = db.Column(db.String(255), nullable=False)
+    description     = db.Column(db.Text)
+    created_at      = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Project(db.Model):
     __tablename__ = 'projects'
-    id = db.Column(db.Integer, primary_key=True)
-    project_name = db.Column(db.String(255), nullable=False)
-    project_number = db.Column(db.String(100))
-    description = db.Column(db.Text)
-    location = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
-    assemblies = db.relationship('Assembly', backref='project', lazy=True)
+    id               = db.Column(db.Integer, primary_key=True)
+    company_id       = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    project_name     = db.Column(db.String(255), nullable=False)
+    project_number   = db.Column(db.String(100))
+    description      = db.Column(db.Text)
+    location         = db.Column(db.String(255))  # kept for backward compat
+    city             = db.Column(db.String(100))
+    state            = db.Column(db.String(50))
+    zip_code         = db.Column(db.String(20))
+    project_type_id  = db.Column(db.Integer, db.ForeignKey('global_properties.id'))
+    market_sector_id = db.Column(db.Integer, db.ForeignKey('global_properties.id'))
+    created_at       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    assemblies       = db.relationship('Assembly', backref='project', lazy=True)
 
 class Assembly(db.Model):
     __tablename__ = 'assemblies'
-    id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    assembly_label = db.Column(db.String(100), nullable=False)
-    assembly_name = db.Column(db.String(255), nullable=False)
-    csi_level_1_id = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'))
-    csi_level_2_id = db.Column(db.Integer, db.ForeignKey('csi_level_2.id'))
-    description = db.Column(db.Text)
-    quantity = db.Column(db.Numeric(10, 2))
-    unit = db.Column(db.String(50))
-    is_template = db.Column(db.Boolean, default=False)
-    measurement_params = db.Column(db.Text)  # JSON: {"lf":500,"height":12,"depth":0,"width":0}
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
-    line_items = db.relationship('LineItem', backref='assembly', lazy=True)
-    composition = db.relationship('AssemblyComposition', backref='assembly', lazy=True,
-                                  order_by='AssemblyComposition.sort_order')
+    id              = db.Column(db.Integer, primary_key=True)
+    project_id      = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    assembly_label  = db.Column(db.String(100), nullable=False)
+    assembly_name   = db.Column(db.String(255), nullable=False)
+    csi_level_1_id  = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'))
+    csi_level_2_id  = db.Column(db.Integer, db.ForeignKey('csi_level_2.id'))
+    description     = db.Column(db.Text)
+    quantity        = db.Column(db.Numeric(10, 2))
+    unit            = db.Column(db.String(50))
+    is_template     = db.Column(db.Boolean, default=False)
+    measurement_params = db.Column(db.Text)
+    created_at      = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at      = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    line_items      = db.relationship('LineItem', backref='assembly', lazy=True)
+    composition     = db.relationship('AssemblyComposition', backref='assembly', lazy=True,
+                                      order_by='AssemblyComposition.sort_order')
 
 class AssemblyComposition(db.Model):
     __tablename__ = 'assembly_composition'
-    id = db.Column(db.Integer, primary_key=True)
-    assembly_id = db.Column(db.Integer, db.ForeignKey('assemblies.id'), nullable=False)
-    library_item_id = db.Column(db.Integer, db.ForeignKey('library_items.id'))
-    description = db.Column(db.String(255), nullable=False)
-    unit = db.Column(db.String(50))
-    qty_formula = db.Column(db.String(50), default='fixed')
-    qty_divisor = db.Column(db.Numeric(10, 4), default=1)
-    qty_manual = db.Column(db.Numeric(10, 2), default=0)
-    production_rate = db.Column(db.Numeric(10, 2), default=1)
+    id                     = db.Column(db.Integer, primary_key=True)
+    assembly_id            = db.Column(db.Integer, db.ForeignKey('assemblies.id'), nullable=False)
+    library_item_id        = db.Column(db.Integer, db.ForeignKey('library_items.id'))
+    description            = db.Column(db.String(255), nullable=False)
+    unit                   = db.Column(db.String(50))
+    qty_formula            = db.Column(db.String(50), default='fixed')
+    qty_divisor            = db.Column(db.Numeric(10, 4), default=1)
+    qty_manual             = db.Column(db.Numeric(10, 2), default=0)
+    production_rate        = db.Column(db.Numeric(10, 2), default=1)
     material_cost_per_unit = db.Column(db.Numeric(10, 2))
-    labor_cost_per_hour = db.Column(db.Numeric(10, 2))
-    equipment_cost_per_hour = db.Column(db.Numeric(10, 2))
-    sort_order = db.Column(db.Integer, default=0)
+    labor_cost_per_hour    = db.Column(db.Numeric(10, 2))
+    equipment_cost_per_hour= db.Column(db.Numeric(10, 2))
+    sort_order             = db.Column(db.Integer, default=0)
 
 class LibraryItem(db.Model):
     __tablename__ = 'library_items'
-    id = db.Column(db.Integer, primary_key=True)
-    description = db.Column(db.String(255), nullable=False)
-    csi_level_1_id = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'))
-    csi_level_2_id = db.Column(db.Integer, db.ForeignKey('csi_level_2.id'))
-    unit = db.Column(db.String(50))
-    production_rate = db.Column(db.Numeric(10, 2))
-    production_unit = db.Column(db.String(50))
+    id                     = db.Column(db.Integer, primary_key=True)
+    company_id             = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    description            = db.Column(db.String(255), nullable=False)
+    csi_level_1_id         = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'))
+    csi_level_2_id         = db.Column(db.Integer, db.ForeignKey('csi_level_2.id'))
+    unit                   = db.Column(db.String(50))
+    production_rate        = db.Column(db.Numeric(10, 2))
+    production_unit        = db.Column(db.String(50))
+    item_type              = db.Column(db.String(20), default='labor_material')
+    prod_base              = db.Column(db.Boolean, default=True)
     material_cost_per_unit = db.Column(db.Numeric(10, 2))
-    labor_cost_per_hour = db.Column(db.Numeric(10, 2))
-    equipment_cost_per_hour = db.Column(db.Numeric(10, 2))
-    notes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    labor_cost_per_hour    = db.Column(db.Numeric(10, 2))
+    labor_cost_per_unit    = db.Column(db.Numeric(10, 2))
+    equipment_cost_per_hour= db.Column(db.Numeric(10, 2))
+    equipment_cost_per_unit= db.Column(db.Numeric(10, 2))
+    notes                  = db.Column(db.Text)
+    created_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class LineItem(db.Model):
     __tablename__ = 'line_items'
-    id = db.Column(db.Integer, primary_key=True)
-    assembly_id = db.Column(db.Integer, db.ForeignKey('assemblies.id'), nullable=False)
-    description = db.Column(db.String(255), nullable=False)
-    quantity = db.Column(db.Numeric(10, 2), nullable=False)
-    unit = db.Column(db.String(50), nullable=False)
-    production_rate = db.Column(db.Numeric(10, 2))
-    production_unit = db.Column(db.String(50))
+    id                     = db.Column(db.Integer, primary_key=True)
+    assembly_id            = db.Column(db.Integer, db.ForeignKey('assemblies.id'), nullable=True)
+    project_id             = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
+    description            = db.Column(db.String(255), nullable=False)
+    quantity               = db.Column(db.Numeric(10, 2), nullable=False)
+    unit                   = db.Column(db.String(50), nullable=False)
+    csi_level_1_id         = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'))
+    csi_level_2_id         = db.Column(db.Integer, db.ForeignKey('csi_level_2.id'))
+    item_type              = db.Column(db.String(20), default='labor_material')
+    prod_base              = db.Column(db.Boolean, default=True)
+    production_rate        = db.Column(db.Numeric(10, 2))
+    production_unit        = db.Column(db.String(50))
     material_cost_per_unit = db.Column(db.Numeric(10, 2))
-    material_cost = db.Column(db.Numeric(12, 2))
-    labor_hours = db.Column(db.Numeric(10, 2))
-    labor_cost_per_hour = db.Column(db.Numeric(10, 2))
-    labor_cost = db.Column(db.Numeric(12, 2))
-    equipment_hours = db.Column(db.Numeric(10, 2))
-    equipment_cost_per_hour = db.Column(db.Numeric(10, 2))
-    equipment_cost = db.Column(db.Numeric(12, 2))
-    total_cost = db.Column(db.Numeric(12, 2))
-    trade = db.Column(db.String(100))
-    notes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    material_cost          = db.Column(db.Numeric(12, 2))
+    labor_hours            = db.Column(db.Numeric(10, 2))
+    labor_cost_per_hour    = db.Column(db.Numeric(10, 2))
+    labor_cost_per_unit    = db.Column(db.Numeric(10, 2))
+    labor_cost             = db.Column(db.Numeric(12, 2))
+    equipment_hours        = db.Column(db.Numeric(10, 2))
+    equipment_cost_per_hour= db.Column(db.Numeric(10, 2))
+    equipment_cost_per_unit= db.Column(db.Numeric(10, 2))
+    equipment_cost         = db.Column(db.Numeric(12, 2))
+    total_cost             = db.Column(db.Numeric(12, 2))
+    trade                  = db.Column(db.String(100))
+    notes                  = db.Column(db.Text)
+    created_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+class GlobalProperty(db.Model):
+    __tablename__ = 'global_properties'
+    id         = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    category   = db.Column(db.String(50), nullable=False)  # 'trade' | 'project_type' | 'market_sector'
+    name       = db.Column(db.String(255), nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+
+class CompanyProfile(db.Model):
+    __tablename__ = 'company_profile'
+    id           = db.Column(db.Integer, primary_key=True)
+    company_id   = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    company_name = db.Column(db.String(255))
+    address      = db.Column(db.String(255))
+    city         = db.Column(db.String(100))
+    state        = db.Column(db.String(50))
+    zip_code     = db.Column(db.String(20))
+    phone        = db.Column(db.String(50))
+    email        = db.Column(db.String(255))
+    logo_path    = db.Column(db.String(500))
+
+class ProductionRateStandard(db.Model):
+    __tablename__ = 'production_rate_standards'
+    id             = db.Column(db.Integer, primary_key=True)
+    trade          = db.Column(db.String(100))
+    csi_level_1_id = db.Column(db.Integer, db.ForeignKey('csi_level_1.id'))
+    csi_level_2_id = db.Column(db.Integer, db.ForeignKey('csi_level_2.id'))
+    description    = db.Column(db.String(255), nullable=False)
+    unit           = db.Column(db.String(50))
+    min_rate       = db.Column(db.Numeric(10, 2))
+    typical_rate   = db.Column(db.Numeric(10, 2))
+    max_rate       = db.Column(db.Numeric(10, 2))
+    source_notes   = db.Column(db.Text)
+    created_at     = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+class WBSProperty(db.Model):
+    __tablename__ = 'wbs_properties'
+    id            = db.Column(db.Integer, primary_key=True)
+    project_id    = db.Column(db.Integer, db.ForeignKey('projects.id'))
+    property_type = db.Column(db.String(50), nullable=False)
+    property_name = db.Column(db.String(100), nullable=False)
+    is_template   = db.Column(db.Boolean, default=False)
+    is_custom     = db.Column(db.Boolean, default=False)
+    display_order = db.Column(db.Integer, default=0)
+    created_at    = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    values        = db.relationship('WBSValue', backref='wbs_property', lazy=True,
+                                    order_by='WBSValue.display_order',
+                                    cascade='all, delete-orphan')
+
+class WBSValue(db.Model):
+    __tablename__ = 'wbs_values'
+    id              = db.Column(db.Integer, primary_key=True)
+    wbs_property_id = db.Column(db.Integer, db.ForeignKey('wbs_properties.id'), nullable=False)
+    value_name      = db.Column(db.String(100), nullable=False)
+    value_code      = db.Column(db.String(50))
+    parent_id       = db.Column(db.Integer, db.ForeignKey('wbs_values.id'))
+    display_order   = db.Column(db.Integer, default=0)
+    created_at      = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+class LineItemWBS(db.Model):
+    __tablename__ = 'line_item_wbs'
+    id              = db.Column(db.Integer, primary_key=True)
+    line_item_id    = db.Column(db.Integer, db.ForeignKey('line_items.id'), nullable=False)
+    wbs_property_id = db.Column(db.Integer, db.ForeignKey('wbs_properties.id'), nullable=False)
+    wbs_value_id    = db.Column(db.Integer, db.ForeignKey('wbs_values.id'), nullable=False)
+    created_at      = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__  = (db.UniqueConstraint('line_item_id', 'wbs_property_id',
+                                           name='uq_lineitem_wbs_property'),)
 
 # ─────────────────────────────────────────
-# ROUTES
+# AUTH HELPERS & DECORATORS
+# ─────────────────────────────────────────
+
+def admin_required(f):
+    """Restrict route to users with role='admin'."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != 'admin':
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+def get_project_or_403(project_id):
+    """Fetch project and abort 403 if it belongs to a different company."""
+    project = Project.query.get_or_404(project_id)
+    if project.company_id != current_user.company_id:
+        abort(403)
+    return project
+
+def get_assembly_or_403(assembly_id):
+    """Fetch assembly and abort 403 if its project belongs to a different company."""
+    assembly = Assembly.query.get_or_404(assembly_id)
+    project = Project.query.get_or_404(assembly.project_id)
+    if project.company_id != current_user.company_id:
+        abort(403)
+    return assembly
+
+def get_lineitem_or_403(item_id):
+    """Fetch line item and abort 403 if it belongs to a different company."""
+    item = LineItem.query.get_or_404(item_id)
+    if item.assembly_id:
+        assembly = Assembly.query.get_or_404(item.assembly_id)
+        project  = Project.query.get_or_404(assembly.project_id)
+    else:
+        project = Project.query.get_or_404(item.project_id)
+    if project.company_id != current_user.company_id:
+        abort(403)
+    return item
+
+def get_library_item_or_403(item_id):
+    item = LibraryItem.query.get_or_404(item_id)
+    if item.company_id != current_user.company_id:
+        abort(403)
+    return item
+
+# ─────────────────────────────────────────
+# AUTH ROUTES
+# ─────────────────────────────────────────
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user, remember=True)
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
+        flash('Invalid username or password.', 'error')
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# ─────────────────────────────────────────
+# ADMIN ROUTES
+# ─────────────────────────────────────────
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_panel():
+    companies = Company.query.order_by(Company.company_name).all()
+    all_users = User.query.order_by(User.company_id, User.username).all()
+    return render_template('admin.html', companies=companies, all_users=all_users)
+
+@app.route('/admin/company/new', methods=['POST'])
+@login_required
+@admin_required
+def admin_new_company():
+    data = request.get_json()
+    name = (data.get('company_name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'Company name required'})
+    company = Company(company_name=name)
+    db.session.add(company)
+    db.session.flush()
+    # Seed default global properties for the new company
+    _seed_company_properties(company.id)
+    db.session.commit()
+    return jsonify({'success': True, 'id': company.id})
+
+@app.route('/admin/user/new', methods=['POST'])
+@login_required
+@admin_required
+def admin_new_user():
+    data = request.get_json()
+    username   = (data.get('username') or '').strip()
+    email      = (data.get('email') or '').strip()
+    password   = data.get('password') or ''
+    role       = data.get('role', 'estimator')
+    company_id = data.get('company_id')
+    if not username or not password or not company_id:
+        return jsonify({'success': False, 'error': 'username, password and company are required'})
+    if User.query.filter_by(username=username).first():
+        return jsonify({'success': False, 'error': 'Username already exists'})
+    if not Company.query.get(company_id):
+        return jsonify({'success': False, 'error': 'Invalid company'})
+    user = User(username=username, email=email or None,
+                company_id=int(company_id), role=role)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'success': True, 'id': user.id})
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        return jsonify({'success': False, 'error': 'Cannot delete yourself'})
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/admin/user/<int:user_id>/edit', methods=['POST'])
+@login_required
+@admin_required
+def admin_edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    if 'role' in data:
+        user.role = data['role']
+    if 'email' in data:
+        user.email = data['email'] or None
+    if data.get('new_password'):
+        user.set_password(data['new_password'])
+    db.session.commit()
+    return jsonify({'success': True})
+
+# ─────────────────────────────────────────
+# PROFILE ROUTE
+# ─────────────────────────────────────────
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    error = None
+    success = None
+    if request.method == 'POST':
+        current_pw  = request.form.get('current_password', '')
+        new_pw      = request.form.get('new_password', '')
+        confirm_pw  = request.form.get('confirm_password', '')
+        if not current_user.check_password(current_pw):
+            error = 'Current password is incorrect.'
+        elif len(new_pw) < 6:
+            error = 'New password must be at least 6 characters.'
+        elif new_pw != confirm_pw:
+            error = 'New passwords do not match.'
+        else:
+            current_user.set_password(new_pw)
+            db.session.commit()
+            success = 'Password changed successfully.'
+    return render_template('profile.html', user=current_user, error=error, success=success)
+
+# ─────────────────────────────────────────
+# STATIC FILES
+# ─────────────────────────────────────────
+
+@app.route('/uploads/logo/<filename>')
+def uploaded_logo(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# ─────────────────────────────────────────
+# SETTINGS / GLOBAL PROPERTIES
+# ─────────────────────────────────────────
+
+@app.route('/settings')
+@login_required
+def settings():
+    company = CompanyProfile.query.filter_by(company_id=current_user.company_id).first()
+    props = (GlobalProperty.query
+             .filter_by(company_id=current_user.company_id)
+             .order_by(GlobalProperty.category, GlobalProperty.sort_order, GlobalProperty.name)
+             .all())
+    props_json = json.dumps([{'id': p.id, 'category': p.category, 'name': p.name} for p in props])
+    return render_template('settings.html', company=company, props_json=props_json)
+
+@app.route('/settings/company/update', methods=['POST'])
+@login_required
+def update_company():
+    company = CompanyProfile.query.filter_by(company_id=current_user.company_id).first()
+    if not company:
+        company = CompanyProfile(company_id=current_user.company_id)
+        db.session.add(company)
+    company.company_name = request.form.get('company_name', '')
+    company.address      = request.form.get('address', '')
+    company.city         = request.form.get('city', '')
+    company.state        = request.form.get('state', '')
+    company.zip_code     = request.form.get('zip_code', '')
+    company.phone        = request.form.get('phone', '')
+    company.email        = request.form.get('email', '')
+    logo = request.files.get('logo')
+    if logo and logo.filename:
+        filename = secure_filename(logo.filename)
+        logo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        company.logo_path = filename
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/settings/property/new', methods=['POST'])
+@login_required
+def new_global_property():
+    data = request.get_json()
+    category = data.get('category', '').strip()
+    name = data.get('name', '').strip()
+    if not category or not name:
+        return jsonify({'success': False, 'error': 'category and name required'})
+    existing = GlobalProperty.query.filter_by(
+        company_id=current_user.company_id, category=category, name=name).first()
+    if existing:
+        return jsonify({'success': True, 'id': existing.id, 'name': existing.name})
+    prop = GlobalProperty(company_id=current_user.company_id, category=category, name=name)
+    db.session.add(prop)
+    db.session.commit()
+    return jsonify({'success': True, 'id': prop.id, 'name': prop.name})
+
+@app.route('/settings/property/<int:prop_id>/delete', methods=['POST'])
+@login_required
+def delete_global_property(prop_id):
+    prop = GlobalProperty.query.get_or_404(prop_id)
+    if prop.company_id != current_user.company_id:
+        abort(403)
+    db.session.delete(prop)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/settings/properties')
+@login_required
+def get_global_properties():
+    props = (GlobalProperty.query
+             .filter_by(company_id=current_user.company_id)
+             .order_by(GlobalProperty.category, GlobalProperty.sort_order, GlobalProperty.name)
+             .all())
+    return jsonify([{'id': p.id, 'category': p.category, 'name': p.name} for p in props])
+
+# ─────────────────────────────────────────
+# DASHBOARD
 # ─────────────────────────────────────────
 
 @app.route('/')
+@login_required
 def index():
-    projects = Project.query.all()
-    total_value = db.session.query(db.func.sum(LineItem.total_cost)).scalar() or 0
-    active_count = db.session.query(Project.id)\
-        .join(Assembly, Assembly.project_id == Project.id)\
-        .join(LineItem, LineItem.assembly_id == Assembly.id)\
-        .distinct().count()
+    cid = current_user.company_id
+    projects = Project.query.filter_by(company_id=cid).all()
+    total_value = (db.session.query(db.func.sum(LineItem.total_cost))
+                   .join(Assembly, LineItem.assembly_id == Assembly.id)
+                   .join(Project, Assembly.project_id == Project.id)
+                   .filter(Project.company_id == cid)
+                   .scalar() or 0)
+    # Add direct line items (no assembly)
+    direct_value = (db.session.query(db.func.sum(LineItem.total_cost))
+                    .join(Project, LineItem.project_id == Project.id)
+                    .filter(Project.company_id == cid, LineItem.assembly_id == None)
+                    .scalar() or 0)
+    total_value = float(total_value) + float(direct_value)
+    active_count = (db.session.query(Project.id)
+                    .filter_by(company_id=cid)
+                    .join(Assembly, Assembly.project_id == Project.id)
+                    .join(LineItem, LineItem.assembly_id == Assembly.id)
+                    .distinct().count())
     return render_template('index.html', projects=projects,
-                           total_value=float(total_value),
-                           active_count=active_count)
+                           total_value=total_value, active_count=active_count)
+
+# ─────────────────────────────────────────
+# PROJECT ROUTES
+# ─────────────────────────────────────────
 
 @app.route('/project/new', methods=['GET', 'POST'])
+@login_required
 def new_project():
     if request.method == 'POST':
         project = Project(
+            company_id=current_user.company_id,
             project_name=request.form['project_name'],
-            project_number=request.form['project_number'],
-            description=request.form['description'],
-            location=request.form['location']
+            project_number=request.form.get('project_number', ''),
+            description=request.form.get('description', ''),
+            city=request.form.get('city', ''),
+            state=request.form.get('state', ''),
+            zip_code=request.form.get('zip_code', ''),
+            project_type_id=request.form.get('project_type_id') or None,
+            market_sector_id=request.form.get('market_sector_id') or None,
         )
         db.session.add(project)
         db.session.commit()
+        _initialize_wbs(project.id)
         return jsonify({'success': True, 'project_id': project.id})
-    return render_template('new_project.html')
+    props = (GlobalProperty.query
+             .filter_by(company_id=current_user.company_id)
+             .order_by(GlobalProperty.category, GlobalProperty.name).all())
+    props_json = json.dumps([{'id': p.id, 'category': p.category, 'name': p.name} for p in props])
+    return render_template('new_project.html', props_json=props_json)
 
 @app.route('/project/<int:project_id>')
+@login_required
 def view_project(project_id):
-    project = Project.query.get_or_404(project_id)
+    project = get_project_or_403(project_id)
     assemblies = Assembly.query.filter_by(project_id=project_id).all()
     csi1_list = CSILevel1.query.order_by(CSILevel1.code).all()
     csi2_list = CSILevel2.query.order_by(CSILevel2.code).all()
@@ -172,13 +585,23 @@ def view_project(project_id):
                         'csi_level_1_id': a.csi_level_1_id, 'csi_level_2_id': a.csi_level_2_id,
                         'description': a.description or '', 'quantity': float(a.quantity or 0),
                         'unit': a.unit or ''} for a in assemblies]
+    props = (GlobalProperty.query
+             .filter_by(company_id=current_user.company_id)
+             .order_by(GlobalProperty.category, GlobalProperty.name).all())
+    props_json = json.dumps([{'id': p.id, 'category': p.category, 'name': p.name} for p in props])
+    props_map = {p.id: p.name for p in props}
     return render_template('project.html', project=project, assemblies=assemblies,
                            csi1_list=csi1_list, csi2_json=json.dumps(csi2_data),
                            csi1_map=csi1_map, csi2_map=csi2_map,
-                           assemblies_json=json.dumps(assemblies_data))
+                           assemblies_json=json.dumps(assemblies_data),
+                           props_json=props_json,
+                           project_type_name=props_map.get(project.project_type_id, ''),
+                           market_sector_name=props_map.get(project.market_sector_id, ''))
 
 @app.route('/project/<int:project_id>/assembly/new', methods=['POST'])
+@login_required
 def new_assembly(project_id):
+    get_project_or_403(project_id)
     assembly = Assembly(
         project_id=project_id,
         assembly_label=request.form['assembly_label'],
@@ -193,78 +616,129 @@ def new_assembly(project_id):
     db.session.commit()
     return jsonify({'success': True, 'assembly_id': assembly.id})
 
-@app.route('/assembly/<int:assembly_id>/lineitem/new', methods=['POST'])
-def new_line_item(assembly_id):
-    quantity = float(request.form.get('quantity', 0))
-    production_rate = float(request.form.get('production_rate', 1))
-    material_cost_per_unit = float(request.form.get('material_cost_per_unit', 0))
-    labor_cost_per_hour = float(request.form.get('labor_cost_per_hour', 0))
-    equipment_cost_per_hour = float(request.form.get('equipment_cost_per_hour', 0))
-
-    # Calculate hours from production rate
-    labor_hours = quantity / production_rate if production_rate > 0 else 0
-    equipment_hours = labor_hours  # adjust if equipment hours differ
-
-    # Calculate costs
-    material_cost = quantity * material_cost_per_unit
-    labor_cost = labor_hours * labor_cost_per_hour
-    equipment_cost = equipment_hours * equipment_cost_per_hour
-    total_cost = material_cost + labor_cost + equipment_cost
-
-    line_item = LineItem(
+def _make_line_item_from_form(form, assembly_id=None, project_id=None):
+    prod_base_val = form.get('prod_base', 'true').lower() in ('true', '1', 'on', 'yes')
+    item = LineItem(
         assembly_id=assembly_id,
-        description=request.form['description'],
-        quantity=quantity,
-        unit=request.form['unit'],
-        production_rate=production_rate,
-        production_unit=request.form.get('production_unit'),
-        material_cost_per_unit=material_cost_per_unit,
-        material_cost=material_cost,
-        labor_hours=labor_hours,
-        labor_cost_per_hour=labor_cost_per_hour,
-        labor_cost=labor_cost,
-        equipment_hours=equipment_hours,
-        equipment_cost_per_hour=equipment_cost_per_hour,
-        equipment_cost=equipment_cost,
-        total_cost=total_cost,
-        trade=request.form.get('trade'),
-        notes=request.form.get('notes')
+        project_id=project_id,
+        description=form['description'],
+        quantity=float(form.get('quantity', 0) or 0),
+        unit=form.get('unit', ''),
+        item_type=form.get('item_type', 'labor_material'),
+        prod_base=prod_base_val,
+        production_rate=float(form.get('production_rate', 0) or 0) or None,
+        material_cost_per_unit=float(form.get('material_cost_per_unit', 0) or 0),
+        labor_cost_per_hour=float(form.get('labor_cost_per_hour', 0) or 0),
+        labor_cost_per_unit=float(form.get('labor_cost_per_unit', 0) or 0),
+        equipment_cost_per_unit=float(form.get('equipment_cost_per_unit', 0) or 0),
+        trade=form.get('trade') or None,
+        notes=form.get('notes') or None,
     )
-    db.session.add(line_item)
+    calculate_item_costs(item)
+    return item
+
+@app.route('/assembly/<int:assembly_id>/lineitem/new', methods=['POST'])
+@login_required
+def new_line_item(assembly_id):
+    get_assembly_or_403(assembly_id)
+    item = _make_line_item_from_form(request.form, assembly_id=assembly_id)
+    db.session.add(item)
     db.session.commit()
-    return jsonify({'success': True, 'line_item_id': line_item.id})
+    return jsonify({'success': True, 'line_item_id': item.id})
+
+@app.route('/project/<int:project_id>/lineitem/new', methods=['POST'])
+@login_required
+def new_direct_line_item(project_id):
+    get_project_or_403(project_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data'}), 400
+    prod_base_val = str(data.get('prod_base', '1')).lower() in ('true', '1', 'on', 'yes')
+    csi1_id = int(data['csi_level_1_id']) if data.get('csi_level_1_id') else None
+    csi2_id = int(data['csi_level_2_id']) if data.get('csi_level_2_id') else None
+    item = LineItem(
+        assembly_id=None,
+        project_id=project_id,
+        csi_level_1_id=csi1_id,
+        csi_level_2_id=csi2_id,
+        description=data.get('description', ''),
+        quantity=float(data.get('quantity', 0) or 0),
+        unit=data.get('unit', ''),
+        item_type=data.get('item_type', 'labor_material'),
+        prod_base=prod_base_val,
+        production_rate=float(data.get('production_rate', 0) or 0) or None,
+        material_cost_per_unit=float(data.get('material_cost_per_unit', 0) or 0),
+        labor_cost_per_hour=float(data.get('labor_cost_per_hour', 0) or 0),
+        labor_cost_per_unit=float(data.get('labor_cost_per_unit', 0) or 0),
+        equipment_cost_per_unit=float(data.get('equipment_cost_per_unit', 0) or 0),
+        trade=data.get('trade') or None,
+        notes=data.get('notes') or None,
+    )
+    calculate_item_costs(item)
+    db.session.add(item)
+    db.session.commit()
+    csi1_map = {d.id: d for d in CSILevel1.query.all()}
+    csi2_map = {s.id: s for s in CSILevel2.query.all()}
+    csi1 = csi1_map.get(csi1_id)
+    csi2 = csi2_map.get(csi2_id)
+    return jsonify({'success': True, 'item': {
+        'id': item.id,
+        'assembly_id': None,
+        'assembly_label': '',
+        'assembly_name': 'Direct Items',
+        'csi_level_1_id': csi1_id, 'csi_level_1_code': csi1.code if csi1 else '', 'csi_level_1_title': csi1.title if csi1 else '',
+        'csi_level_2_id': csi2_id, 'csi_level_2_code': csi2.code if csi2 else '', 'csi_level_2_title': csi2.title if csi2 else '',
+        'description': item.description,
+        'quantity': float(item.quantity or 0),
+        'unit': item.unit or '',
+        'item_type': item.item_type or 'labor_material',
+        'prod_base': item.prod_base if item.prod_base is not None else True,
+        'production_rate': float(item.production_rate or 0),
+        'labor_hours': float(item.labor_hours or 0),
+        'material_cost_per_unit': float(item.material_cost_per_unit or 0),
+        'material_cost': float(item.material_cost or 0),
+        'labor_cost_per_hour': float(item.labor_cost_per_hour or 0),
+        'labor_cost_per_unit': float(item.labor_cost_per_unit or 0),
+        'labor_cost': float(item.labor_cost or 0),
+        'equipment_cost_per_unit': float(item.equipment_cost_per_unit or 0),
+        'equipment_cost_per_hour': float(item.equipment_cost_per_hour or 0),
+        'equipment_hours': float(item.equipment_hours or 0),
+        'equipment_cost': float(item.equipment_cost or 0),
+        'total_cost': float(item.total_cost or 0),
+        'trade': item.trade or '',
+        'notes': item.notes or '',
+    }})
 
 @app.route('/project/<int:project_id>/summary')
+@login_required
 def project_summary(project_id):
-    project = Project.query.get_or_404(project_id)
-    assemblies = Assembly.query.filter_by(project_id=project_id).all()
-    
+    project = get_project_or_403(project_id)
     summary = {
-        'total_material_cost': 0,
-        'total_labor_cost': 0,
-        'total_labor_hours': 0,
-        'total_equipment_cost': 0,
-        'total_equipment_hours': 0,
-        'total_cost': 0
+        'total_material_cost': 0, 'total_labor_cost': 0, 'total_labor_hours': 0,
+        'total_equipment_cost': 0, 'total_equipment_hours': 0, 'total_cost': 0
     }
-
-    for assembly in assemblies:
-        line_items = LineItem.query.filter_by(assembly_id=assembly.id).all()
-        for item in line_items:
-            summary['total_material_cost'] += float(item.material_cost or 0)
-            summary['total_labor_cost'] += float(item.labor_cost or 0)
-            summary['total_labor_hours'] += float(item.labor_hours or 0)
+    for assembly in project.assemblies:
+        for item in LineItem.query.filter_by(assembly_id=assembly.id).all():
+            summary['total_material_cost']  += float(item.material_cost or 0)
+            summary['total_labor_cost']     += float(item.labor_cost or 0)
+            summary['total_labor_hours']    += float(item.labor_hours or 0)
             summary['total_equipment_cost'] += float(item.equipment_cost or 0)
-            summary['total_equipment_hours'] += float(item.equipment_hours or 0)
-            summary['total_cost'] += float(item.total_cost or 0)
-
+            summary['total_equipment_hours']+= float(item.equipment_hours or 0)
+            summary['total_cost']           += float(item.total_cost or 0)
+    for item in LineItem.query.filter_by(project_id=project_id, assembly_id=None).all():
+        summary['total_material_cost']  += float(item.material_cost or 0)
+        summary['total_labor_cost']     += float(item.labor_cost or 0)
+        summary['total_labor_hours']    += float(item.labor_hours or 0)
+        summary['total_equipment_cost'] += float(item.equipment_cost or 0)
+        summary['total_equipment_hours']+= float(item.equipment_hours or 0)
+        summary['total_cost']           += float(item.total_cost or 0)
     return jsonify({'project': project.project_name, 'summary': summary})
 
 @app.route('/project/<int:project_id>/report')
+@login_required
 def project_report(project_id):
-    project = Project.query.get_or_404(project_id)
+    project = get_project_or_403(project_id)
     raw_assemblies = Assembly.query.filter_by(project_id=project_id).all()
-
     summary = {
         'total_material_cost': 0, 'total_labor_cost': 0, 'total_labor_hours': 0,
         'total_equipment_cost': 0, 'total_equipment_hours': 0, 'total_cost': 0
@@ -276,163 +750,234 @@ def project_report(project_id):
                'equipment_hours': 0, 'total_cost': 0}
         for item in asm.line_items:
             row['item_count'] += 1
-            row['material_cost']    += float(item.material_cost or 0)
-            row['labor_cost']       += float(item.labor_cost or 0)
-            row['labor_hours']      += float(item.labor_hours or 0)
-            row['equipment_cost']   += float(item.equipment_cost or 0)
-            row['equipment_hours']  += float(item.equipment_hours or 0)
-            row['total_cost']       += float(item.total_cost or 0)
+            row['material_cost']   += float(item.material_cost or 0)
+            row['labor_cost']      += float(item.labor_cost or 0)
+            row['labor_hours']     += float(item.labor_hours or 0)
+            row['equipment_cost']  += float(item.equipment_cost or 0)
+            row['equipment_hours'] += float(item.equipment_hours or 0)
+            row['total_cost']      += float(item.total_cost or 0)
         assembly_rows.append(row)
-        for key in ('material_cost', 'labor_cost', 'labor_hours', 'equipment_cost', 'equipment_hours', 'total_cost'):
+        for key in ('material_cost', 'labor_cost', 'labor_hours', 'equipment_cost', 'equipment_hours'):
             summary['total_' + key] += row[key]
-
+        summary['total_cost'] += row['total_cost']
     return render_template('summary.html', project=project, summary=summary, assemblies=assembly_rows)
 
 @app.route('/project/<int:project_id>/estimate')
+@login_required
 def estimate_view(project_id):
-    project = Project.query.get_or_404(project_id)
+    project = get_project_or_403(project_id)
     assemblies = Assembly.query.filter_by(project_id=project_id).order_by(Assembly.assembly_label).all()
-
     csi1_map = {d.id: d for d in CSILevel1.query.all()}
     csi2_map = {s.id: s for s in CSILevel2.query.all()}
 
+    def item_dict(item, asm=None):
+        csi1_id = asm.csi_level_1_id if asm else item.csi_level_1_id
+        csi2_id = asm.csi_level_2_id if asm else item.csi_level_2_id
+        csi1 = csi1_map.get(csi1_id)
+        csi2 = csi2_map.get(csi2_id)
+        return {
+            'id': item.id,
+            'assembly_id': asm.id if asm else None,
+            'assembly_label': asm.assembly_label if asm else '',
+            'assembly_name': asm.assembly_name if asm else 'Direct Items',
+            'csi_level_1_id': csi1_id,
+            'csi_level_1_code': csi1.code if csi1 else '',
+            'csi_level_1_title': csi1.title if csi1 else '',
+            'csi_level_2_id': csi2_id,
+            'csi_level_2_code': csi2.code if csi2 else '',
+            'csi_level_2_title': csi2.title if csi2 else '',
+            'description': item.description,
+            'quantity': float(item.quantity or 0),
+            'unit': item.unit or '',
+            'item_type': item.item_type or 'labor_material',
+            'prod_base': item.prod_base if item.prod_base is not None else True,
+            'production_rate': float(item.production_rate or 0),
+            'labor_hours': float(item.labor_hours or 0),
+            'material_cost_per_unit': float(item.material_cost_per_unit or 0),
+            'material_cost': float(item.material_cost or 0),
+            'labor_cost_per_hour': float(item.labor_cost_per_hour or 0),
+            'labor_cost_per_unit': float(item.labor_cost_per_unit or 0),
+            'labor_cost': float(item.labor_cost or 0),
+            'equipment_cost_per_unit': float(item.equipment_cost_per_unit or 0),
+            'equipment_cost_per_hour': float(item.equipment_cost_per_hour or 0),
+            'equipment_hours': float(item.equipment_hours or 0),
+            'equipment_cost': float(item.equipment_cost or 0),
+            'total_cost': float(item.total_cost or 0),
+            'trade': item.trade or '',
+            'notes': item.notes or '',
+        }
+
     items = []
     for asm in assemblies:
-        csi1 = csi1_map.get(asm.csi_level_1_id)
-        csi2 = csi2_map.get(asm.csi_level_2_id)
         for item in asm.line_items:
-            items.append({
-                'id': item.id,
-                'assembly_id': asm.id,
-                'assembly_label': asm.assembly_label,
-                'assembly_name': asm.assembly_name,
-                'csi_level_1_id': asm.csi_level_1_id,
-                'csi_level_1_code': csi1.code if csi1 else '',
-                'csi_level_1_title': csi1.title if csi1 else '',
-                'csi_level_2_id': asm.csi_level_2_id,
-                'csi_level_2_code': csi2.code if csi2 else '',
-                'csi_level_2_title': csi2.title if csi2 else '',
-                'description': item.description,
-                'quantity': float(item.quantity or 0),
-                'unit': item.unit or '',
-                'production_rate': float(item.production_rate or 0),
-                'labor_hours': float(item.labor_hours or 0),
-                'material_cost_per_unit': float(item.material_cost_per_unit or 0),
-                'material_cost': float(item.material_cost or 0),
-                'labor_cost_per_hour': float(item.labor_cost_per_hour or 0),
-                'labor_cost': float(item.labor_cost or 0),
-                'equipment_cost_per_hour': float(item.equipment_cost_per_hour or 0),
-                'equipment_hours': float(item.equipment_hours or 0),
-                'equipment_cost': float(item.equipment_cost or 0),
-                'total_cost': float(item.total_cost or 0),
-                'trade': item.trade or '',
-                'notes': item.notes or '',
-            })
+            items.append(item_dict(item, asm))
+    for item in LineItem.query.filter_by(project_id=project_id, assembly_id=None).all():
+        items.append(item_dict(item, None))
 
     assemblies_data = [{'id': a.id, 'label': a.assembly_label, 'name': a.assembly_name} for a in assemblies]
     csi1_data = [{'id': d.id, 'code': d.code, 'title': d.title}
                  for d in CSILevel1.query.order_by(CSILevel1.code).all()]
     csi2_data = [{'id': s.id, 'parent': s.csi_level_1_id, 'code': s.code, 'title': s.title}
                  for s in CSILevel2.query.order_by(CSILevel2.code).all()]
+    props = (GlobalProperty.query
+             .filter_by(company_id=current_user.company_id)
+             .order_by(GlobalProperty.category, GlobalProperty.name).all())
+    props_json = json.dumps([{'id': p.id, 'category': p.category, 'name': p.name} for p in props])
+    lib_items = LibraryItem.query.filter_by(company_id=current_user.company_id).order_by(LibraryItem.description).all()
+    lib_data = [{'id': i.id, 'description': i.description,
+                 'csi_level_1_id': i.csi_level_1_id,
+                 'csi_level_2_id': i.csi_level_2_id,
+                 'csi_level_1_code': csi1_map[i.csi_level_1_id].code if i.csi_level_1_id and i.csi_level_1_id in csi1_map else '',
+                 'csi_level_2_code': csi2_map[i.csi_level_2_id].code if i.csi_level_2_id and i.csi_level_2_id in csi2_map else '',
+                 'unit': i.unit or '',
+                 'item_type': i.item_type or 'labor_material',
+                 'prod_base': i.prod_base if i.prod_base is not None else True,
+                 'production_rate': float(i.production_rate or 0),
+                 'material_cost_per_unit': float(i.material_cost_per_unit or 0),
+                 'labor_cost_per_hour': float(i.labor_cost_per_hour or 0),
+                 'labor_cost_per_unit': float(i.labor_cost_per_unit or 0),
+                 'equipment_cost_per_unit': float(i.equipment_cost_per_unit or 0),
+                 'notes': i.notes or ''} for i in lib_items]
 
     return render_template('estimate.html',
                            project=project,
                            items_json=json.dumps(items),
                            assemblies_json=json.dumps(assemblies_data),
                            csi1_json=json.dumps(csi1_data),
-                           csi2_json=json.dumps(csi2_data))
-
+                           csi2_json=json.dumps(csi2_data),
+                           props_json=props_json,
+                           library_json=json.dumps(lib_data))
 
 @app.route('/assembly/<int:assembly_id>/update', methods=['POST'])
+@login_required
 def update_assembly(assembly_id):
-    assembly = Assembly.query.get_or_404(assembly_id)
+    assembly = get_assembly_or_403(assembly_id)
     assembly.assembly_label = request.form['assembly_label']
-    assembly.assembly_name = request.form['assembly_name']
+    assembly.assembly_name  = request.form['assembly_name']
     assembly.csi_level_1_id = request.form.get('csi_level_1_id') or None
     assembly.csi_level_2_id = request.form.get('csi_level_2_id') or None
-    assembly.description = request.form.get('description')
-    assembly.quantity = request.form.get('quantity') or None
-    assembly.unit = request.form.get('unit')
-    assembly.updated_at = datetime.utcnow()
+    assembly.description    = request.form.get('description')
+    assembly.quantity       = request.form.get('quantity') or None
+    assembly.unit           = request.form.get('unit')
+    assembly.updated_at     = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify({'success': True})
 
 @app.route('/lineitem/<int:item_id>/update', methods=['POST'])
+@login_required
 def update_line_item(item_id):
-    item = LineItem.query.get_or_404(item_id)
+    item = get_lineitem_or_403(item_id)
     data = request.get_json()
-
-    if 'description' in data: item.description = data['description']
-    if 'unit' in data:        item.unit = data['unit']
-    if 'trade' in data:       item.trade = data['trade']
-    if 'notes' in data:       item.notes = data['notes']
-
-    for field in ('quantity', 'production_rate', 'material_cost_per_unit',
-                  'labor_cost_per_hour', 'equipment_cost_per_hour'):
-        if field in data:
-            try:
-                setattr(item, field, float(data[field]) if data[field] not in ('', None) else 0)
-            except (ValueError, TypeError):
-                pass
-
-    # Recalculate derived values
-    qty      = float(item.quantity or 0)
-    rate     = float(item.production_rate or 0)
-    lhrs     = qty / rate if rate > 0 else 0
-    ehrs     = lhrs
-    mat_cost = qty  * float(item.material_cost_per_unit or 0)
-    lab_cost = lhrs * float(item.labor_cost_per_hour or 0)
-    equ_cost = ehrs * float(item.equipment_cost_per_hour or 0)
-    total    = mat_cost + lab_cost + equ_cost
-
-    item.labor_hours     = lhrs
-    item.equipment_hours = ehrs
-    item.material_cost   = mat_cost
-    item.labor_cost      = lab_cost
-    item.equipment_cost  = equ_cost
-    item.total_cost      = total
-    item.updated_at      = datetime.utcnow()
+    str_fields = ('description', 'unit', 'trade', 'notes', 'item_type')
+    for f in str_fields:
+        if f in data: setattr(item, f, data[f] or None if f in ('trade', 'notes') else data[f])
+    if 'prod_base' in data:
+        item.prod_base = bool(data['prod_base'])
+    if 'csi_level_1_id' in data:
+        item.csi_level_1_id = int(data['csi_level_1_id']) if data['csi_level_1_id'] else None
+    if 'csi_level_2_id' in data:
+        item.csi_level_2_id = int(data['csi_level_2_id']) if data['csi_level_2_id'] else None
+    num_fields = ('quantity', 'production_rate', 'material_cost_per_unit',
+                  'labor_cost_per_hour', 'labor_cost_per_unit',
+                  'equipment_cost_per_unit', 'equipment_cost_per_hour')
+    for f in num_fields:
+        if f in data:
+            try: setattr(item, f, float(data[f]) if data[f] not in ('', None) else 0)
+            except (ValueError, TypeError): pass
+    calculate_item_costs(item)
+    item.updated_at = datetime.now(timezone.utc)
     db.session.commit()
-
     return jsonify({
         'success': True,
-        'labor_hours': lhrs, 'material_cost': mat_cost,
-        'labor_cost': lab_cost, 'equipment_hours': ehrs,
-        'equipment_cost': equ_cost, 'total_cost': total
+        'labor_hours':     float(item.labor_hours or 0),
+        'material_cost':   float(item.material_cost or 0),
+        'labor_cost':      float(item.labor_cost or 0),
+        'equipment_hours': float(item.equipment_hours or 0),
+        'equipment_cost':  float(item.equipment_cost or 0),
+        'total_cost':      float(item.total_cost or 0),
     })
 
-
 @app.route('/lineitem/<int:item_id>/delete', methods=['POST'])
+@login_required
 def delete_line_item(item_id):
-    item = LineItem.query.get_or_404(item_id)
+    item = get_lineitem_or_403(item_id)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'success': True})
 
 @app.route('/assembly/<int:assembly_id>/delete', methods=['POST'])
+@login_required
 def delete_assembly(assembly_id):
-    assembly = Assembly.query.get_or_404(assembly_id)
+    assembly = get_assembly_or_403(assembly_id)
     LineItem.query.filter_by(assembly_id=assembly_id).delete()
     db.session.delete(assembly)
     db.session.commit()
     return jsonify({'success': True})
 
+@app.route('/project/<int:project_id>/update', methods=['POST'])
+@login_required
+def update_project(project_id):
+    project = get_project_or_403(project_id)
+    data = request.get_json()
+    project.project_name     = data.get('project_name',     project.project_name)
+    project.project_number   = data.get('project_number',   project.project_number)
+    project.description      = data.get('description',      project.description)
+    project.city             = data.get('city',             project.city)
+    project.state            = data.get('state',            project.state)
+    project.zip_code         = data.get('zip_code',         project.zip_code)
+    project.project_type_id  = data.get('project_type_id',  project.project_type_id) or None
+    project.market_sector_id = data.get('market_sector_id', project.market_sector_id) or None
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/project/<int:project_id>/delete', methods=['POST'])
+@login_required
 def delete_project(project_id):
-    project = Project.query.get_or_404(project_id)
+    project = get_project_or_403(project_id)
     for asm in project.assemblies:
         LineItem.query.filter_by(assembly_id=asm.id).delete()
+    LineItem.query.filter_by(project_id=project_id, assembly_id=None).delete()
     Assembly.query.filter_by(project_id=project_id).delete()
     db.session.delete(project)
     db.session.commit()
     return jsonify({'success': True})
 
 # ─────────────────────────────────────────
+# HELPER: ITEM COST CALCULATOR
+# ─────────────────────────────────────────
+
+def calculate_item_costs(item):
+    qty       = float(item.quantity or 0)
+    item_type = item.item_type or 'labor_material'
+    prod_base = item.prod_base if item.prod_base is not None else True
+
+    if item_type == 'equipment':
+        item.labor_hours     = 0
+        item.labor_cost      = 0
+        item.equipment_hours = 0
+        item.material_cost   = qty * float(item.material_cost_per_unit or 0)
+        item.equipment_cost  = qty * float(item.equipment_cost_per_unit or 0)
+    else:
+        item.material_cost = qty * float(item.material_cost_per_unit or 0)
+        if prod_base:
+            rate = float(item.production_rate or 0)
+            item.labor_hours = (qty / rate) if rate > 0 else 0
+            item.labor_cost  = item.labor_hours * float(item.labor_cost_per_hour or 0)
+        else:
+            item.labor_hours = 0
+            item.labor_cost  = qty * float(item.labor_cost_per_unit or 0)
+        item.equipment_hours = 0
+        item.equipment_cost  = 0
+
+    item.total_cost = (float(item.material_cost or 0) +
+                       float(item.labor_cost or 0) +
+                       float(item.equipment_cost or 0))
+
+# ─────────────────────────────────────────
 # HELPER: QUANTITY FORMULA CALCULATOR
 # ─────────────────────────────────────────
 
 def calculate_qty(formula, params, divisor=1, manual_qty=0):
-    """Calculate line item quantity from assembly measurements and a formula key."""
     lf     = float(params.get('lf', 0))
     height = float(params.get('height', 0))
     depth  = float(params.get('depth', 0))
@@ -442,7 +987,7 @@ def calculate_qty(formula, params, divisor=1, manual_qty=0):
     return {
         'fixed':     float(manual_qty),
         'lf':        lf,
-        'lf_x_2':   lf * 2,
+        'lf_x_2':    lf * 2,
         'sf':        sf,
         'sf_div':    sf / div,
         'depth':     lf * depth,
@@ -454,29 +999,34 @@ def calculate_qty(formula, params, divisor=1, manual_qty=0):
 # ─────────────────────────────────────────
 
 @app.route('/project/<int:project_id>/assembly/builder')
+@login_required
 def assembly_builder(project_id):
-    project = Project.query.get_or_404(project_id)
+    project = get_project_or_403(project_id)
     csi1_list = CSILevel1.query.order_by(CSILevel1.code).all()
-    csi1_map = {d.id: d for d in csi1_list}
-    csi2_map = {s.id: s for s in CSILevel2.query.all()}
-    library_items = LibraryItem.query.order_by(LibraryItem.description).all()
+    csi1_map  = {d.id: d for d in csi1_list}
+    library_items = LibraryItem.query.filter_by(company_id=current_user.company_id).order_by(LibraryItem.description).all()
     library_data = [{
         'id': i.id, 'description': i.description,
         'csi_level_1_id': i.csi_level_1_id,
-        'csi_code': csi1_map[i.csi_level_1_id].code if i.csi_level_1_id and i.csi_level_1_id in csi1_map else '',
+        'csi_code':  csi1_map[i.csi_level_1_id].code  if i.csi_level_1_id and i.csi_level_1_id in csi1_map else '',
         'csi_title': csi1_map[i.csi_level_1_id].title if i.csi_level_1_id and i.csi_level_1_id in csi1_map else '',
         'unit': i.unit or '', 'production_rate': float(i.production_rate or 1),
         'material_cost_per_unit': float(i.material_cost_per_unit or 0),
-        'labor_cost_per_hour': float(i.labor_cost_per_hour or 0),
-        'equipment_cost_per_hour': float(i.equipment_cost_per_hour or 0),
+        'labor_cost_per_hour':    float(i.labor_cost_per_hour or 0),
+        'equipment_cost_per_hour':float(i.equipment_cost_per_hour or 0),
         'notes': i.notes or ''
     } for i in library_items]
 
-    # Pre-load from template if requested
     template_data = None
     from_template_id = request.args.get('from_template', type=int)
     if from_template_id:
-        tmpl = Assembly.query.filter_by(id=from_template_id, is_template=True).first()
+        # Verify the template belongs to the same company
+        tmpl = (Assembly.query
+                .join(Project, Assembly.project_id == Project.id)
+                .filter(Assembly.id == from_template_id,
+                        Assembly.is_template == True,
+                        Project.company_id == current_user.company_id)
+                .first())
         if tmpl:
             params = {}
             if tmpl.measurement_params:
@@ -486,7 +1036,7 @@ def assembly_builder(project_id):
                     pass
             template_data = {
                 'label': tmpl.assembly_label,
-                'name': tmpl.assembly_name,
+                'name':  tmpl.assembly_name,
                 'description': tmpl.description or '',
                 'lf':     float(params.get('lf', 0)),
                 'height': float(params.get('height', 0)),
@@ -512,19 +1062,20 @@ def assembly_builder(project_id):
                            template_json=json.dumps(template_data))
 
 @app.route('/project/<int:project_id>/assembly/builder/save', methods=['POST'])
+@login_required
 def save_assembly_builder(project_id):
+    get_project_or_403(project_id)
     params_str = request.form.get('measurement_params', '{}')
     comp_str   = request.form.get('composition', '[]')
     try:
-        params = json.loads(params_str)
+        params     = json.loads(params_str)
         comp_items = json.loads(comp_str)
     except (ValueError, TypeError):
         return jsonify({'success': False, 'error': 'Invalid JSON data'})
 
-    # Determine assembly qty/unit from measurements
-    lf     = float(params.get('lf', 0))
-    height = float(params.get('height', 0))
-    sf     = lf * height if height else lf
+    lf       = float(params.get('lf', 0))
+    height   = float(params.get('height', 0))
+    sf       = lf * height if height else lf
     asm_qty  = sf or lf or 1
     asm_unit = 'SF' if height else ('LF' if lf else 'LS')
 
@@ -538,25 +1089,23 @@ def save_assembly_builder(project_id):
         measurement_params=params_str
     )
     db.session.add(assembly)
-    db.session.flush()  # get assembly.id
+    db.session.flush()
 
     for i, comp in enumerate(comp_items):
         formula    = comp.get('formula', 'fixed')
         divisor    = float(comp.get('divisor', 1)) or 1
         manual_qty = float(comp.get('manual_qty', 0))
         qty        = calculate_qty(formula, params, divisor, manual_qty)
-
-        mat_per  = float(comp.get('mat_cost', 0))
-        lab_hr   = float(comp.get('labor_rate', 0))
-        equ_hr   = float(comp.get('equip_rate', 0))
-        prod_r   = float(comp.get('production_rate', 1)) or 1
-
-        lab_hrs  = qty / prod_r if prod_r > 0 else 0
-        equ_hrs  = lab_hrs
-        mat_cost = qty * mat_per
-        lab_cost = lab_hrs * lab_hr
-        equ_cost = equ_hrs * equ_hr
-        total    = mat_cost + lab_cost + equ_cost
+        mat_per    = float(comp.get('mat_cost', 0))
+        lab_hr     = float(comp.get('labor_rate', 0))
+        equ_hr     = float(comp.get('equip_rate', 0))
+        prod_r     = float(comp.get('production_rate', 1)) or 1
+        lab_hrs    = qty / prod_r if prod_r > 0 else 0
+        equ_hrs    = lab_hrs
+        mat_cost   = qty * mat_per
+        lab_cost   = lab_hrs * lab_hr
+        equ_cost   = equ_hrs * equ_hr
+        total      = mat_cost + lab_cost + equ_cost
 
         db.session.add(AssemblyComposition(
             assembly_id=assembly.id,
@@ -589,9 +1138,15 @@ def save_assembly_builder(project_id):
 # ─────────────────────────────────────────
 
 @app.route('/templates')
+@login_required
 def templates_browse():
-    templates = Assembly.query.filter_by(is_template=True).order_by(Assembly.assembly_name).all()
-    projects = Project.query.order_by(Project.project_name).all()
+    cid = current_user.company_id
+    templates = (Assembly.query
+                 .join(Project, Assembly.project_id == Project.id)
+                 .filter(Assembly.is_template == True,
+                         Project.company_id == cid)
+                 .order_by(Assembly.assembly_name).all())
+    projects = Project.query.filter_by(company_id=cid).order_by(Project.project_name).all()
     csi1_map = {d.id: d for d in CSILevel1.query.all()}
 
     templates_data = []
@@ -609,7 +1164,7 @@ def templates_browse():
             'label':       t.assembly_label,
             'name':        t.assembly_name,
             'description': t.description or '',
-            'csi_code':    csi1.code if csi1 else '',
+            'csi_code':    csi1.code  if csi1 else '',
             'csi_title':   csi1.title if csi1 else '',
             'item_count':  len(t.line_items),
             'total_cost':  total_cost,
@@ -628,12 +1183,19 @@ def templates_browse():
                            projects_data=projects_data,
                            template_count=len(templates))
 
-
 @app.route('/project/<int:project_id>/assembly/load-template/<int:template_id>', methods=['POST'])
+@login_required
 def load_template(project_id, template_id):
-    tmpl = Assembly.query.filter_by(id=template_id, is_template=True).first_or_404()
+    get_project_or_403(project_id)
+    cid = current_user.company_id
+    # Verify the template belongs to the same company
+    tmpl = (Assembly.query
+            .join(Project, Assembly.project_id == Project.id)
+            .filter(Assembly.id == template_id,
+                    Assembly.is_template == True,
+                    Project.company_id == cid)
+            .first_or_404())
     new_label = request.form.get('assembly_label', tmpl.assembly_label)
-
     new_asm = Assembly(
         project_id=project_id,
         assembly_label=new_label,
@@ -688,70 +1250,87 @@ def load_template(project_id, template_id):
     db.session.commit()
     return jsonify({'success': True, 'project_id': project_id, 'assembly_id': new_asm.id})
 
-
 # ─────────────────────────────────────────
 # LIBRARY ROUTES
 # ─────────────────────────────────────────
 
 @app.route('/library')
+@login_required
 def library():
-    items = LibraryItem.query.order_by(LibraryItem.description).all()
+    cid = current_user.company_id
+    items = LibraryItem.query.filter_by(company_id=cid).order_by(LibraryItem.description).all()
     csi1_list = CSILevel1.query.order_by(CSILevel1.code).all()
     csi2_list = CSILevel2.query.order_by(CSILevel2.code).all()
-    csi1_map = {d.id: d for d in csi1_list}
-    csi2_map = {s.id: s for s in csi2_list}
+    csi1_map  = {d.id: d for d in csi1_list}
+    csi2_map  = {s.id: s for s in csi2_list}
     csi2_data = [{'id': s.id, 'parent': s.csi_level_1_id, 'code': s.code, 'title': s.title}
                  for s in csi2_list]
     items_data = [{'id': i.id, 'description': i.description,
                    'csi_level_1_id': i.csi_level_1_id, 'csi_level_2_id': i.csi_level_2_id,
                    'unit': i.unit or '', 'production_rate': float(i.production_rate or 0),
                    'production_unit': i.production_unit or '',
+                   'item_type': i.item_type or 'labor_material',
+                   'prod_base': i.prod_base if i.prod_base is not None else True,
                    'material_cost_per_unit': float(i.material_cost_per_unit or 0),
                    'labor_cost_per_hour': float(i.labor_cost_per_hour or 0),
+                   'labor_cost_per_unit': float(i.labor_cost_per_unit or 0),
                    'equipment_cost_per_hour': float(i.equipment_cost_per_hour or 0),
+                   'equipment_cost_per_unit': float(i.equipment_cost_per_unit or 0),
                    'notes': i.notes or ''} for i in items]
+    props = (GlobalProperty.query
+             .filter_by(company_id=cid, category='trade')
+             .order_by(GlobalProperty.name).all())
+    trades_json = json.dumps([{'id': p.id, 'name': p.name} for p in props])
     return render_template('library.html', items=items, csi1_list=csi1_list,
                            csi2_json=json.dumps(csi2_data), csi1_map=csi1_map, csi2_map=csi2_map,
-                           items_json=json.dumps(items_data))
+                           items_json=json.dumps(items_data), trades_json=trades_json)
+
+def _apply_library_item_form(item, form):
+    prod_base_val = form.get('prod_base', 'true').lower() in ('true', '1', 'on', 'yes')
+    item.description             = form['description']
+    item.csi_level_1_id          = form.get('csi_level_1_id') or None
+    item.csi_level_2_id          = form.get('csi_level_2_id') or None
+    item.unit                    = form.get('unit')
+    item.item_type               = form.get('item_type', 'labor_material')
+    item.prod_base               = prod_base_val
+    item.production_rate         = form.get('production_rate') or None
+    item.production_unit         = form.get('production_unit')
+    item.material_cost_per_unit  = form.get('material_cost_per_unit') or None
+    item.labor_cost_per_hour     = form.get('labor_cost_per_hour') or None
+    item.labor_cost_per_unit     = form.get('labor_cost_per_unit') or None
+    item.equipment_cost_per_hour = form.get('equipment_cost_per_hour') or None
+    item.equipment_cost_per_unit = form.get('equipment_cost_per_unit') or None
+    item.notes                   = form.get('notes')
 
 @app.route('/library/item/new', methods=['POST'])
+@login_required
 def new_library_item():
-    item = LibraryItem(
-        description=request.form['description'],
-        csi_level_1_id=request.form.get('csi_level_1_id') or None,
-        csi_level_2_id=request.form.get('csi_level_2_id') or None,
-        unit=request.form.get('unit'),
-        production_rate=request.form.get('production_rate') or None,
-        production_unit=request.form.get('production_unit'),
-        material_cost_per_unit=request.form.get('material_cost_per_unit') or None,
-        labor_cost_per_hour=request.form.get('labor_cost_per_hour') or None,
-        equipment_cost_per_hour=request.form.get('equipment_cost_per_hour') or None,
-        notes=request.form.get('notes')
-    )
+    item = LibraryItem(company_id=current_user.company_id)
+    _apply_library_item_form(item, request.form)
     db.session.add(item)
     db.session.commit()
-    return jsonify({'success': True, 'item_id': item.id})
+    return jsonify({'success': True, 'item_id': item.id,
+                    'description': item.description, 'unit': item.unit or '',
+                    'item_type': item.item_type, 'prod_base': item.prod_base,
+                    'production_rate': float(item.production_rate or 0),
+                    'material_cost_per_unit': float(item.material_cost_per_unit or 0),
+                    'labor_cost_per_hour': float(item.labor_cost_per_hour or 0),
+                    'labor_cost_per_unit': float(item.labor_cost_per_unit or 0),
+                    'equipment_cost_per_unit': float(item.equipment_cost_per_unit or 0)})
 
 @app.route('/library/item/<int:item_id>/update', methods=['POST'])
+@login_required
 def update_library_item(item_id):
-    item = LibraryItem.query.get_or_404(item_id)
-    item.description = request.form['description']
-    item.csi_level_1_id = request.form.get('csi_level_1_id') or None
-    item.csi_level_2_id = request.form.get('csi_level_2_id') or None
-    item.unit = request.form.get('unit')
-    item.production_rate = request.form.get('production_rate') or None
-    item.production_unit = request.form.get('production_unit')
-    item.material_cost_per_unit = request.form.get('material_cost_per_unit') or None
-    item.labor_cost_per_hour = request.form.get('labor_cost_per_hour') or None
-    item.equipment_cost_per_hour = request.form.get('equipment_cost_per_hour') or None
-    item.notes = request.form.get('notes')
-    item.updated_at = datetime.utcnow()
+    item = get_library_item_or_403(item_id)
+    _apply_library_item_form(item, request.form)
+    item.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify({'success': True})
 
 @app.route('/library/item/<int:item_id>/delete', methods=['POST'])
+@login_required
 def delete_library_item(item_id):
-    item = LibraryItem.query.get_or_404(item_id)
+    item = get_library_item_or_403(item_id)
     db.session.delete(item)
     db.session.commit()
     return jsonify({'success': True})
@@ -771,20 +1350,18 @@ CSI_COLORS = {
 }
 
 @app.route('/project/<int:project_id>/estimate/csv')
+@login_required
 def estimate_csv(project_id):
-    project = Project.query.get_or_404(project_id)
+    project   = get_project_or_403(project_id)
     assemblies = Assembly.query.filter_by(project_id=project_id).order_by(Assembly.assembly_label).all()
-    csi1_map = {d.id: d for d in CSILevel1.query.all()}
-    csi2_map = {s.id: s for s in CSILevel2.query.all()}
-
+    csi1_map   = {d.id: d for d in CSILevel1.query.all()}
+    csi2_map   = {s.id: s for s in CSILevel2.query.all()}
     out = io.StringIO()
-    w = csv.writer(out)
-    w.writerow([
-        'Assembly', 'Assembly Name', 'CSI Division', 'CSI Section',
-        'Description', 'Trade', 'Qty', 'Unit', 'Prod Rate (units/hr)', 'Labor Hrs',
-        'Mat $/Unit', 'Material $', 'Labor $/Hr', 'Labor $',
-        'Equip $/Hr', 'Equipment $', 'Total $', 'Notes'
-    ])
+    w   = csv.writer(out)
+    w.writerow(['Assembly', 'Assembly Name', 'CSI Division', 'CSI Section',
+                'Description', 'Trade', 'Qty', 'Unit', 'Prod Rate (units/hr)', 'Labor Hrs',
+                'Mat $/Unit', 'Material $', 'Labor $/Hr', 'Labor $',
+                'Equip $/Hr', 'Equipment $', 'Total $', 'Notes'])
     for asm in assemblies:
         d1 = csi1_map.get(asm.csi_level_1_id)
         d2 = csi2_map.get(asm.csi_level_2_id)
@@ -801,20 +1378,19 @@ def estimate_csv(project_id):
                 float(item.equipment_cost_per_hour or 0), float(item.equipment_cost or 0),
                 float(item.total_cost or 0), item.notes or ''
             ])
-
     safe_name = re.sub(r'[^\w\s-]', '', project.project_name).strip().replace(' ', '_')
-    pnum = re.sub(r'[^\w-]', '', project.project_number or 'estimate')
-    filename = f"{safe_name}_{pnum}.csv"
+    pnum      = re.sub(r'[^\w-]', '', project.project_number or 'estimate')
+    filename  = f"{safe_name}_{pnum}.csv"
     return Response(out.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': f'attachment; filename="{filename}"'})
 
-
 @app.route('/project/<int:project_id>/report/csi')
+@login_required
 def csi_report(project_id):
-    project = Project.query.get_or_404(project_id)
+    project    = get_project_or_403(project_id)
     assemblies = Assembly.query.filter_by(project_id=project_id).order_by(Assembly.assembly_label).all()
-    csi1_map = {d.id: d for d in CSILevel1.query.order_by(CSILevel1.code).all()}
-    csi2_map = {s.id: s for s in CSILevel2.query.order_by(CSILevel2.code).all()}
+    csi1_map   = {d.id: d for d in CSILevel1.query.order_by(CSILevel1.code).all()}
+    csi2_map   = {s.id: s for s in CSILevel2.query.order_by(CSILevel2.code).all()}
 
     def subtotal(rows):
         return {
@@ -825,12 +1401,12 @@ def csi_report(project_id):
             'total_cost':     sum(float(r['item'].total_cost or 0) for r in rows),
         }
 
-    div_data = {}
+    div_data      = {}
     uncategorized = []
 
     for asm in assemblies:
         for item in asm.line_items:
-            row = {'item': item, 'asm_label': asm.assembly_label, 'asm_name': asm.assembly_name}
+            row    = {'item': item, 'asm_label': asm.assembly_label, 'asm_name': asm.assembly_name}
             csi1_id = asm.csi_level_1_id
             csi2_id = asm.csi_level_2_id
             if not csi1_id or csi1_id not in csi1_map:
@@ -846,7 +1422,7 @@ def csi_report(project_id):
                 div_data[csi1_id]['unsec'].append(row)
 
     divisions_out = []
-    all_rows = []
+    all_rows      = []
     for csi1_id in sorted(div_data, key=lambda k: div_data[k]['div'].code):
         d = div_data[csi1_id]
         sections_out = []
@@ -860,7 +1436,8 @@ def csi_report(project_id):
         div_total = subtotal(div_rows)
         all_rows.extend(div_rows)
         color = CSI_COLORS.get(d['div'].code[:2], '#888')
-        divisions_out.append({'div': d['div'], 'sections': sections_out, 'total': div_total, 'color': color})
+        divisions_out.append({'div': d['div'], 'sections': sections_out,
+                               'total': div_total, 'color': color})
 
     all_rows.extend(uncategorized)
     grand_total = subtotal(all_rows)
@@ -870,100 +1447,1530 @@ def csi_report(project_id):
                            uncategorized=uncategorized,
                            uncategorized_total=subtotal(uncategorized),
                            grand_total=grand_total,
-                           now=datetime.utcnow())
+                           now=datetime.now(timezone.utc))
+
+# ─────────────────────────────────────────
+# BID PROPOSAL
+# ─────────────────────────────────────────
+
+@app.route('/project/<int:project_id>/proposal')
+@login_required
+def project_proposal(project_id):
+    project  = get_project_or_403(project_id)
+    company  = CompanyProfile.query.filter_by(company_id=current_user.company_id).first()
+    props_map = {p.id: p.name for p in GlobalProperty.query.filter_by(company_id=current_user.company_id).all()}
+
+    raw_assemblies = Assembly.query.filter_by(project_id=project_id).all()
+    summary = {
+        'total_material_cost': 0, 'total_labor_cost': 0, 'total_labor_hours': 0,
+        'total_equipment_cost': 0, 'total_cost': 0
+    }
+    assembly_rows = []
+    for asm in raw_assemblies:
+        row = {'assembly': asm, 'material_cost': 0, 'labor_cost': 0,
+               'labor_hours': 0, 'equipment_cost': 0, 'total_cost': 0, 'item_count': 0}
+        for item in asm.line_items:
+            row['item_count']    += 1
+            row['material_cost'] += float(item.material_cost or 0)
+            row['labor_cost']    += float(item.labor_cost or 0)
+            row['labor_hours']   += float(item.labor_hours or 0)
+            row['equipment_cost']+= float(item.equipment_cost or 0)
+            row['total_cost']    += float(item.total_cost or 0)
+        assembly_rows.append(row)
+        for k in ('material_cost', 'labor_cost', 'labor_hours', 'equipment_cost'):
+            summary['total_' + k] += row[k]
+        summary['total_cost'] += row['total_cost']
+
+    for item in LineItem.query.filter_by(project_id=project_id, assembly_id=None).all():
+        summary['total_material_cost']  += float(item.material_cost or 0)
+        summary['total_labor_cost']     += float(item.labor_cost or 0)
+        summary['total_labor_hours']    += float(item.labor_hours or 0)
+        summary['total_equipment_cost'] += float(item.equipment_cost or 0)
+        summary['total_cost']           += float(item.total_cost or 0)
+
+    csi1_map   = {d.id: d for d in CSILevel1.query.order_by(CSILevel1.code).all()}
+    div_totals = {}
+    for asm in raw_assemblies:
+        csi1_id = asm.csi_level_1_id
+        for item in asm.line_items:
+            if csi1_id and csi1_id in csi1_map:
+                if csi1_id not in div_totals:
+                    div_totals[csi1_id] = {'div': csi1_map[csi1_id],
+                                           'material_cost': 0, 'labor_cost': 0,
+                                           'equipment_cost': 0, 'total_cost': 0}
+                div_totals[csi1_id]['material_cost']  += float(item.material_cost or 0)
+                div_totals[csi1_id]['labor_cost']     += float(item.labor_cost or 0)
+                div_totals[csi1_id]['equipment_cost'] += float(item.equipment_cost or 0)
+                div_totals[csi1_id]['total_cost']     += float(item.total_cost or 0)
+    for item in LineItem.query.filter_by(project_id=project_id, assembly_id=None).all():
+        csi1_id = item.csi_level_1_id
+        if csi1_id and csi1_id in csi1_map:
+            if csi1_id not in div_totals:
+                div_totals[csi1_id] = {'div': csi1_map[csi1_id],
+                                       'material_cost': 0, 'labor_cost': 0,
+                                       'equipment_cost': 0, 'total_cost': 0}
+            div_totals[csi1_id]['material_cost']  += float(item.material_cost or 0)
+            div_totals[csi1_id]['labor_cost']     += float(item.labor_cost or 0)
+            div_totals[csi1_id]['equipment_cost'] += float(item.equipment_cost or 0)
+            div_totals[csi1_id]['total_cost']     += float(item.total_cost or 0)
+
+    csi_divisions = sorted(div_totals.values(), key=lambda d: d['div'].code)
+
+    return render_template('proposal.html',
+                           project=project, company=company,
+                           project_type_name=props_map.get(project.project_type_id, ''),
+                           market_sector_name=props_map.get(project.market_sector_id, ''),
+                           summary=summary, assembly_rows=assembly_rows,
+                           csi_divisions=csi_divisions,
+                           now=datetime.now(timezone.utc))
+
+# ─────────────────────────────────────────
+# PRODUCTION RATE STANDARDS
+# ─────────────────────────────────────────
+
+@app.route('/production-rates')
+@login_required
+def production_rates():
+    standards = ProductionRateStandard.query.order_by(
+        ProductionRateStandard.trade, ProductionRateStandard.description).all()
+    csi1_list = CSILevel1.query.order_by(CSILevel1.code).all()
+    csi2_list = CSILevel2.query.order_by(CSILevel2.code).all()
+    csi1_map  = {d.id: d for d in csi1_list}
+    csi2_map  = {s.id: s for s in csi2_list}
+    csi2_data = [{'id': s.id, 'parent': s.csi_level_1_id, 'code': s.code, 'title': s.title}
+                 for s in csi2_list]
+    standards_data = [{'id': s.id, 'description': s.description, 'trade': s.trade or '',
+                        'csi_level_1_id': s.csi_level_1_id, 'csi_level_2_id': s.csi_level_2_id,
+                        'unit': s.unit or '',
+                        'min_rate': float(s.min_rate or 0),
+                        'typical_rate': float(s.typical_rate or 0),
+                        'max_rate': float(s.max_rate or 0),
+                        'source_notes': s.source_notes or ''} for s in standards]
+    trades = [p.name for p in GlobalProperty.query.filter_by(
+        company_id=current_user.company_id, category='trade').order_by(GlobalProperty.name).all()]
+    return render_template('production_rates.html',
+                           standards=standards, csi1_list=csi1_list,
+                           csi2_json=json.dumps(csi2_data), csi1_map=csi1_map, csi2_map=csi2_map,
+                           standards_json=json.dumps(standards_data),
+                           trades=trades)
+
+@app.route('/production-rates/new', methods=['POST'])
+@login_required
+def new_production_rate():
+    s = ProductionRateStandard(
+        trade=request.form.get('trade') or None,
+        csi_level_1_id=request.form.get('csi_level_1_id') or None,
+        csi_level_2_id=request.form.get('csi_level_2_id') or None,
+        description=request.form['description'],
+        unit=request.form.get('unit'),
+        min_rate=request.form.get('min_rate') or None,
+        typical_rate=request.form.get('typical_rate') or None,
+        max_rate=request.form.get('max_rate') or None,
+        source_notes=request.form.get('source_notes'),
+    )
+    db.session.add(s)
+    db.session.commit()
+    return jsonify({'success': True, 'id': s.id})
+
+@app.route('/production-rate/<int:std_id>/update', methods=['POST'])
+@login_required
+def update_production_rate(std_id):
+    s = ProductionRateStandard.query.get_or_404(std_id)
+    s.trade          = request.form.get('trade') or None
+    s.csi_level_1_id = request.form.get('csi_level_1_id') or None
+    s.csi_level_2_id = request.form.get('csi_level_2_id') or None
+    s.description    = request.form['description']
+    s.unit           = request.form.get('unit')
+    s.min_rate       = request.form.get('min_rate') or None
+    s.typical_rate   = request.form.get('typical_rate') or None
+    s.max_rate       = request.form.get('max_rate') or None
+    s.source_notes   = request.form.get('source_notes')
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/production-rate/<int:std_id>/delete', methods=['POST'])
+@login_required
+def delete_production_rate(std_id):
+    s = ProductionRateStandard.query.get_or_404(std_id)
+    db.session.delete(s)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/production-rates/search')
+@login_required
+def search_production_rates():
+    q     = request.args.get('q', '').lower()
+    trade = request.args.get('trade', '')
+    csi1  = request.args.get('csi1', '')
+    query = ProductionRateStandard.query
+    if trade:
+        query = query.filter_by(trade=trade)
+    if csi1:
+        query = query.filter_by(csi_level_1_id=int(csi1))
+    standards = query.order_by(ProductionRateStandard.trade, ProductionRateStandard.description).all()
+    results = []
+    for s in standards:
+        if not q or q in s.description.lower() or (s.trade and q in s.trade.lower()):
+            results.append({
+                'id': s.id, 'description': s.description, 'trade': s.trade or '',
+                'unit': s.unit or '',
+                'typical_rate': float(s.typical_rate or 0),
+                'min_rate': float(s.min_rate or 0),
+                'max_rate': float(s.max_rate or 0),
+            })
+    return jsonify(results)
+
+# ─────────────────────────────────────────
+# PROJECT DATA API
+# ─────────────────────────────────────────
+
+@app.route('/project/<int:project_id>/data', methods=['GET'])
+@login_required
+def project_data(project_id):
+    project = get_project_or_403(project_id)
+
+    csi1_map = {d.id: f"{d.code} {d.title}" for d in CSILevel1.query.all()}
+    csi2_map = {s.id: f"{s.code} {s.title}" for s in CSILevel2.query.all()}
+    props_map = {p.id: p.name for p in GlobalProperty.query.filter_by(
+        company_id=current_user.company_id).all()}
+
+    # Build WBS assignment lookup: {line_item_id: {property_type: {id, name, code}}}
+    wbs_props = (WBSProperty.query.filter_by(project_id=project_id)
+                 .order_by(WBSProperty.display_order).all())
+    wbs_value_map = {}
+    for prop in wbs_props:
+        for v in prop.values:
+            wbs_value_map[v.id] = {'name': v.value_name, 'code': v.value_code}
+    wbs_prop_map = {p.id: p.property_type for p in wbs_props}
+
+    raw_assignments = LineItemWBS.query.filter(
+        LineItemWBS.wbs_property_id.in_([p.id for p in wbs_props])
+    ).all() if wbs_props else []
+    # {line_item_id: {property_type: {value_id, value_name, value_code}}}
+    li_wbs_map = {}
+    for a in raw_assignments:
+        ptype = wbs_prop_map.get(a.wbs_property_id, '')
+        vinfo = wbs_value_map.get(a.wbs_value_id, {})
+        li_wbs_map.setdefault(a.line_item_id, {})[ptype] = {
+            'wbs_property_id': a.wbs_property_id,
+            'wbs_value_id':    a.wbs_value_id,
+            'value_name':      vinfo.get('name', ''),
+            'value_code':      vinfo.get('code', ''),
+        }
+
+    total_material = total_labor = total_equipment = total_hours = total_cost = 0.0
+
+    assemblies_out = []
+    for asm in Assembly.query.filter_by(project_id=project_id).order_by(Assembly.assembly_label).all():
+        items_out = []
+        for it in LineItem.query.filter_by(assembly_id=asm.id).all():
+            mat = float(it.material_cost or 0)
+            lab = float(it.labor_cost or 0)
+            equ = float(it.equipment_cost or 0)
+            hrs = float(it.labor_hours or 0)
+            tot = float(it.total_cost or 0)
+            total_material  += mat
+            total_labor     += lab
+            total_equipment += equ
+            total_hours     += hrs
+            total_cost      += tot
+            items_out.append({
+                'id':                     it.id,
+                'assembly_id':            it.assembly_id,
+                'description':            it.description,
+                'quantity':               float(it.quantity or 0),
+                'unit':                   it.unit,
+                'item_type':              it.item_type,
+                'prod_base':              it.prod_base,
+                'production_rate':        float(it.production_rate or 0),
+                'production_unit':        it.production_unit,
+                'material_cost_per_unit': float(it.material_cost_per_unit or 0),
+                'labor_cost_per_hour':    float(it.labor_cost_per_hour or 0),
+                'labor_cost_per_unit':    float(it.labor_cost_per_unit or 0),
+                'equipment_cost_per_hour':float(it.equipment_cost_per_hour or 0),
+                'equipment_cost_per_unit':float(it.equipment_cost_per_unit or 0),
+                'material_cost':          mat,
+                'labor_cost':             lab,
+                'labor_hours':            hrs,
+                'equipment_cost':         equ,
+                'total_cost':             tot,
+                'trade':                  it.trade,
+                'notes':                  it.notes,
+                'csi_division':           csi1_map.get(asm.csi_level_1_id, ''),
+                'csi_section':            csi2_map.get(asm.csi_level_2_id, ''),
+                'wbs':                    li_wbs_map.get(it.id, {}),
+            })
+        assemblies_out.append({
+            'id':             asm.id,
+            'assembly_label': asm.assembly_label,
+            'assembly_name':  asm.assembly_name,
+            'description':    asm.description,
+            'quantity':       float(asm.quantity or 0),
+            'unit':           asm.unit,
+            'csi_level_1_id': asm.csi_level_1_id,
+            'csi_level_1':    csi1_map.get(asm.csi_level_1_id, ''),
+            'csi_level_2_id': asm.csi_level_2_id,
+            'csi_level_2':    csi2_map.get(asm.csi_level_2_id, ''),
+            'line_items':     items_out,
+        })
+
+    # Direct line items (no assembly)
+    direct_items_out = []
+    for it in LineItem.query.filter_by(project_id=project_id, assembly_id=None).all():
+        mat = float(it.material_cost or 0)
+        lab = float(it.labor_cost or 0)
+        equ = float(it.equipment_cost or 0)
+        hrs = float(it.labor_hours or 0)
+        tot = float(it.total_cost or 0)
+        total_material  += mat
+        total_labor     += lab
+        total_equipment += equ
+        total_hours     += hrs
+        total_cost      += tot
+        direct_items_out.append({
+            'id':                     it.id,
+            'assembly_id':            None,
+            'description':            it.description,
+            'quantity':               float(it.quantity or 0),
+            'unit':                   it.unit,
+            'item_type':              it.item_type,
+            'prod_base':              it.prod_base,
+            'production_rate':        float(it.production_rate or 0),
+            'production_unit':        it.production_unit,
+            'material_cost_per_unit': float(it.material_cost_per_unit or 0),
+            'labor_cost_per_hour':    float(it.labor_cost_per_hour or 0),
+            'labor_cost_per_unit':    float(it.labor_cost_per_unit or 0),
+            'equipment_cost_per_hour':float(it.equipment_cost_per_hour or 0),
+            'equipment_cost_per_unit':float(it.equipment_cost_per_unit or 0),
+            'material_cost':          mat,
+            'labor_cost':             lab,
+            'labor_hours':            hrs,
+            'equipment_cost':         equ,
+            'total_cost':             tot,
+            'trade':                  it.trade,
+            'notes':                  it.notes,
+            'csi_division':           '',
+            'csi_section':            '',
+            'wbs':                    li_wbs_map.get(it.id, {}),
+        })
+
+    return jsonify({
+        'project': {
+            'id':             project.id,
+            'project_name':   project.project_name,
+            'project_number': project.project_number,
+            'city':           project.city,
+            'state':          project.state,
+            'zip_code':       project.zip_code,
+            'description':    project.description,
+            'project_type':   props_map.get(project.project_type_id, ''),
+            'market_sector':  props_map.get(project.market_sector_id, ''),
+        },
+        'assemblies':    assemblies_out,
+        'direct_items':  direct_items_out,
+        'totals': {
+            'total_material':  total_material,
+            'total_labor':     total_labor,
+            'total_equipment': total_equipment,
+            'total_hours':     total_hours,
+            'total_cost':      total_cost,
+        },
+    })
 
 
 # ─────────────────────────────────────────
-# AI / OLLAMA ROUTES
+# WBS ROUTES
 # ─────────────────────────────────────────
 
-@app.route('/agent/suggest', methods=['POST'])
-def agent_suggest():
-    data = request.get_json()
-    description   = data.get('description', '')
-    unit          = data.get('unit', '')
-    quantity      = data.get('quantity', 0)
-    location      = data.get('location', 'Unknown location')
-    csi_code      = data.get('csi_code', '')
-    csi_title     = data.get('csi_title', '')
-    current_mat   = data.get('current_mat', 0)
-    current_labor = data.get('current_labor', 0)
-    current_equip = data.get('current_equip', 0)
-    prod_rate     = data.get('production_rate', 0)
+@app.route('/project/<int:project_id>/wbs/initialize', methods=['POST'])
+@login_required
+def wbs_initialize(project_id):
+    get_project_or_403(project_id)
+    # Only initialize if no WBS properties exist yet for this project
+    if WBSProperty.query.filter_by(project_id=project_id).count() == 0:
+        _initialize_wbs(project_id)
+    return jsonify({'success': True})
 
-    prompt = f"""You are a professional construction cost estimating assistant. Suggest realistic unit pricing for the following line item.
 
-Line item: {description}
-Unit of measure: {unit}
-Quantity: {quantity}
-CSI Division: {csi_code} {csi_title}
-Project location: {location}
-Current estimator values — Material: ${current_mat}/unit, Labor: ${current_labor}/hr, Equipment: ${current_equip}/hr, Production rate: {prod_rate} units/hr
+@app.route('/project/<int:project_id>/wbs', methods=['GET'])
+@login_required
+def wbs_get(project_id):
+    get_project_or_403(project_id)
+    props = (WBSProperty.query
+             .filter_by(project_id=project_id)
+             .order_by(WBSProperty.display_order)
+             .all())
+    result = []
+    for prop in props:
+        result.append({
+            'id':            prop.id,
+            'property_type': prop.property_type,
+            'property_name': prop.property_name,
+            'is_template':   prop.is_template,
+            'is_custom':     prop.is_custom,
+            'display_order': prop.display_order,
+            'values': [{
+                'id':           v.id,
+                'value_name':   v.value_name,
+                'value_code':   v.value_code,
+                'parent_id':    v.parent_id,
+                'display_order': v.display_order,
+            } for v in prop.values],
+        })
+    return jsonify({'success': True, 'properties': result})
 
-Respond with ONLY a valid JSON object, no other text, no markdown fences:
+
+@app.route('/project/<int:project_id>/wbs/property', methods=['POST'])
+@login_required
+def wbs_upsert_property(project_id):
+    get_project_or_403(project_id)
+    data = request.get_json() or {}
+    prop_type = data.get('property_type', '').strip()
+    prop_name = data.get('property_name', '').strip()
+    if not prop_type or not prop_name:
+        return jsonify({'success': False, 'error': 'property_type and property_name required'}), 400
+
+    prop = WBSProperty.query.filter_by(project_id=project_id, property_type=prop_type).first()
+    if prop:
+        prop.property_name = prop_name
+    else:
+        max_order = db.session.query(db.func.max(WBSProperty.display_order)).filter_by(
+            project_id=project_id).scalar() or 0
+        prop = WBSProperty(
+            project_id=project_id, property_type=prop_type, property_name=prop_name,
+            is_custom=True, display_order=max_order + 1
+        )
+        db.session.add(prop)
+    db.session.commit()
+    return jsonify({'success': True, 'id': prop.id})
+
+
+@app.route('/project/<int:project_id>/wbs/value', methods=['POST'])
+@login_required
+def wbs_add_value(project_id):
+    get_project_or_403(project_id)
+    data = request.get_json() or {}
+    prop_id    = data.get('wbs_property_id')
+    value_name = (data.get('value_name') or '').strip()
+    value_code = (data.get('value_code') or '').strip() or None
+    parent_id  = data.get('parent_id') or None
+
+    if not prop_id or not value_name:
+        return jsonify({'success': False, 'error': 'wbs_property_id and value_name required'}), 400
+
+    prop = WBSProperty.query.get_or_404(prop_id)
+    if prop.project_id != project_id:
+        abort(403)
+
+    max_order = db.session.query(db.func.max(WBSValue.display_order)).filter_by(
+        wbs_property_id=prop_id).scalar() or 0
+    val = WBSValue(
+        wbs_property_id=prop_id, value_name=value_name,
+        value_code=value_code, parent_id=parent_id, display_order=max_order + 1
+    )
+    db.session.add(val)
+    db.session.commit()
+    return jsonify({'success': True, 'id': val.id})
+
+
+@app.route('/project/<int:project_id>/wbs/value/<int:value_id>', methods=['DELETE'])
+@login_required
+def wbs_delete_value(project_id, value_id):
+    get_project_or_403(project_id)
+    val = WBSValue.query.get_or_404(value_id)
+    prop = WBSProperty.query.get_or_404(val.wbs_property_id)
+    if prop.project_id != project_id:
+        abort(403)
+    # Remove any line item assignments for this value before deleting
+    LineItemWBS.query.filter_by(wbs_value_id=value_id).delete()
+    db.session.delete(val)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/line-item/<int:item_id>/wbs', methods=['POST'])
+@login_required
+def assign_lineitem_wbs(item_id):
+    get_lineitem_or_403(item_id)
+    data = request.get_json() or {}
+    prop_id  = data.get('wbs_property_id')
+    value_id = data.get('wbs_value_id')
+    if not prop_id or not value_id:
+        return jsonify({'success': False, 'error': 'wbs_property_id and wbs_value_id required'}), 400
+
+    # Upsert — one value per property per line item
+    assignment = LineItemWBS.query.filter_by(
+        line_item_id=item_id, wbs_property_id=prop_id).first()
+    if assignment:
+        assignment.wbs_value_id = value_id
+    else:
+        assignment = LineItemWBS(
+            line_item_id=item_id, wbs_property_id=prop_id, wbs_value_id=value_id
+        )
+        db.session.add(assignment)
+    db.session.commit()
+    return jsonify({'success': True, 'id': assignment.id})
+
+
+@app.route('/project/<int:project_id>/wbs/summary', methods=['GET'])
+@login_required
+def wbs_summary(project_id):
+    get_project_or_403(project_id)
+
+    # Fetch all line items for the project
+    all_items = (LineItem.query
+                 .outerjoin(Assembly, LineItem.assembly_id == Assembly.id)
+                 .filter(
+                     db.or_(
+                         Assembly.project_id == project_id,
+                         db.and_(LineItem.project_id == project_id, LineItem.assembly_id == None)
+                     )
+                 ).all())
+
+    item_ids = [i.id for i in all_items]
+
+    # Build wbs assignment lookup: {line_item_id: {prop_id: value_id}}
+    assignments = LineItemWBS.query.filter(LineItemWBS.line_item_id.in_(item_ids)).all() if item_ids else []
+    assign_map = {}
+    for a in assignments:
+        assign_map.setdefault(a.line_item_id, {})[a.wbs_property_id] = a.wbs_value_id
+
+    # Load WBS properties + values for this project
+    props = (WBSProperty.query
+             .filter_by(project_id=project_id)
+             .order_by(WBSProperty.display_order)
+             .all())
+    value_map = {}
+    for prop in props:
+        for v in prop.values:
+            value_map[v.id] = {'name': v.value_name, 'code': v.value_code}
+
+    def item_totals(it):
+        return {
+            'material_cost':  float(it.material_cost or 0),
+            'labor_cost':     float(it.labor_cost or 0),
+            'equipment_cost': float(it.equipment_cost or 0),
+            'labor_hours':    float(it.labor_hours or 0),
+            'total_cost':     float(it.total_cost or 0),
+        }
+
+    result = []
+    for prop in props:
+        groups = {}   # value_id (or None) -> {meta, items[], subtotals}
+        for it in all_items:
+            vid = assign_map.get(it.id, {}).get(prop.id)
+            key = vid  # None = unassigned
+            if key not in groups:
+                label = value_map[vid]['name'] if vid and vid in value_map else '(Unassigned)'
+                code  = value_map[vid]['code']  if vid and vid in value_map else None
+                groups[key] = {
+                    'value_id':   vid,
+                    'value_name': label,
+                    'value_code': code,
+                    'items':      [],
+                    'subtotals':  {'material_cost': 0, 'labor_cost': 0,
+                                   'equipment_cost': 0, 'labor_hours': 0, 'total_cost': 0},
+                }
+            t = item_totals(it)
+            groups[key]['items'].append({'id': it.id, 'description': it.description, **t})
+            for k in groups[key]['subtotals']:
+                groups[key]['subtotals'][k] += t[k]
+
+        result.append({
+            'property_id':   prop.id,
+            'property_type': prop.property_type,
+            'property_name': prop.property_name,
+            'groups':        list(groups.values()),
+        })
+
+    return jsonify({'success': True, 'wbs_summary': result})
+
+
+# ─────────────────────────────────────────
+# AI / CLAUDE ROUTES
+# ─────────────────────────────────────────
+
+@app.route('/ai/chat', methods=['POST'])
+@login_required
+def ai_chat():
+    data       = request.get_json()
+    message    = data.get('message', '').strip()
+    project_id = data.get('project_id')
+    mode       = data.get('mode', 'chat')   # estimate | research | chat
+
+    if not message:
+        return jsonify({'success': False, 'error': 'message is required'}), 400
+
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key or api_key == 'your-api-key-here':
+        return jsonify({'success': False, 'error': 'ANTHROPIC_API_KEY not configured'}), 500
+
+    # ── Build system prompt ──────────────────────────────────────────────
+    if mode == 'estimate' and project_id:
+        project = get_project_or_403(project_id)
+
+        # Gather CSI lookup maps
+        csi1_map = {d.id: f"{d.code} {d.title}" for d in CSILevel1.query.all()}
+        csi2_map = {s.id: f"{s.code} {s.title}" for s in CSILevel2.query.all()}
+
+        # Build assembly + line-item context
+        assemblies = Assembly.query.filter_by(project_id=project_id).order_by(Assembly.assembly_label).all()
+        asm_blocks = []
+        total_material = total_labor = total_equipment = total_hours = total_cost = 0.0
+
+        for asm in assemblies:
+            items = LineItem.query.filter_by(assembly_id=asm.id).all()
+            item_rows = []
+            for it in items:
+                mat  = float(it.material_cost or 0)
+                lab  = float(it.labor_cost or 0)
+                equ  = float(it.equipment_cost or 0)
+                hrs  = float(it.labor_hours or 0)
+                tot  = float(it.total_cost or 0)
+                total_material  += mat
+                total_labor     += lab
+                total_equipment += equ
+                total_hours     += hrs
+                total_cost      += tot
+                item_rows.append(
+                    f"  - [{it.id}] {it.description} | {float(it.quantity or 0)} {it.unit} "
+                    f"| type={it.item_type} prod_base={it.prod_base} "
+                    f"rate={float(it.production_rate or 0)} | "
+                    f"mat=${mat:.2f} lab=${lab:.2f} equ=${equ:.2f} hrs={hrs:.1f} total=${tot:.2f}"
+                )
+            asm_blocks.append(
+                f"Assembly [id={asm.id}] {asm.assembly_label}: {asm.assembly_name} "
+                f"[CSI: {csi1_map.get(asm.csi_level_1_id, 'none')} / {csi2_map.get(asm.csi_level_2_id, 'none')}]\n"
+                + ("\n".join(item_rows) if item_rows else "  (no line items)")
+            )
+
+        # Direct line items (no assembly)
+        direct_items = LineItem.query.filter_by(project_id=project_id, assembly_id=None).all()
+        if direct_items:
+            direct_rows = []
+            for it in direct_items:
+                mat  = float(it.material_cost or 0)
+                lab  = float(it.labor_cost or 0)
+                equ  = float(it.equipment_cost or 0)
+                hrs  = float(it.labor_hours or 0)
+                tot  = float(it.total_cost or 0)
+                total_material  += mat
+                total_labor     += lab
+                total_equipment += equ
+                total_hours     += hrs
+                total_cost      += tot
+                direct_rows.append(
+                    f"  - [{it.id}] {it.description} | {float(it.quantity or 0)} {it.unit} "
+                    f"| total=${tot:.2f}"
+                )
+            asm_blocks.append("Direct Line Items (no assembly):\n" + "\n".join(direct_rows))
+
+        # Production rate standards (global reference)
+        standards = (ProductionRateStandard.query
+                     .order_by(ProductionRateStandard.trade, ProductionRateStandard.description)
+                     .limit(60).all())
+        rates_text = "\n".join(
+            f"  {s.trade or 'General'} | {s.description} | {s.unit} | "
+            f"min={float(s.min_rate or 0)} typ={float(s.typical_rate or 0)} max={float(s.max_rate or 0)}"
+            for s in standards
+        )
+
+        props_map = {p.id: p.name for p in GlobalProperty.query.filter_by(
+            company_id=current_user.company_id).all()}
+
+        system_prompt = f"""You are an expert construction cost estimator embedded in a project estimating tool.
+
+PROJECT CONTEXT
+---------------
+Name:        {project.project_name}
+Number:      {project.project_number or 'N/A'}
+Location:    {project.city or ''} {project.state or ''} {project.zip_code or ''}
+Type:        {props_map.get(project.project_type_id, 'N/A')}
+Sector:      {props_map.get(project.market_sector_id, 'N/A')}
+Description: {project.description or 'N/A'}
+
+LIVE TOTALS
+-----------
+Material:  ${total_material:,.2f}
+Labor:     ${total_labor:,.2f}  ({total_hours:,.1f} hrs)
+Equipment: ${total_equipment:,.2f}
+TOTAL:     ${total_cost:,.2f}
+
+ASSEMBLIES & LINE ITEMS
+------------------------
+{chr(10).join(asm_blocks) if asm_blocks else '(none)'}
+
+PRODUCTION RATE STANDARDS (reference)
+--------------------------------------
+{rates_text}
+
+INSTRUCTIONS
+------------
+Answer the estimator's questions with specific, actionable advice based on the project data above.
+Always explain your proposed change in plain text first. When the user asks you to make a change,
+append EXACTLY ONE fenced JSON block at the end of your response. Never propose more than one action
+per response. Only include a JSON block when the user explicitly asked you to add, change, update,
+or delete something.
+
+ACTION SCHEMAS
+--------------
+
+ADD new line items (create a new assembly if needed):
+```json
 {{
-  "material_cost_per_unit": <number>,
-  "labor_cost_per_hour": <number>,
-  "equipment_cost_per_hour": <number>,
-  "production_rate": <number>,
-  "reasoning": "<2-3 sentences explaining your suggestions and key factors considered>"
+  "action": "add_line_items",
+  "assembly_id": null,
+  "new_assembly": {{
+    "assembly_label": "A###",
+    "assembly_name": "Assembly Name",
+    "quantity": 0,
+    "unit": "LS",
+    "description": ""
+  }},
+  "line_items": [
+    {{
+      "description": "",
+      "quantity": 0,
+      "unit": "SF",
+      "production_rate": 0,
+      "production_unit": "SF/HR",
+      "material_cost_per_unit": 0,
+      "labor_cost_per_hour": 0,
+      "equipment_cost_per_hour": 0,
+      "notes": ""
+    }}
+  ]
+}}
+```
+
+UPDATE a single line item (include only the fields being changed in "updates"):
+```json
+{{
+  "action": "update_line_item",
+  "line_item_id": 123,
+  "updates": {{"labor_cost_per_hour": 85, "quantity": 6500}},
+  "description": "plain English summary of what is being changed"
+}}
+```
+
+UPDATE an assembly record (include only the fields being changed in "updates"):
+```json
+{{
+  "action": "update_assembly",
+  "assembly_id": 456,
+  "updates": {{"quantity": 6500, "assembly_name": "New Name"}},
+  "description": "plain English summary of what is being changed"
+}}
+```
+
+DELETE a line item permanently:
+```json
+{{
+  "action": "delete_line_item",
+  "line_item_id": 123,
+  "item_name": "name of item being deleted"
+}}
+```
+
+BULK UPDATE multiple line items at once (useful for recalculate-all operations):
+```json
+{{
+  "action": "bulk_update",
+  "line_items": [
+    {{"id": 1, "updates": {{"labor_cost_per_hour": 85}}}},
+    {{"id": 2, "updates": {{"labor_cost_per_hour": 85}}}}
+  ],
+  "description": "plain English summary of the bulk change"
+}}
+```
+"""
+
+    elif mode == 'research':
+        system_prompt = """You are a senior construction cost estimator with 20+ years of experience across commercial, residential, and civil projects. You have deep knowledge of CSI MasterFormat, RS Means pricing, labor productivity, material markets, and regional cost factors. Answer questions thoroughly and cite specific figures, ranges, and caveats where relevant."""
+
+    else:  # chat / fallback
+        system_prompt = """You are a knowledgeable construction industry assistant embedded in a project estimating tool. You help estimators with questions about materials, methods, costs, codes, and project management. Be concise and practical."""
+
+    # ── Call Claude API ──────────────────────────────────────────────────
+    try:
+        client   = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model='claude-sonnet-4-20250514',
+            max_tokens=2048,
+            system=system_prompt,
+            messages=[{'role': 'user', 'content': message}],
+        )
+        reply_text = response.content[0].text
+    except anthropic.AuthenticationError:
+        return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── Extract write proposal if present ───────────────────────────────
+    write_proposal = None
+    fence_match = re.search(r'```json\s*([\s\S]*?)```', reply_text)
+    if fence_match:
+        try:
+            write_proposal = json.loads(fence_match.group(1).strip())
+            # Strip the proposal block from the displayed reply
+            reply_text = reply_text[:fence_match.start()].rstrip()
+        except (json.JSONDecodeError, ValueError):
+            write_proposal = None
+
+    return jsonify({'success': True, 'reply': reply_text,
+                    'write_proposal': write_proposal, 'mode': mode})
+
+
+@app.route('/ai/apply', methods=['POST'])
+@login_required
+def ai_apply():
+    data       = request.get_json()
+    proposal   = data.get('proposal', {})
+    project_id = data.get('project_id')
+
+    if not project_id or not proposal:
+        return jsonify({'success': False, 'error': 'proposal and project_id are required'}), 400
+
+    get_project_or_403(project_id)
+
+    action = proposal.get('action', 'add_line_items')
+
+    # ── update_line_item ─────────────────────────────────────────────────
+    if action == 'update_line_item':
+        item = get_lineitem_or_403(proposal.get('line_item_id'))
+        updates = proposal.get('updates', {})
+        allowed = {
+            'description', 'quantity', 'unit', 'item_type', 'prod_base',
+            'production_rate', 'production_unit', 'trade', 'notes',
+            'material_cost_per_unit', 'labor_cost_per_hour',
+            'labor_cost_per_unit', 'equipment_cost_per_hour',
+            'equipment_cost_per_unit',
+        }
+        for field, value in updates.items():
+            if field in allowed:
+                setattr(item, field, value)
+        calculate_item_costs(item)
+        db.session.commit()
+        return jsonify({'success': True, 'line_item_id': item.id})
+
+    # ── update_assembly ──────────────────────────────────────────────────
+    if action == 'update_assembly':
+        assembly = get_assembly_or_403(proposal.get('assembly_id'))
+        updates = proposal.get('updates', {})
+        allowed = {
+            'assembly_label', 'assembly_name', 'description',
+            'quantity', 'unit', 'csi_level_1_id', 'csi_level_2_id',
+        }
+        for field, value in updates.items():
+            if field in allowed:
+                setattr(assembly, field, value)
+        db.session.commit()
+        return jsonify({'success': True, 'assembly_id': assembly.id})
+
+    # ── delete_line_item ─────────────────────────────────────────────────
+    if action == 'delete_line_item':
+        item = get_lineitem_or_403(proposal.get('line_item_id'))
+        item_id = item.id
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify({'success': True, 'deleted_line_item_id': item_id})
+
+    # ── bulk_update ──────────────────────────────────────────────────────
+    if action == 'bulk_update':
+        allowed = {
+            'description', 'quantity', 'unit', 'item_type', 'prod_base',
+            'production_rate', 'production_unit', 'trade', 'notes',
+            'material_cost_per_unit', 'labor_cost_per_hour',
+            'labor_cost_per_unit', 'equipment_cost_per_hour',
+            'equipment_cost_per_unit',
+        }
+        updated_ids = []
+        for entry in proposal.get('line_items', []):
+            item = get_lineitem_or_403(entry.get('id'))
+            for field, value in entry.get('updates', {}).items():
+                if field in allowed:
+                    setattr(item, field, value)
+            calculate_item_costs(item)
+            updated_ids.append(item.id)
+        db.session.commit()
+        return jsonify({'success': True, 'updated_ids': updated_ids})
+
+    # ── add_line_items (default) ─────────────────────────────────────────
+    assembly_id = proposal.get('assembly_id') or proposal.get('target_assembly_id')
+
+    # If Claude returned a label (e.g. "A200") instead of a numeric ID, look it up
+    if assembly_id and not str(assembly_id).lstrip('-').isdigit():
+        matched = Assembly.query.filter_by(
+            project_id=project_id,
+            assembly_label=str(assembly_id)
+        ).first()
+        assembly_id = matched.id if matched else None
+
+    if proposal.get('new_assembly'):
+        na = proposal['new_assembly']
+        assembly = Assembly(
+            project_id=project_id,
+            assembly_label=na.get('assembly_label') or na.get('label', 'AI'),
+            assembly_name=na.get('assembly_name') or na.get('name', 'AI-Generated Assembly'),
+            csi_level_1_id=na.get('csi_level_1_id') or None,
+            csi_level_2_id=na.get('csi_level_2_id') or None,
+            description=na.get('description') or None,
+            quantity=na.get('quantity', 1) or 1,
+            unit=na.get('unit', 'LS'),
+        )
+        db.session.add(assembly)
+        db.session.flush()
+        assembly_id = assembly.id
+    elif assembly_id:
+        get_assembly_or_403(assembly_id)
+
+    if not assembly_id:
+        return jsonify({'success': False, 'error': 'No assembly target specified'}), 400
+
+    inserted = 0
+    for li_data in proposal.get('line_items', []):
+        prod_base = li_data.get('prod_base', True)
+        if isinstance(prod_base, str):
+            prod_base = prod_base.lower() not in ('false', '0', 'no')
+
+        item = LineItem(
+            assembly_id=assembly_id,
+            project_id=project_id,
+            description=li_data.get('description', 'AI-generated item'),
+            quantity=float(li_data.get('quantity', 0) or 0),
+            unit=li_data.get('unit', 'LS'),
+            item_type=li_data.get('item_type', 'labor_material'),
+            prod_base=prod_base,
+            production_rate=float(li_data.get('production_rate', 0) or 0) or None,
+            production_unit=li_data.get('production_unit') or None,
+            material_cost_per_unit=float(li_data.get('material_cost_per_unit', 0) or 0),
+            labor_cost_per_hour=float(li_data.get('labor_cost_per_hour', 0) or 0),
+            labor_cost_per_unit=float(li_data.get('labor_cost_per_unit', 0) or 0),
+            equipment_cost_per_hour=float(li_data.get('equipment_cost_per_hour', 0) or 0),
+            equipment_cost_per_unit=float(li_data.get('equipment_cost_per_unit', 0) or 0),
+            trade=li_data.get('trade') or None,
+            notes=li_data.get('notes') or None,
+        )
+        calculate_item_costs(item)
+        db.session.add(item)
+        inserted += 1
+
+    db.session.commit()
+    return jsonify({'success': True, 'assembly_id': assembly_id, 'items_inserted': inserted})
+
+
+@app.route('/ai/build-assembly', methods=['POST'])
+@login_required
+def ai_build_assembly():
+    data        = request.get_json()
+    project_id  = data.get('project_id')
+    description = (data.get('description') or '').strip()
+
+    if not project_id or not description:
+        return jsonify({'success': False, 'error': 'project_id and description are required'}), 400
+
+    project = get_project_or_403(project_id)
+
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key or api_key == 'your-api-key-here':
+        return jsonify({'success': False, 'error': 'ANTHROPIC_API_KEY not configured'}), 500
+
+    # ── Gather context ────────────────────────────────────────────────────
+    props_map  = {p.id: p.name for p in GlobalProperty.query.filter_by(
+        company_id=current_user.company_id).all()}
+
+    existing_labels = [
+        a.assembly_label for a in
+        Assembly.query.filter_by(project_id=project_id)
+                      .order_by(Assembly.assembly_label).all()
+    ]
+    assembly_count  = len(existing_labels)
+    next_number     = (assembly_count + 1) * 100
+    next_label      = f"A{next_number}"
+
+    standards = (ProductionRateStandard.query
+                 .order_by(ProductionRateStandard.trade, ProductionRateStandard.description)
+                 .all())
+    rates_text = "\n".join(
+        f"  {s.trade or 'General'} | {s.description} | {s.unit} | "
+        f"min={float(s.min_rate or 0)} typ={float(s.typical_rate or 0)} max={float(s.max_rate or 0)}"
+        for s in standards
+    ) or "  (none on file)"
+
+    # ── System prompt ─────────────────────────────────────────────────────
+    system_prompt = f"""You are an expert construction cost estimator with 20+ years of experience.
+Your task is to build a fully-costed assembly for the described scope of work.
+
+PROJECT CONTEXT
+---------------
+Name:     {project.project_name}
+Number:   {project.project_number or 'N/A'}
+Location: {project.city or ''} {project.state or ''} {project.zip_code or ''}
+Type:     {props_map.get(project.project_type_id, 'N/A')}
+Sector:   {props_map.get(project.market_sector_id, 'N/A')}
+
+EXISTING ASSEMBLY LABELS (already used — do NOT reuse these)
+------------------------------------------------------------
+{', '.join(existing_labels) if existing_labels else '(none yet)'}
+Next available label: {next_label}
+
+PRODUCTION RATE STANDARDS (use these where applicable)
+-------------------------------------------------------
+{rates_text}
+
+INSTRUCTIONS
+------------
+- Return ONLY valid JSON. No markdown, no explanations, no text outside the JSON object.
+- Include EVERY line item needed to fully execute the described scope — do not omit any component.
+- Use realistic production rates and costs appropriate for the project location and type.
+- Do not leave any numeric field as zero unless it is genuinely zero for that item type.
+- For concrete work include: formwork, reinforcement, placement, finishing, curing, and any related items.
+- For each line item set production_rate > 0 whenever crew output can be measured in units/hour.
+- Use the production rates from the database above where available; supplement with expert knowledge where not.
+- Assign the next available assembly label shown above.
+- Set item_type to "labor_material" for most items, "equipment" for equipment-only items.
+- Set prod_base to true when production_rate applies (labor hours = qty / rate), false for lump labor costs.
+
+REQUIRED JSON FORMAT (return exactly this structure, nothing else):
+{{
+  "assembly": {{
+    "assembly_label": "{next_label}",
+    "assembly_name": "descriptive name",
+    "description": "brief scope description",
+    "quantity": 0,
+    "unit": "SF"
+  }},
+  "line_items": [
+    {{
+      "description": "item description",
+      "quantity": 0,
+      "unit": "SF",
+      "item_type": "labor_material",
+      "prod_base": true,
+      "production_rate": 0,
+      "production_unit": "SF/HR",
+      "material_cost_per_unit": 0,
+      "labor_cost_per_hour": 0,
+      "labor_cost_per_unit": 0,
+      "equipment_cost_per_hour": 0,
+      "equipment_cost_per_unit": 0,
+      "trade": "trade name",
+      "notes": "any relevant notes"
+    }}
+  ],
+  "estimator_notes": "summary of assumptions, regional pricing adjustments, items to review"
 }}"""
 
+    # ── Call Claude ───────────────────────────────────────────────────────
     try:
-        req = urllib.request.Request(
-            'http://localhost:11434/api/generate',
-            data=json.dumps({'model': 'llama3.2', 'prompt': prompt, 'stream': False}).encode('utf-8'),
-            headers={'Content-Type': 'application/json'},
-            method='POST'
+        client   = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model='claude-sonnet-4-20250514',
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{'role': 'user', 'content': description}],
         )
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
-
-        response_text = result.get('response', '').strip()
-
-        # Strip markdown code fences if model wrapped the JSON
-        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', response_text)
-        if fence_match:
-            response_text = fence_match.group(1).strip()
-
-        suggestion = json.loads(response_text)
-        # Ensure all numeric fields are floats
-        for field in ('material_cost_per_unit', 'labor_cost_per_hour',
-                      'equipment_cost_per_hour', 'production_rate'):
-            suggestion[field] = float(suggestion.get(field, 0) or 0)
-
-        return jsonify({'success': True, 'suggestion': suggestion})
-
-    except urllib.error.URLError:
-        return jsonify({'success': False,
-                        'error': 'Ollama is not running. Start it with: ollama serve'})
-    except (json.JSONDecodeError, ValueError):
-        return jsonify({'success': False,
-                        'error': 'Could not parse AI response. Try again.',
-                        'raw': response_text if 'response_text' in dir() else ''})
+        raw_text = response.content[0].text.strip()
+    except anthropic.AuthenticationError:
+        return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── Parse JSON from Claude ────────────────────────────────────────────
+    # Strip any accidental markdown fences
+    json_text = raw_text
+    fence = re.search(r'```(?:json)?\s*([\s\S]*?)```', raw_text)
+    if fence:
+        json_text = fence.group(1).strip()
+
+    try:
+        result = json.loads(json_text)
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'success': False,
+                        'error': f'Claude returned invalid JSON: {str(e)}',
+                        'raw': raw_text}), 500
+
+    asm_data   = result.get('assembly', {})
+    items_data = result.get('line_items', [])
+
+    # ── Calculate costs for each line item ────────────────────────────────
+    total_material = total_labor = total_equipment = total_hours = 0.0
+    computed_items = []
+
+    for li in items_data:
+        qty       = float(li.get('quantity', 0) or 0)
+        item_type = li.get('item_type', 'labor_material')
+        prod_base = li.get('prod_base', True)
+        if isinstance(prod_base, str):
+            prod_base = prod_base.lower() not in ('false', '0', 'no')
+
+        mat_rate  = float(li.get('material_cost_per_unit', 0) or 0)
+        lbr_hr    = float(li.get('labor_cost_per_hour', 0) or 0)
+        lbr_unit  = float(li.get('labor_cost_per_unit', 0) or 0)
+        equ_hr    = float(li.get('equipment_cost_per_hour', 0) or 0)
+        equ_unit  = float(li.get('equipment_cost_per_unit', 0) or 0)
+        rate      = float(li.get('production_rate', 0) or 0)
+
+        if item_type == 'equipment':
+            labor_hours    = 0.0
+            labor_cost     = 0.0
+            material_cost  = qty * mat_rate
+            equipment_cost = qty * equ_unit
+        else:
+            material_cost = qty * mat_rate
+            if prod_base:
+                labor_hours = (qty / rate) if rate > 0 else 0.0
+                labor_cost  = labor_hours * lbr_hr
+            else:
+                labor_hours = 0.0
+                labor_cost  = qty * lbr_unit
+            equipment_cost = 0.0
+
+        total_cost = material_cost + labor_cost + equipment_cost
+
+        total_material  += material_cost
+        total_labor     += labor_cost
+        total_equipment += equipment_cost
+        total_hours     += labor_hours
+
+        computed_items.append({
+            'description':            li.get('description', ''),
+            'quantity':               qty,
+            'unit':                   li.get('unit', 'LS'),
+            'item_type':              item_type,
+            'prod_base':              prod_base,
+            'production_rate':        rate,
+            'production_unit':        li.get('production_unit') or '',
+            'material_cost_per_unit': mat_rate,
+            'labor_cost_per_hour':    lbr_hr,
+            'labor_cost_per_unit':    lbr_unit,
+            'equipment_cost_per_hour': equ_hr,
+            'equipment_cost_per_unit': equ_unit,
+            'trade':                  li.get('trade') or '',
+            'notes':                  li.get('notes') or '',
+            # Calculated
+            'labor_hours':    round(labor_hours, 2),
+            'material_cost':  round(material_cost, 2),
+            'labor_cost':     round(labor_cost, 2),
+            'equipment_cost': round(equipment_cost, 2),
+            'total_cost':     round(total_cost, 2),
+        })
+
+    grand_total = total_material + total_labor + total_equipment
+
+    return jsonify({
+        'success': True,
+        'assembly': {
+            'assembly_label': asm_data.get('assembly_label', next_label),
+            'assembly_name':  asm_data.get('assembly_name', 'AI-Generated Assembly'),
+            'description':    asm_data.get('description', ''),
+            'quantity':       float(asm_data.get('quantity', 0) or 0),
+            'unit':           asm_data.get('unit', 'LS'),
+        },
+        'line_items': computed_items,
+        'totals': {
+            'total_material':  round(total_material, 2),
+            'total_labor':     round(total_labor, 2),
+            'total_equipment': round(total_equipment, 2),
+            'total_hours':     round(total_hours, 2),
+            'grand_total':     round(grand_total, 2),
+        },
+        'estimator_notes': result.get('estimator_notes', ''),
+    })
+
+
+@app.route('/ai/scope-gap', methods=['POST'])
+@login_required
+def ai_scope_gap():
+    data       = request.get_json()
+    project_id = data.get('project_id')
+
+    if not project_id:
+        return jsonify({'success': False, 'error': 'project_id is required'}), 400
+
+    project = get_project_or_403(project_id)
+
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key or api_key == 'your-api-key-here':
+        return jsonify({'success': False, 'error': 'ANTHROPIC_API_KEY not configured'}), 500
+
+    # ── CSI lookup maps ────────────────────────────────────────────────────
+    csi1_map = {d.id: f"{d.code} {d.title}" for d in CSILevel1.query.all()}
+    csi2_map = {s.id: f"{s.code} {s.title}" for s in CSILevel2.query.all()}
+
+    # ── Project type / sector ──────────────────────────────────────────────
+    props_map = {p.id: p.name for p in GlobalProperty.query.filter_by(
+        company_id=current_user.company_id).all()}
+
+    # ── Gather assemblies + line items, compute totals ─────────────────────
+    assemblies = Assembly.query.filter_by(project_id=project_id).order_by(Assembly.assembly_label).all()
+    asm_blocks = []
+    total_material = total_labor = total_equipment = total_hours = total_cost = 0.0
+    csi_divisions_present = set()
+
+    for asm in assemblies:
+        if asm.csi_level_1_id:
+            csi_divisions_present.add(csi1_map.get(asm.csi_level_1_id, str(asm.csi_level_1_id)))
+
+        items = LineItem.query.filter_by(assembly_id=asm.id).all()
+        item_rows = []
+        for it in items:
+            mat = float(it.material_cost or 0)
+            lab = float(it.labor_cost or 0)
+            equ = float(it.equipment_cost or 0)
+            hrs = float(it.labor_hours or 0)
+            tot = float(it.total_cost or 0)
+            total_material  += mat
+            total_labor     += lab
+            total_equipment += equ
+            total_hours     += hrs
+            total_cost      += tot
+            item_rows.append(
+                f"    - {it.description} | {float(it.quantity or 0)} {it.unit} "
+                f"| trade={it.trade or 'N/A'} | mat=${mat:.2f} lab=${lab:.2f} equ=${equ:.2f} total=${tot:.2f}"
+            )
+
+        asm_blocks.append(
+            f"  [{asm.assembly_label}] {asm.assembly_name}"
+            f" [CSI: {csi1_map.get(asm.csi_level_1_id, 'none')} / {csi2_map.get(asm.csi_level_2_id, 'none')}]\n"
+            + ("\n".join(item_rows) if item_rows else "    (no line items)")
+        )
+
+    # Direct line items (no assembly)
+    direct_items = LineItem.query.filter_by(project_id=project_id, assembly_id=None).all()
+    if direct_items:
+        direct_rows = []
+        for it in direct_items:
+            mat = float(it.material_cost or 0)
+            lab = float(it.labor_cost or 0)
+            equ = float(it.equipment_cost or 0)
+            tot = float(it.total_cost or 0)
+            total_material  += mat
+            total_labor     += lab
+            total_equipment += equ
+            total_cost      += tot
+            direct_rows.append(
+                f"    - {it.description} | {float(it.quantity or 0)} {it.unit} | total=${tot:.2f}"
+            )
+        asm_blocks.append("  [Direct Line Items — no assembly]\n" + "\n".join(direct_rows))
+
+    # ── Production rate standards ──────────────────────────────────────────
+    standards = (ProductionRateStandard.query
+                 .order_by(ProductionRateStandard.trade, ProductionRateStandard.description)
+                 .limit(80).all())
+    rates_text = "\n".join(
+        f"  {s.trade or 'General'} | {s.description} | {s.unit}"
+        for s in standards
+    ) or "  (none on file)"
+
+    estimate_text = "\n\n".join(asm_blocks) if asm_blocks else "  (no assemblies or line items)"
+    divisions_list = "\n".join(f"  - {d}" for d in sorted(csi_divisions_present)) or "  (none)"
+
+    # ── System prompt ──────────────────────────────────────────────────────
+    system_prompt = f"""You are a senior construction cost estimator with 25 years of experience reviewing bids and estimates before submission. You are conducting a formal peer review of the estimate below, exactly as you would prepare it for a pre-bid scope review meeting.
+
+Your job is to identify gaps, omissions, and missing scope — not to reprice items. Be specific. Reference actual assembly names and line item descriptions from the estimate when calling out gaps.
+
+PROJECT DETAILS
+---------------
+Name:        {project.project_name}
+Number:      {project.project_number or 'N/A'}
+Location:    {project.city or ''} {project.state or ''} {project.zip_code or ''}
+Type:        {props_map.get(project.project_type_id, 'N/A')}
+Sector:      {props_map.get(project.market_sector_id, 'N/A')}
+Description: {project.description or 'N/A'}
+
+LIVE ESTIMATE TOTALS
+--------------------
+Total Material:  ${total_material:,.2f}
+Total Labor:     ${total_labor:,.2f}
+Total Equipment: ${total_equipment:,.2f}
+Total Hours:     {total_hours:,.1f}
+Grand Total:     ${total_cost:,.2f}
+
+CSI DIVISIONS PRESENT IN ESTIMATE
+----------------------------------
+{divisions_list}
+
+FULL ESTIMATE (assemblies and line items)
+-----------------------------------------
+{estimate_text}
+
+PRODUCTION RATE STANDARDS ON FILE
+----------------------------------
+{rates_text}
+
+REVIEW INSTRUCTIONS
+-------------------
+Analyze this estimate at three levels and identify every meaningful gap:
+
+LEVEL 1 — MISSING LINE ITEMS
+Items that should exist within the current assemblies but are absent.
+Examples: concrete assembly with no curing compound, no formwork, no rebar; drywall assembly with no corner bead, no fasteners; painting scope with no primer.
+
+LEVEL 2 — MISSING ASSEMBLIES
+Entire scopes of work that are absent given what is already in the estimate and the project type.
+Examples: structural steel present but no metal deck, no shear studs, no steel erection equipment; site work present but no erosion control, no temporary fencing.
+
+LEVEL 3 — MISSING CSI DIVISIONS
+Entire CSI divisions that would typically be required for this project type and sector but have zero representation in the estimate.
+Examples: no Division 01 General Conditions, no Division 10 Specialties, no Division 26 Electrical allowance, no Division 22 Plumbing.
+
+For each gap assign a severity:
+HIGH   — likely to cause a significant cost miss if submitted as-is
+MEDIUM — should be resolved before bid day
+LOW    — minor item or optional scope, flag for estimator awareness
+
+Also note regional considerations for {project.city or 'the project location'}, {project.state or ''} — permits, prevailing wage, specific trade requirements, or weather-related scope that may be missing.
+
+RESPONSE FORMAT
+---------------
+Return ONLY valid JSON. No markdown, no explanation, no text outside the JSON object. Your entire response must be parseable by json.loads().
+
+{{
+  "summary": "2-3 sentence overall assessment of the estimate completeness and readiness for bid",
+  "completeness_score": 85,
+  "gaps": [
+    {{
+      "level": "MISSING_LINE_ITEM",
+      "severity": "HIGH",
+      "assembly_name": "name of the related assembly, or null if not assembly-specific",
+      "title": "short descriptive title of the gap",
+      "description": "specific description of what is missing and why it matters for this project",
+      "suggested_action": "concrete action the estimator should take",
+      "estimated_cost_impact": "rough cost impact if known (e.g. '$5,000–$15,000' or 'minor')"
+    }}
+  ],
+  "strengths": [
+    "2 to 4 specific things the estimate does well"
+  ],
+  "review_notes": "any additional observations the estimator should consider before submitting this bid"
+}}
+
+Level values must be one of: MISSING_LINE_ITEM, MISSING_ASSEMBLY, MISSING_CSI_DIVISION
+Severity values must be one of: HIGH, MEDIUM, LOW"""
+
+    # ── Call Claude ────────────────────────────────────────────────────────
+    try:
+        client   = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model='claude-sonnet-4-20250514',
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{'role': 'user', 'content': 'Please review this estimate for scope gaps and missing items.'}],
+        )
+        raw_text = response.content[0].text.strip()
+    except anthropic.AuthenticationError:
+        return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── Parse JSON from Claude ─────────────────────────────────────────────
+    json_text = raw_text
+    fence = re.search(r'```(?:json)?\s*([\s\S]*?)```', raw_text)
+    if fence:
+        json_text = fence.group(1).strip()
+
+    try:
+        result = json.loads(json_text)
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'success': False,
+                        'error': f'Claude returned invalid JSON: {str(e)}',
+                        'raw': raw_text}), 500
+
+    # ── Sort gaps: HIGH → MEDIUM → LOW ────────────────────────────────────
+    severity_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
+    gaps = result.get('gaps', [])
+    gaps.sort(key=lambda g: severity_order.get(g.get('severity', 'LOW'), 2))
+    result['gaps'] = gaps
+
+    return jsonify({'success': True, **result})
+
 
 # ─────────────────────────────────────────
-# RUN APP
+# STARTUP HELPERS
 # ─────────────────────────────────────────
+
+def _seed_company_properties(company_id):
+    """Seed default global properties for a new company (called when admin creates a company)."""
+    defaults = {
+        'trade': ['Concrete', 'Drywall', 'Steel', 'Framing', 'Masonry',
+                  'Electrical', 'Plumbing', 'Mechanical', 'Painting', 'Roofing'],
+        'project_type': ['Ground Up', 'Interior Fit-Out', 'Renovation'],
+        'market_sector': ['Retail', 'Multi-Family', 'Mixed-Use', 'Single Family',
+                          'Higher-Ed', 'Healthcare', 'Office', 'Industrial'],
+    }
+    for category, names in defaults.items():
+        existing = {p.name for p in GlobalProperty.query.filter_by(
+            company_id=company_id, category=category).all()}
+        for i, name in enumerate(names):
+            if name not in existing:
+                db.session.add(GlobalProperty(company_id=company_id,
+                                              category=category, name=name, sort_order=i))
+
+def _initialize_wbs(project_id):
+    """Seed default WBS properties and values for a new project."""
+    # Location 1 – primary location breakdown (building / zone)
+    loc1 = WBSProperty(
+        project_id=project_id, property_type='location_1', property_name='Location 1',
+        is_template=True, display_order=1
+    )
+    db.session.add(loc1)
+    db.session.flush()
+    for i, (name, code) in enumerate([
+        ('Building A', 'BLDG-A'), ('Building B', 'BLDG-B'),
+        ('Basement', 'BASE'), ('Ground Floor', 'GRD'), ('Upper Floors', 'UPR'),
+        ('Roof', 'ROOF'), ('Site', 'SITE'),
+    ]):
+        db.session.add(WBSValue(
+            wbs_property_id=loc1.id, value_name=name,
+            value_code=code, display_order=i
+        ))
+
+    # Location 2 – secondary location (floor / wing)
+    loc2 = WBSProperty(
+        project_id=project_id, property_type='location_2', property_name='Location 2',
+        is_template=True, display_order=2
+    )
+    db.session.add(loc2)
+
+    # Location 3 – tertiary location (room / zone)
+    loc3 = WBSProperty(
+        project_id=project_id, property_type='location_3', property_name='Location 3',
+        is_template=True, display_order=3
+    )
+    db.session.add(loc3)
+
+    # Bid Package
+    bid_prop = WBSProperty(
+        project_id=project_id, property_type='bid_package', property_name='Bid Package',
+        is_template=True, display_order=4
+    )
+    db.session.add(bid_prop)
+    db.session.flush()
+    for i, (name, code) in enumerate([
+        ('General Conditions', 'GC'), ('Sitework', 'SITE'), ('Concrete', 'CONC'),
+        ('Masonry', 'MAS'), ('Structural Steel', 'STL'), ('Carpentry', 'CARP'),
+        ('Mechanical', 'MECH'), ('Electrical', 'ELEC'), ('Plumbing', 'PLMB'),
+        ('Finishes', 'FIN'),
+    ]):
+        db.session.add(WBSValue(
+            wbs_property_id=bid_prop.id, value_name=name,
+            value_code=code, display_order=i
+        ))
+
+    # Custom properties (no default values)
+    for i in range(1, 5):
+        db.session.add(WBSProperty(
+            project_id=project_id, property_type=f'custom_{i}',
+            property_name=f'Custom {i}', is_custom=True, display_order=i + 4
+        ))
+
+    db.session.commit()
+
 
 def run_migrations():
     """Add new columns to existing tables without dropping data."""
     with app.app_context():
-        for sql in [
-            'ALTER TABLE assemblies ADD COLUMN IF NOT EXISTS is_template BOOLEAN DEFAULT FALSE',
-            'ALTER TABLE assemblies ADD COLUMN IF NOT EXISTS measurement_params TEXT',
-            'ALTER TABLE line_items ADD COLUMN IF NOT EXISTS trade VARCHAR(100)',
-        ]:
+        stmts = [
+            # Pre-auth columns (idempotent)
+            "ALTER TABLE assemblies ADD COLUMN IF NOT EXISTS is_template BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE assemblies ADD COLUMN IF NOT EXISTS measurement_params TEXT",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS trade VARCHAR(100)",
+            "ALTER TABLE projects ADD COLUMN IF NOT EXISTS city VARCHAR(100)",
+            "ALTER TABLE projects ADD COLUMN IF NOT EXISTS state VARCHAR(50)",
+            "ALTER TABLE projects ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)",
+            "ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_type_id INTEGER",
+            "ALTER TABLE projects ADD COLUMN IF NOT EXISTS market_sector_id INTEGER",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(20) DEFAULT 'labor_material'",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS prod_base BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS labor_cost_per_unit NUMERIC(10,2)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS equipment_cost_per_unit NUMERIC(10,2)",
+            "ALTER TABLE line_items ALTER COLUMN assembly_id DROP NOT NULL",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS csi_level_1_id INTEGER REFERENCES csi_level_1(id)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS csi_level_2_id INTEGER REFERENCES csi_level_2(id)",
+            "ALTER TABLE library_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(20) DEFAULT 'labor_material'",
+            "ALTER TABLE library_items ADD COLUMN IF NOT EXISTS prod_base BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE library_items ADD COLUMN IF NOT EXISTS labor_cost_per_unit NUMERIC(10,2)",
+            "ALTER TABLE library_items ADD COLUMN IF NOT EXISTS equipment_cost_per_unit NUMERIC(10,2)",
+            # Auth / multi-tenancy columns
+            "ALTER TABLE projects ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
+            "ALTER TABLE library_items ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
+            "ALTER TABLE global_properties ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
+            "ALTER TABLE company_profile ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
+            # WBS tables (created by db.create_all; these are safety guards)
+            """CREATE TABLE IF NOT EXISTS wbs_properties (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+                property_type VARCHAR(50) NOT NULL,
+                property_name VARCHAR(100) NOT NULL,
+                is_template BOOLEAN DEFAULT false,
+                is_custom BOOLEAN DEFAULT false,
+                display_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS wbs_values (
+                id SERIAL PRIMARY KEY,
+                wbs_property_id INTEGER REFERENCES wbs_properties(id) ON DELETE CASCADE,
+                value_name VARCHAR(100) NOT NULL,
+                value_code VARCHAR(50),
+                parent_id INTEGER REFERENCES wbs_values(id),
+                display_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS line_item_wbs (
+                id SERIAL PRIMARY KEY,
+                line_item_id INTEGER REFERENCES line_items(id) ON DELETE CASCADE,
+                wbs_property_id INTEGER REFERENCES wbs_properties(id) ON DELETE CASCADE,
+                wbs_value_id INTEGER REFERENCES wbs_values(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+        ]
+        for sql in stmts:
             try:
                 db.session.execute(db.text(sql))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
 
+def seed_production_rates():
+    """Seed default production rate standards if table is empty."""
+    with app.app_context():
+        if ProductionRateStandard.query.count() > 0:
+            return
+        defaults = [
+            ('Concrete',   'Concrete — Footings, continuous',          'LF',  15,  25,  40,  'Includes form, pour, strip'),
+            ('Concrete',   'Concrete — Slab on grade, 4"',             'SF',  150, 250, 400, 'Machine-assisted placement'),
+            ('Concrete',   'Concrete — Columns, square',               'LF',  8,   12,  20,  'Includes forming'),
+            ('Masonry',    'Masonry — CMU block, 8"',                  'SF',  80,  120, 160, 'Running bond, mortar included'),
+            ('Masonry',    'Masonry — Brick veneer',                   'SF',  60,  90,  130, 'Standard running bond'),
+            ('Framing',    'Framing — Wood stud wall, 2x4 16"oc',     'SF',  200, 350, 500, 'Plate to plate, layout to sheathing'),
+            ('Framing',    'Framing — Metal stud wall, 3-5/8"',       'SF',  175, 300, 450, 'Track + studs + blocking'),
+            ('Framing',    'Framing — Floor joist system',             'SF',  100, 180, 280, 'Layout, cut, set, blocking'),
+            ('Drywall',    'Drywall — Hang 5/8" GWB',                 'SF',  400, 600, 900, 'Flat ceilings reduce rate'),
+            ('Drywall',    'Drywall — Tape, float, finish Level 4',    'SF',  350, 500, 700, 'Spray primer after'),
+            ('Painting',   'Painting — Interior walls, 2-coat',        'SF',  300, 500, 800, 'Roller application'),
+            ('Painting',   'Painting — Exterior siding',               'SF',  200, 350, 600, 'Brush + roller'),
+            ('Roofing',    'Roofing — TPO single-ply membrane',        'SQ',  4,   6,   9,   'Mechanically fastened'),
+            ('Roofing',    'Roofing — Asphalt shingle, 30yr',         'SQ',  6,   9,   14,  'Tear-off not included'),
+            ('Electrical', 'Electrical — EMT conduit, 3/4"',           'LF',  30,  50,  80,  'Install only, material separate'),
+            ('Electrical', 'Electrical — Receptacle outlet, rough-in', 'EA',  4,   6,   10,  'Box, wire, device'),
+            ('Plumbing',   'Plumbing — Copper pipe, 3/4"',             'LF',  25,  40,  60,  'Solder joints'),
+            ('Plumbing',   'Plumbing — PVC DWV, 3"',                  'LF',  30,  50,  75,  'Includes fittings'),
+            ('Mechanical', 'HVAC — Flex duct, 8"',                     'LF',  40,  65,  100, 'Insulated'),
+            ('Mechanical', 'HVAC — Sheet metal duct, rectangular',     'LB',  20,  35,  55,  'Fab + install'),
+        ]
+        for trade, desc, unit, min_r, typ_r, max_r, notes in defaults:
+            db.session.add(ProductionRateStandard(
+                trade=trade, description=desc, unit=unit,
+                min_rate=min_r, typical_rate=typ_r, max_rate=max_r, source_notes=notes,
+            ))
+        db.session.commit()
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     run_migrations()
+    seed_production_rates()
     app.run(debug=True)

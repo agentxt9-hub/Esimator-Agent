@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bid Proposal — {{ project.project_name }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+        /* Screen chrome */
+        .screen-bar {
+            background: #1a1a2e; padding: 12px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .screen-bar a { color: #aaa; text-decoration: none; font-size: 13px; }
+        .screen-bar a:hover { color: #e94560; }
+        .screen-bar .btn-print {
+            background: #e94560; color: white; border: none; padding: 8px 20px;
+            border-radius: 4px; cursor: pointer; font-size: 14px;
+        }
+        .screen-bar .btn-print:hover { background: #c73652; }
+
+        /* Page */
+        .page {
+            max-width: 960px; margin: 24px auto; background: white;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+        }
+
+        /* Cover header */
+        .cover {
+            padding: 40px 48px 32px;
+            border-bottom: 3px solid #1a1a2e;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            gap: 32px;
+        }
+        .company-block { flex: 1; }
+        .company-logo { max-height: 70px; max-width: 200px; object-fit: contain; margin-bottom: 10px; display: block; }
+        .company-name { font-size: 20px; font-weight: bold; color: #1a1a2e; }
+        .company-detail { color: #555; font-size: 13px; line-height: 1.7; margin-top: 4px; }
+
+        .project-block { flex: 1; text-align: right; }
+        .proposal-title { font-size: 13px; font-weight: bold; text-transform: uppercase;
+                          letter-spacing: 2px; color: #e94560; margin-bottom: 6px; }
+        .project-name { font-size: 24px; font-weight: bold; color: #1a1a2e; margin-bottom: 6px; }
+        .project-detail { color: #555; font-size: 13px; line-height: 1.8; }
+        .project-detail strong { color: #1a1a2e; }
+
+        /* Section wrapper */
+        .section { padding: 32px 48px; border-bottom: 1px solid #e0e4ea; }
+        .section:last-child { border-bottom: none; }
+        .section-heading {
+            font-size: 11px; font-weight: bold; text-transform: uppercase;
+            letter-spacing: 2px; color: #e94560; margin-bottom: 16px;
+            padding-bottom: 8px; border-bottom: 2px solid #e94560;
+        }
+
+        /* Cost summary */
+        .summary-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+        }
+        .summary-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; background: #f7f8fa; border-radius: 4px;
+        }
+        .summary-row.total {
+            background: #1a1a2e; color: white; grid-column: 1 / -1;
+            font-size: 16px; font-weight: bold;
+        }
+        .summary-row.total .lbl { color: #aaa; }
+        .summary-row .lbl { color: #555; font-size: 13px; }
+        .summary-row .val { font-size: 15px; font-weight: bold; color: #1a1a2e; }
+        .summary-row.total .val { color: #e94560; font-size: 18px; }
+        .summary-row.hours { background: #f0f2f5; }
+        .summary-row.hours .val { color: #555; font-size: 14px; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table th {
+            background: #1a1a2e; color: #aaa; padding: 9px 12px;
+            text-align: left; font-weight: bold; font-size: 11px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        table th.right, table td.right { text-align: right; }
+        table td { padding: 9px 12px; border-bottom: 1px solid #e8ecf0; color: #333; }
+        table tr:last-child td { border-bottom: none; }
+        table tr:hover td { background: #f7f8fa; }
+        .total-row td { font-weight: bold; background: #f0f2f5; border-top: 2px solid #ccc; }
+        .total-row td.cost { color: #1a1a2e; }
+        .csi-color-bar { width: 4px; height: 100%; border-radius: 2px; display: inline-block; margin-right: 8px; vertical-align: middle; }
+
+        /* Footer */
+        .footer {
+            padding: 20px 48px; background: #f7f8fa;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 11px; color: #999;
+        }
+
+        @media print {
+            body { background: white; }
+            .screen-bar { display: none; }
+            .page { max-width: 100%; margin: 0; box-shadow: none; }
+            .section { padding: 20px 32px; }
+            .cover { padding: 24px 32px; }
+            table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .summary-row.total { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .footer { padding: 12px 32px; }
+            .section { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+{% include 'nav.html' %}
+<!-- Screen-only top bar -->
+<div class="screen-bar">
+    <span>
+        <a href="/project/{{ project.id }}">&larr; Back to {{ project.project_name }}</a>
+    </span>
+    <button class="btn-print" onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<div class="page">
+
+    <!-- COVER -->
+    <div class="cover">
+        <div class="company-block">
+            {% if company and company.logo_path %}
+            <img class="company-logo" src="/uploads/logo/{{ company.logo_path }}" alt="Company Logo">
+            {% endif %}
+            {% if company and company.company_name %}
+            <div class="company-name">{{ company.company_name }}</div>
+            <div class="company-detail">
+                {% if company.address %}{{ company.address }}<br>{% endif %}
+                {% if company.city %}{{ company.city }}{% if company.state %}, {{ company.state }}{% endif %}{% if company.zip_code %} {{ company.zip_code }}{% endif %}<br>{% endif %}
+                {% if company.phone %}{{ company.phone }}<br>{% endif %}
+                {% if company.email %}{{ company.email }}{% endif %}
+            </div>
+            {% else %}
+            <div class="company-name" style="color:#999;">Your Company Name</div>
+            <div class="company-detail" style="color:#bbb;">Set up company profile in Settings</div>
+            {% endif %}
+        </div>
+        <div class="project-block">
+            <div class="proposal-title">Bid Proposal</div>
+            <div class="project-name">{{ project.project_name }}</div>
+            <div class="project-detail">
+                {% if project.project_number %}<strong>Project #</strong> {{ project.project_number }}<br>{% endif %}
+                {% if project.city or project.state or project.zip_code %}
+                <strong>Location</strong>
+                {{ project.city or '' }}{% if project.city and project.state %}, {% endif %}{{ project.state or '' }}{% if project.zip_code %} {{ project.zip_code }}{% endif %}<br>
+                {% elif project.location %}
+                <strong>Location</strong> {{ project.location }}<br>
+                {% endif %}
+                {% if project_type_name %}<strong>Type</strong> {{ project_type_name }}<br>{% endif %}
+                {% if market_sector_name %}<strong>Sector</strong> {{ market_sector_name }}<br>{% endif %}
+                <strong>Date</strong> {{ now.strftime('%B %d, %Y') }}
+            </div>
+        </div>
+    </div>
+
+    <!-- COST SUMMARY -->
+    <div class="section">
+        <div class="section-heading">Cost Summary</div>
+        <div class="summary-grid">
+            <div class="summary-row">
+                <span class="lbl">Material Cost</span>
+                <span class="val">${{ "{:,.2f}".format(summary.total_material_cost) }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="lbl">Labor Cost</span>
+                <span class="val">${{ "{:,.2f}".format(summary.total_labor_cost) }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="lbl">Equipment Cost</span>
+                <span class="val">${{ "{:,.2f}".format(summary.total_equipment_cost) }}</span>
+            </div>
+            <div class="summary-row hours">
+                <span class="lbl">Total Labor Hours</span>
+                <span class="val">{{ "{:,.1f}".format(summary.total_labor_hours) }} hrs</span>
+            </div>
+            <div class="summary-row total">
+                <span class="lbl">Total Estimate</span>
+                <span class="val">${{ "{:,.2f}".format(summary.total_cost) }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ASSEMBLY BREAKDOWN -->
+    {% if assembly_rows %}
+    <div class="section">
+        <div class="section-heading">Assembly Breakdown</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Assembly</th>
+                    <th>Name</th>
+                    <th class="right">Items</th>
+                    <th class="right">Material</th>
+                    <th class="right">Labor</th>
+                    <th class="right">Equipment</th>
+                    <th class="right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set ns = namespace(mat=0, lab=0, equip=0, tot=0) %}
+                {% for row in assembly_rows %}
+                {% set ns.mat   = ns.mat   + row.material_cost %}
+                {% set ns.lab   = ns.lab   + row.labor_cost %}
+                {% set ns.equip = ns.equip + row.equipment_cost %}
+                {% set ns.tot   = ns.tot   + row.total_cost %}
+                <tr>
+                    <td><strong>{{ row.assembly.assembly_label }}</strong></td>
+                    <td>{{ row.assembly.assembly_name }}</td>
+                    <td class="right">{{ row.item_count }}</td>
+                    <td class="right">${{ "{:,.2f}".format(row.material_cost) }}</td>
+                    <td class="right">${{ "{:,.2f}".format(row.labor_cost) }}</td>
+                    <td class="right">${{ "{:,.2f}".format(row.equipment_cost) }}</td>
+                    <td class="right"><strong>${{ "{:,.2f}".format(row.total_cost) }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="3"><strong>Total</strong></td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns.mat) }}</td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns.lab) }}</td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns.equip) }}</td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns.tot) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- CSI BREAKDOWN -->
+    {% if csi_divisions %}
+    <div class="section">
+        <div class="section-heading">CSI Division Breakdown</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Division</th>
+                    <th>Title</th>
+                    <th class="right">Material</th>
+                    <th class="right">Labor</th>
+                    <th class="right">Equipment</th>
+                    <th class="right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set ns2 = namespace(mat=0, lab=0, equip=0, tot=0) %}
+                {% for d in csi_divisions %}
+                {% set ns2.mat   = ns2.mat   + d.material_cost %}
+                {% set ns2.lab   = ns2.lab   + d.labor_cost %}
+                {% set ns2.equip = ns2.equip + d.equipment_cost %}
+                {% set ns2.tot   = ns2.tot   + d.total_cost %}
+                <tr>
+                    <td><strong>{{ d.div.code }}</strong></td>
+                    <td>{{ d.div.title }}</td>
+                    <td class="right">${{ "{:,.2f}".format(d.material_cost) }}</td>
+                    <td class="right">${{ "{:,.2f}".format(d.labor_cost) }}</td>
+                    <td class="right">${{ "{:,.2f}".format(d.equipment_cost) }}</td>
+                    <td class="right"><strong>${{ "{:,.2f}".format(d.total_cost) }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="2"><strong>Total</strong></td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns2.mat) }}</td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns2.lab) }}</td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns2.equip) }}</td>
+                    <td class="right cost">${{ "{:,.2f}".format(ns2.tot) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <span>
+            {% if company and company.company_name %}{{ company.company_name }} &mdash; {% endif %}
+            Prepared {{ now.strftime('%B %d, %Y') }}
+        </span>
+        <span>
+            {% if project.description %}{{ project.description }}{% else %}Construction Estimate{% endif %}
+        </span>
+    </div>
+
+</div>
+</body>
+</html>

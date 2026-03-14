@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Production Rate Standards - Construction Estimator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
+        .container { max-width: 1400px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
+        h1 { color: #e94560; margin-bottom: 5px; }
+        .subtitle { color: #888; font-size: 14px; }
+        .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #c73652; }
+        .btn-secondary { background: #0f3460; color: #eee; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-danger { background: #3a0a12; color: #e94560; border: 1px solid #e94560; }
+        .btn-danger:hover { background: #e94560; color: white; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-group { display: flex; gap: 10px; align-items: center; }
+        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
+        .breadcrumb a { color: #e94560; text-decoration: none; }
+
+        .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: #0f3460; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-card h3 { color: #e94560; font-size: 28px; }
+        .stat-card p { color: #888; font-size: 12px; margin-top: 4px; }
+
+        .search-bar { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; }
+        .search-input { flex: 1; padding: 10px 14px; background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; color: #eee; font-size: 14px; }
+        .search-input:focus { outline: none; border-color: #e94560; }
+        .search-input::placeholder { color: #555; }
+        .filter-select { padding: 10px 14px; background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; color: #eee; font-size: 14px; min-width: 180px; }
+        .filter-select:focus { outline: none; border-color: #e94560; }
+        .result-count { color: #888; font-size: 13px; white-space: nowrap; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table th { background: #0f3460; padding: 10px 12px; text-align: left; color: #aaa; font-weight: bold; white-space: nowrap; }
+        table td { padding: 10px 12px; border-bottom: 1px solid #1a2a3a; color: #ccc; vertical-align: middle; }
+        table tr:hover td { background: #1a2a3a; }
+        .csi-badge { display: inline-block; background: #0f3460; color: #aaa; padding: 2px 8px; border-radius: 3px; font-size: 11px; white-space: nowrap; }
+        .rate-cell { color: #eee; font-variant-numeric: tabular-nums; }
+        .rate-typical { color: #e94560; font-weight: bold; }
+        .no-data { color: #555; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #555; }
+        .empty-state p { font-size: 16px; margin-bottom: 10px; }
+        .trade-badge { display: inline-block; background: #0f3460; color: #7bbdde; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
+
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid #0f3460; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h2 { color: #e94560; }
+        .close { color: #888; font-size: 28px; cursor: pointer; line-height: 1; }
+        .close:hover { color: #eee; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 14px; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
+        .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .section-label { color: #e94560; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 12px; padding-bottom: 6px; border-bottom: 1px solid #0f3460; }
+        .help-text { color: #666; font-size: 11px; margin-top: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+{% include 'nav.html' %}
+    <div class="breadcrumb"><a href="/">Home</a> &rsaquo; <a href="/library">Library</a> &rsaquo; Production Rate Standards</div>
+
+    <div class="header">
+        <div>
+            <h1>Production Rate Standards</h1>
+            <p class="subtitle">Reference labor production rates by trade. Use the Lookup button in the Library to pull these into any item.</p>
+        </div>
+        <div class="btn-group">
+            <a href="/library" class="btn btn-secondary">Library</a>
+            <a href="/" class="btn btn-secondary">Home</a>
+            <button class="btn" onclick="openNewModal()">+ New Standard</button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+        <div class="stat-card">
+            <h3 id="statTotal">{{ standards|length }}</h3>
+            <p>Rate Standards</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="statVisible">{{ standards|length }}</h3>
+            <p>Showing</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ standards | map(attribute='trade') | select | unique | list | length }}</h3>
+            <p>Trades Covered</p>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="search-bar">
+        <input type="text" class="search-input" id="searchInput" placeholder="Search description or trade..." oninput="filterStandards()">
+        <select class="filter-select" id="tradeFilter" onchange="filterStandards()">
+            <option value="">All Trades</option>
+            {% for t in trades %}
+            <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+        </select>
+        <select class="filter-select" id="csiFilter" onchange="filterStandards()">
+            <option value="">All CSI Divisions</option>
+            {% for d in csi1_list %}
+            <option value="{{ d.id }}">{{ d.code }} — {{ d.title }}</option>
+            {% endfor %}
+        </select>
+        <span class="result-count" id="resultCount"></span>
+    </div>
+
+    <!-- Table -->
+    {% if standards %}
+    <table id="standardsTable">
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>Trade</th>
+                <th>CSI Division</th>
+                <th>Unit</th>
+                <th>Min Rate</th>
+                <th>Typical Rate</th>
+                <th>Max Rate</th>
+                <th>Source Notes</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="standardsBody">
+            {% for s in standards %}
+            {% set d1 = csi1_map.get(s.csi_level_1_id) %}
+            <tr data-id="{{ s.id }}"
+                data-description="{{ s.description | lower }}"
+                data-trade="{{ (s.trade or '') | lower }}"
+                data-csi1="{{ s.csi_level_1_id or '' }}">
+                <td><strong style="color:#eee;">{{ s.description }}</strong></td>
+                <td>{% if s.trade %}<span class="trade-badge">{{ s.trade }}</span>{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td>{% if d1 %}<span class="csi-badge">{{ d1.code }} — {{ d1.title }}</span>{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td>{{ s.unit or '—' }}</td>
+                <td class="rate-cell">{% if s.min_rate %}{{ s.min_rate }}{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td class="rate-cell rate-typical">{% if s.typical_rate %}{{ s.typical_rate }}{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td class="rate-cell">{% if s.max_rate %}{{ s.max_rate }}{% else %}<span class="no-data">—</span>{% endif %}</td>
+                <td style="color:#888; font-size:12px;">{{ s.source_notes or '—' }}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary btn-sm" onclick="openEditModal({{ s.id }})">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteStandard({{ s.id }}, '{{ s.description }}')">✕</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No production rate standards yet.</p>
+        <p style="font-size:13px; margin-bottom:20px;">Add reference rates here to look them up when building library items.</p>
+        <button class="btn" onclick="openNewModal()">+ Add First Standard</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Create / Edit Modal -->
+<div id="stdModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="stdModalTitle">New Rate Standard</h2>
+            <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <form id="stdForm" onsubmit="saveStandard(event)">
+            <input type="hidden" id="stdEditId" value="">
+
+            <div class="section-label">Classification</div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Trade</label>
+                    <select name="trade" id="stdTrade">
+                        <option value="">— None —</option>
+                        {% for t in trades %}
+                        <option value="{{ t }}">{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Unit *</label>
+                    <input type="text" name="unit" placeholder="e.g., SF, LF, EA, SQ" required>
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>CSI Division</label>
+                    <select name="csi_level_1_id" id="stdCsi1" onchange="filterStdCsi2()">
+                        <option value="">— None —</option>
+                        {% for d in csi1_list %}
+                        <option value="{{ d.id }}">{{ d.code }} — {{ d.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>CSI Section</label>
+                    <select name="csi_level_2_id" id="stdCsi2">
+                        <option value="">— Select Division first —</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-label">Description</div>
+            <div class="form-group">
+                <label>Description *</label>
+                <input type="text" name="description" placeholder="e.g., Framing — Wood stud wall, 2x4 16&quot;oc" required>
+            </div>
+
+            <div class="section-label">Production Rates (units per labor hour)</div>
+            <div class="form-grid-3">
+                <div class="form-group">
+                    <label>Min Rate</label>
+                    <input type="number" name="min_rate" step="0.01" placeholder="e.g., 150">
+                    <p class="help-text">Difficult conditions</p>
+                </div>
+                <div class="form-group">
+                    <label>Typical Rate</label>
+                    <input type="number" name="typical_rate" step="0.01" placeholder="e.g., 300">
+                    <p class="help-text">Normal conditions</p>
+                </div>
+                <div class="form-group">
+                    <label>Max Rate</label>
+                    <input type="number" name="max_rate" step="0.01" placeholder="e.g., 500">
+                    <p class="help-text">Ideal conditions</p>
+                </div>
+            </div>
+
+            <div class="section-label">Notes</div>
+            <div class="form-group">
+                <label>Source Notes</label>
+                <textarea name="source_notes" rows="2" placeholder="e.g., Includes forming, crew of 3, based on RSMeans..."></textarea>
+            </div>
+
+            <button type="submit" id="stdSubmitBtn" class="btn" style="width:100%; margin-top:10px;">Add Standard</button>
+        </form>
+    </div>
+</div>
+
+<script id="csi2Data" type="application/json">{{ csi2_json | safe }}</script>
+<script id="standardsData" type="application/json">{{ standards_json | safe }}</script>
+<script>
+    const csi2All = JSON.parse(document.getElementById('csi2Data').textContent);
+    const allStandards = JSON.parse(document.getElementById('standardsData').textContent);
+
+    function filterStdCsi2() {
+        const parentId = parseInt(document.getElementById('stdCsi1').value);
+        const sel = document.getElementById('stdCsi2');
+        sel.innerHTML = '<option value="">— None —</option>';
+        if (!parentId) return;
+        csi2All.filter(s => s.parent === parentId).forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.code + ' — ' + s.title;
+            sel.appendChild(opt);
+        });
+    }
+
+    function filterStandards() {
+        const query = document.getElementById('searchInput').value.toLowerCase().trim();
+        const trade = document.getElementById('tradeFilter').value.toLowerCase();
+        const csi1  = document.getElementById('csiFilter').value;
+        const rows  = document.querySelectorAll('#standardsBody tr');
+        let visible = 0;
+
+        rows.forEach(row => {
+            const desc      = row.dataset.description || '';
+            const rowTrade  = row.dataset.trade || '';
+            const rowCsi1   = row.dataset.csi1 || '';
+            const matchText = !query || desc.includes(query) || rowTrade.includes(query);
+            const matchTrade = !trade || rowTrade === trade;
+            const matchCsi  = !csi1 || rowCsi1 === csi1;
+            if (matchText && matchTrade && matchCsi) { row.style.display = ''; visible++; }
+            else { row.style.display = 'none'; }
+        });
+
+        document.getElementById('statVisible').textContent = visible;
+        document.getElementById('resultCount').textContent = visible + ' of ' + rows.length + ' standards';
+    }
+
+    function openNewModal() {
+        document.getElementById('stdEditId').value = '';
+        document.getElementById('stdModalTitle').textContent = 'New Rate Standard';
+        document.getElementById('stdSubmitBtn').textContent = 'Add Standard';
+        document.getElementById('stdForm').reset();
+        document.getElementById('stdCsi1').value = '';
+        document.getElementById('stdCsi2').innerHTML = '<option value="">— Select Division first —</option>';
+        document.getElementById('stdModal').style.display = 'block';
+    }
+
+    function openEditModal(id) {
+        const s = allStandards.find(x => x.id === id);
+        if (!s) return;
+        document.getElementById('stdEditId').value = s.id;
+        document.getElementById('stdModalTitle').textContent = 'Edit Rate Standard';
+        document.getElementById('stdSubmitBtn').textContent = 'Save Changes';
+
+        document.querySelector('#stdForm [name="description"]').value  = s.description;
+        document.querySelector('#stdForm [name="unit"]').value         = s.unit || '';
+        document.querySelector('#stdForm [name="min_rate"]').value     = s.min_rate || '';
+        document.querySelector('#stdForm [name="typical_rate"]').value = s.typical_rate || '';
+        document.querySelector('#stdForm [name="max_rate"]').value     = s.max_rate || '';
+        document.querySelector('#stdForm [name="source_notes"]').value = s.source_notes || '';
+        document.getElementById('stdTrade').value = s.trade || '';
+        document.getElementById('stdCsi1').value  = s.csi_level_1_id || '';
+        filterStdCsi2();
+        if (s.csi_level_2_id) document.getElementById('stdCsi2').value = s.csi_level_2_id;
+
+        document.getElementById('stdModal').style.display = 'block';
+    }
+
+    function closeModal() { document.getElementById('stdModal').style.display = 'none'; }
+    window.onclick = e => { if (e.target === document.getElementById('stdModal')) closeModal(); };
+
+    function saveStandard(event) {
+        event.preventDefault();
+        const editId = document.getElementById('stdEditId').value;
+        const url = editId ? '/production-rate/' + editId + '/update' : '/production-rates/new';
+        fetch(url, { method: 'POST', body: new FormData(event.target) })
+            .then(r => r.json())
+            .then(data => { if (data.success) window.location.reload(); });
+    }
+
+    function deleteStandard(id, description) {
+        if (!confirm('Delete "' + description + '"?')) return;
+        fetch('/production-rate/' + id + '/delete', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => { if (data.success) window.location.reload(); });
+    }
+
+    // Init
+    filterStandards();
+</script>
+
+    {% include 'agentx_panel.html' %}
+</body>
+</html>

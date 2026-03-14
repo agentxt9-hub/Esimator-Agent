@@ -126,43 +126,42 @@
         .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
-        /* AI button column */
-        .c-ai  { width: 36px; text-align: center; padding: 3px !important; }
-        .ai-btn { background: none; border: none; cursor: pointer; font-size: 15px; padding: 3px 5px; border-radius: 3px; opacity: 0.4; transition: opacity 0.15s; }
-        .ai-btn:hover { opacity: 1; background: #1f3050; }
+        /* Delete button column */
+        .c-del { width: 32px; text-align: center; padding: 2px !important; }
+        .del-btn { padding: 2px 7px; font-size: 11px; }
 
-        /* AI slide-in panel */
-        .ai-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; }
-        .ai-panel   { display: none; position: fixed; right: 0; top: 0; height: 100vh; width: 380px;
-                      background: #16213e; border-left: 1px solid #0f3460; z-index: 201;
-                      padding: 24px; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,0.6); }
-        .ai-overlay.open, .ai-panel.open { display: block; }
-        .ai-panel-header { display: flex; justify-content: space-between; align-items: center;
-                           margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #0f3460; }
-        .ai-panel-header .ai-title { color: #e94560; font-size: 15px; font-weight: bold; }
-        .ai-item-name { color: #eee; font-size: 13px; margin-bottom: 20px; padding: 10px 12px;
-                        background: #0d1b2a; border-radius: 4px; border-left: 3px solid #e94560; }
-        .ai-loading   { text-align: center; padding: 48px 0; color: #888; }
-        .ai-spinner   { width: 34px; height: 34px; border: 3px solid #0f3460; border-top-color: #e94560;
-                        border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .ai-label     { color: #888; font-size: 10px; font-weight: bold; text-transform: uppercase;
-                        letter-spacing: 1px; margin-bottom: 6px; }
-        .ai-reasoning { color: #ccc; font-size: 13px; line-height: 1.6; margin-bottom: 20px;
-                        padding: 12px; background: #0d1b2a; border-radius: 4px;
-                        border-left: 3px solid #7bde9b; }
-        .ai-tbl       { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
-        .ai-tbl th    { background: #0f3460; color: #aaa; padding: 7px 10px; text-align: left; }
-        .ai-tbl td    { padding: 8px 10px; border-bottom: 1px solid #1a2a3a; color: #ccc; }
-        .ai-tbl td.ai-val { color: #7bde9b; font-weight: bold; }
-        .ai-disclaimer { color: #555; font-size: 11px; font-style: italic; margin-bottom: 16px; }
-        .ai-error     { color: #e94560; background: #1a0a10; padding: 12px; border-radius: 4px; font-size: 13px; }
+        /* Library search cards */
+        .lib-results { max-height: 200px; overflow-y: auto; border: 1px solid #0f3460; border-radius: 4px; margin-top: 6px; background: #0d1b2a; }
+        .lib-card { padding: 9px 12px; border-bottom: 1px solid #1a2a3a; cursor: pointer; }
+        .lib-card:hover { background: #1a2a3a; }
+        .lib-card:last-child { border-bottom: none; }
+        .lib-card-desc { color: #eee; font-size: 13px; }
+        .lib-card-meta { color: #888; font-size: 11px; margin-top: 2px; }
+        .lib-no-results { color: #555; font-size: 13px; padding: 16px; text-align: center; }
+
+        /* Item type toggle */
+        .type-toggle { display: flex; margin-bottom: 16px; border-radius: 4px; overflow: hidden; border: 1px solid #0f3460; }
+        .type-toggle button { flex: 1; padding: 8px; background: #0d1b2a; color: #aaa; border: none; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; transition: background 0.15s; }
+        .type-toggle button.active { background: #e94560; color: white; }
+
+        /* Prod base row */
+        .prod-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 12px; background: #0d1b2a; border-radius: 4px; border: 1px solid #0f3460; }
+        .prod-row label { margin: 0; color: #aaa; font-size: 12px; font-weight: bold; cursor: pointer; user-select: none; }
+        .prod-row input[type=checkbox] { width: auto; margin: 0; cursor: pointer; accent-color: #e94560; }
+
+        /* Step back link */
+        .step-back { background: none; border: none; color: #e94560; cursor: pointer; font-size: 12px; padding: 0; margin-bottom: 14px; display: inline-block; }
+        .step-back:hover { color: #fff; }
+        .selected-lib-card { background: #0d1b2a; border: 1px solid #e94560; border-radius: 4px; padding: 10px 12px; margin-bottom: 14px; }
+        .selected-lib-card .lib-card-desc { font-weight: bold; }
+        .add-new-inline { margin-top: 6px; display: none; }
+        .add-new-inline input { background: #0d1b2a; border-color: #e94560; }
 
         @media print {
             body { background: white; color: #000; }
             .page { padding: 0; }
             .inner { background: white; padding: 12px; border-radius: 0; }
-            .breadcrumb, .btn-row, .toolbar, .ai-overlay, .ai-panel, .modal { display: none !important; }
+            .breadcrumb, .btn-row, .toolbar, .modal { display: none !important; }
             .totals-bar { display: grid; margin-bottom: 12px; }
             .total-card { background: #f0f0f0; border: 1px solid #ccc; }
             .total-card h3 { color: #c00; font-size: 15px; }
@@ -179,14 +178,14 @@
             tr.grp-hdr td { background: #f0f0f0; color: #000; border-top: 2px solid #999; }
             tr.proj-total td { background: #e0e0e0; color: #000; }
             .grp-badge { background: #c00; }
-            .c-ai { display: none !important; }
+            .c-del { display: none !important; }
             .c-trade { display: table-cell !important; }
         }
     </style>
 </head>
 <body>
 <div class="page"><div class="inner">
-
+{% include 'nav.html' %}
     <div class="breadcrumb">
         <a href="/">Home</a> &gt;
         <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
@@ -204,8 +203,7 @@
             <a href="/project/{{ project.id }}/report/csi" class="btn btn-secondary">CSI Report</a>
             <a href="/project/{{ project.id }}/estimate/csv" class="btn btn-secondary">Export CSV</a>
             <button class="btn btn-secondary" onclick="window.print()" id="printBtn">Print</button>
-            <button class="btn btn-secondary" onclick="openAssemblyModal()">+ Assembly</button>
-            <button class="btn" onclick="openAddItemModal(null)">+ Line Item</button>
+            <button class="btn" onclick="openAddItemModal()">+ Line Item</button>
         </div>
     </div>
 
@@ -253,7 +251,7 @@
                     <th class="c-equ"  onclick="setSort('equipment_cost')">Equip $ <span class="sort-icon" id="si-equipment_cost"></span></th>
                     <th class="c-tot"  onclick="setSort('total_cost')">Total $ <span class="sort-icon" id="si-total_cost"></span></th>
                     <th class="c-trade" onclick="setSort('trade')">Trade <span class="sort-icon" id="si-trade"></span></th>
-                    <th class="c-ai" title="AI Suggest">✨</th>
+                    <th class="c-del"></th>
                 </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -267,184 +265,153 @@
 <script id="assembliesData" type="application/json">{{ assemblies_json | safe }}</script>
 <script id="csi1Data"       type="application/json">{{ csi1_json | safe }}</script>
 <script id="csi2Data"       type="application/json">{{ csi2_json | safe }}</script>
-<script id="projectMeta"    type="application/json">{"location": {{ (project.location or '') | tojson }}}</script>
+<script id="libraryData"    type="application/json">{{ library_json | safe }}</script>
+<script id="propsData"      type="application/json">{{ props_json | safe }}</script>
+<script id="projectMeta"    type="application/json">{"location": {{ (project.location or '') | tojson }}, "id": {{ project.id }} }</script>
 
-<!-- Assembly Modal -->
-<div id="assemblyModal" class="modal">
-    <div class="modal-content">
+<!-- Line Item Modal (2-step: library search → item form) -->
+<div id="lineItemModal" class="modal">
+    <div class="modal-content" style="max-width: 580px;">
         <div class="modal-header">
-            <h2>Add Assembly</h2>
-            <span class="close" onclick="closeModal('assemblyModal')">&times;</span>
+            <h2 id="liModalTitle">Add Line Item</h2>
+            <span class="close" onclick="closeModal('lineItemModal')">&times;</span>
         </div>
-        <form onsubmit="submitAssembly(event, {{ project.id }})">
+
+        <!-- Step 1: Library Search -->
+        <div id="liStep1">
+            <div class="form-group">
+                <label>Search Library</label>
+                <input type="text" id="liLibSearch" placeholder="Type to search by description or CSI code…" oninput="filterLibrary()" autocomplete="off">
+            </div>
+            <div class="lib-results" id="liLibResults">
+                <div class="lib-no-results">Start typing to search the library…</div>
+            </div>
+            <div style="margin-top: 12px; text-align: center; color: #888; font-size: 12px;">— or —</div>
+            <button type="button" class="btn btn-secondary" style="width:100%; margin-top:10px;" onclick="selectLibItem(null)">➕ Create New Library Item</button>
+        </div>
+
+        <!-- Step 2: Item Form -->
+        <div id="liStep2" style="display:none;">
+            <button type="button" class="step-back" onclick="goToStep1()">← Back to library search</button>
+            <div id="liSelectedCard" class="selected-lib-card" style="display:none;"></div>
+
+            <!-- Item type toggle -->
+            <div class="type-toggle">
+                <button type="button" id="liTypeLabMat" class="active" onclick="setItemType('labor_material')">Labor &amp; Materials</button>
+                <button type="button" id="liTypeEquip"  onclick="setItemType('equipment')">Equipment</button>
+            </div>
+
             <div class="fg2">
                 <div class="form-group">
-                    <label>Assembly Label *</label>
-                    <input type="text" name="assembly_label" placeholder="e.g., A1" required>
+                    <label>Description *</label>
+                    <input type="text" id="liDesc" placeholder="e.g., Concrete footing pour" required>
                 </div>
                 <div class="form-group">
-                    <label>Assembly Name *</label>
-                    <input type="text" name="assembly_name" placeholder="e.g., Foundation" required>
+                    <label>Trade</label>
+                    <select id="liTradeSel" onchange="handleTradeAddNew()">
+                        <option value="">— None —</option>
+                    </select>
+                    <div class="add-new-inline" id="liTradeNewWrap">
+                        <input type="text" id="liTradeNewVal" placeholder="Trade name…"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();commitNewTrade()}">
+                    </div>
                 </div>
             </div>
             <div class="fg2">
                 <div class="form-group">
-                    <label>Quantity</label>
-                    <input type="number" name="quantity" step="0.01" placeholder="0">
+                    <label>Quantity *</label>
+                    <input type="number" id="liQty" step="0.01" placeholder="0" required>
                 </div>
                 <div class="form-group">
-                    <label>Unit</label>
-                    <input type="text" name="unit" placeholder="e.g., LS, SF, CY">
+                    <label>Unit *</label>
+                    <input type="text" id="liUnit" placeholder="e.g., CY, SF, EA" required>
                 </div>
             </div>
+
+            <!-- CSI Classification -->
             <div class="fg2">
                 <div class="form-group">
                     <label>CSI Division</label>
-                    <select name="csi_level_1_id" id="estAsmCsi1" onchange="estFilterCsi2()">
+                    <select id="liCsi1" onchange="filterLiCsi2()">
                         <option value="">— None —</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>CSI Section</label>
-                    <select name="csi_level_2_id" id="estAsmCsi2">
+                    <select id="liCsi2">
                         <option value="">— Select Division first —</option>
                     </select>
                 </div>
             </div>
-            <div class="form-group">
-                <label>Description</label>
-                <textarea name="description" rows="2" placeholder="Optional..."></textarea>
-            </div>
-            <button type="submit" class="btn" style="width:100%; margin-top:10px;">Add Assembly</button>
-        </form>
-    </div>
-</div>
 
-<!-- Line Item Modal -->
-<div id="lineItemModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Add Line Item</h2>
-            <span class="close" onclick="closeModal('lineItemModal')">&times;</span>
-        </div>
-        <form id="liForm" onsubmit="submitLineItem(event)">
-            <input type="hidden" id="liAsmId">
-            <div class="form-group">
-                <label>Assembly *</label>
-                <select id="liAsmSelect" required onchange="document.getElementById('liAsmId').value=this.value">
-                    <option value="">— Select Assembly —</option>
-                </select>
-            </div>
-            <div class="fg2">
+            <!-- Labor & Materials fields -->
+            <div id="liLaborFields">
                 <div class="form-group">
-                    <label>Description *</label>
-                    <input type="text" name="description" placeholder="e.g., Excavate trench" required>
+                    <label>Material Cost / Unit ($)</label>
+                    <input type="number" id="liMatCpu" step="0.01" placeholder="0.00">
                 </div>
-                <div class="form-group">
-                    <label>Trade</label>
-                    <input type="text" name="trade" placeholder="e.g., Concrete, Framing">
+
+                <!-- Prod Base toggle -->
+                <div class="prod-row">
+                    <input type="checkbox" id="liProdBase" checked onchange="updateProdBaseFields()">
+                    <label for="liProdBase">Production Base (qty ÷ rate → labor hours)</label>
                 </div>
-            </div>
-            <div class="fg3">
-                <div class="form-group">
-                    <label>Quantity *</label>
-                    <input type="number" name="quantity" step="0.01" placeholder="0" required>
+
+                <!-- Prod Base ON fields -->
+                <div id="liProdBaseOn" class="fg2">
+                    <div class="form-group">
+                        <label>Production Rate (units/hr)</label>
+                        <input type="number" id="liProdRate" step="0.01" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Labor Cost / Hr ($)</label>
+                        <input type="number" id="liLaborCph" step="0.01" placeholder="0.00">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Unit *</label>
-                    <input type="text" name="unit" placeholder="e.g., CY" required>
-                </div>
-                <div class="form-group">
-                    <label>Prod Rate (units/hr)</label>
-                    <input type="number" name="production_rate" step="0.01" placeholder="1">
+
+                <!-- Prod Base OFF fields -->
+                <div id="liProdBaseOff" style="display:none;">
+                    <div class="form-group">
+                        <label>Labor Cost / Unit ($)</label>
+                        <input type="number" id="liLaborCpu" step="0.01" placeholder="0.00">
+                    </div>
                 </div>
             </div>
-            <div class="fg3">
+
+            <!-- Equipment fields -->
+            <div id="liEquipFields" style="display:none;">
                 <div class="form-group">
-                    <label>Mat Cost / Unit ($)</label>
-                    <input type="number" name="material_cost_per_unit" step="0.01" placeholder="0.00">
-                </div>
-                <div class="form-group">
-                    <label>Labor Cost / Hr ($)</label>
-                    <input type="number" name="labor_cost_per_hour" step="0.01" placeholder="0.00">
-                </div>
-                <div class="form-group">
-                    <label>Equip Cost / Hr ($)</label>
-                    <input type="number" name="equipment_cost_per_hour" step="0.01" placeholder="0.00">
+                    <label>Equipment Cost / Unit ($)</label>
+                    <input type="number" id="liEquipCpu" step="0.01" placeholder="0.00">
                 </div>
             </div>
-            <div class="form-group">
+
+            <div class="form-group" style="margin-top:4px;">
                 <label>Notes</label>
-                <textarea name="notes" rows="2" placeholder="Optional..."></textarea>
+                <textarea id="liNotes" rows="2" placeholder="Optional…"></textarea>
             </div>
-            <button type="submit" class="btn" style="width:100%; margin-top:10px;">Add Line Item</button>
-        </form>
-    </div>
-</div>
 
-<!-- AI Panel -->
-<div id="aiOverlay" class="ai-overlay" onclick="closeAiPanel()"></div>
-<div id="aiPanel" class="ai-panel">
-    <div class="ai-panel-header">
-        <span class="ai-title">✨ AI Cost Suggestion</span>
-        <span class="close" onclick="closeAiPanel()">&times;</span>
+            <!-- Hidden: library item id, item_type, prod_base -->
+            <input type="hidden" id="liLibItemId">
+            <input type="hidden" id="liItemType" value="labor_material">
+            <input type="hidden" id="liProdBaseHidden" value="1">
+
+            <button type="button" class="btn" style="width:100%; margin-top:12px;" onclick="submitLineItem()">Add Line Item</button>
+        </div>
     </div>
-    <div id="aiItemName" class="ai-item-name"></div>
-    <div id="aiLoading" class="ai-loading">
-        <div class="ai-spinner"></div>
-        <p>Analyzing with Llama 3.2…</p>
-    </div>
-    <div id="aiResult" style="display:none">
-        <div class="ai-label">Reasoning</div>
-        <div id="aiReasoning" class="ai-reasoning"></div>
-        <table class="ai-tbl">
-            <thead><tr><th>Field</th><th>Current</th><th>AI Suggests</th></tr></thead>
-            <tbody id="aiSuggestions"></tbody>
-        </table>
-        <p class="ai-disclaimer">AI suggestions are estimates only. Always review before applying.</p>
-        <button class="btn" onclick="applyAiSuggestion()" style="width:100%">Apply Suggestions</button>
-    </div>
-    <div id="aiError" style="display:none" class="ai-error"></div>
 </div>
 
 <script>
 // ── Data ─────────────────────────────────────────────────────────────────────
 let items = JSON.parse(document.getElementById('itemsData').textContent);
-const assemblies = JSON.parse(document.getElementById('assembliesData').textContent);
-const csi1List = JSON.parse(document.getElementById('csi1Data').textContent);
-const csi2All  = JSON.parse(document.getElementById('csi2Data').textContent);
-const projectLocation = JSON.parse(document.getElementById('projectMeta').textContent).location || '';
-
-// Populate assembly dropdown in line item modal
-const asmSel = document.getElementById('liAsmSelect');
-assemblies.forEach(a => {
-    const o = document.createElement('option');
-    o.value = a.id;
-    o.textContent = `${a.label} — ${a.name}`;
-    asmSel.appendChild(o);
-});
-
-// Populate CSI Division dropdown in assembly modal
-const csi1Sel = document.getElementById('estAsmCsi1');
-csi1List.forEach(d => {
-    const o = document.createElement('option');
-    o.value = d.id;
-    o.textContent = `${d.code} — ${d.title}`;
-    csi1Sel.appendChild(o);
-});
-
-function estFilterCsi2() {
-    const parentId = parseInt(document.getElementById('estAsmCsi1').value);
-    const sel = document.getElementById('estAsmCsi2');
-    sel.innerHTML = '<option value="">— None —</option>';
-    if (!parentId) return;
-    csi2All.filter(s => s.parent === parentId).forEach(s => {
-        const o = document.createElement('option');
-        o.value = s.id;
-        o.textContent = `${s.code} — ${s.title}`;
-        sel.appendChild(o);
-    });
-}
+const assemblies    = JSON.parse(document.getElementById('assembliesData').textContent);
+const csi1List      = JSON.parse(document.getElementById('csi1Data').textContent);
+const csi2All       = JSON.parse(document.getElementById('csi2Data').textContent);
+let   libraryItems  = JSON.parse(document.getElementById('libraryData').textContent);
+let   allProps      = JSON.parse(document.getElementById('propsData').textContent);
+const projectMeta   = JSON.parse(document.getElementById('projectMeta').textContent);
+const projectLocation = projectMeta.location || '';
+const PROJECT_ID      = projectMeta.id;
 
 // ── CSI Division Colors (left-border accent per division) ─────────────────────
 const CSI_COLORS = {
@@ -484,6 +451,11 @@ function rollup(arr) {
 function getGrp(item) {
     switch (S.groupBy) {
         case 'assembly':
+            if (!item.assembly_id) {
+                return { key: 'a_direct', addId: null,
+                         label: '<em style="color:#aaa">Direct Items</em>',
+                         color: '#888' };
+            }
             return { key: 'a'+item.assembly_id, addId: item.assembly_id,
                      label: `<span class="grp-badge">${esc(item.assembly_label)}</span>${esc(item.assembly_name)}`,
                      color: null };
@@ -565,7 +537,7 @@ function render() {
                 <td class="c-equ cost" style="text-align:right">${fmt$(gr.equipment_cost)}</td>
                 <td class="c-tot grand" style="text-align:right">${fmt$(gr.total_cost)}</td>
                 <td class="c-trade"></td>
-                <td class="c-ai"></td>
+                <td class="c-del"></td>
             </tr>`;
         }
 
@@ -588,6 +560,7 @@ function render() {
         <td class="c-tot grand" style="text-align:right">${fmt$(proj.total_cost)}</td>
         <td class="c-trade"></td>
         <td class="c-ai"></td>
+        <td class="c-del"></td>
     </tr>`;
 
     tbody.innerHTML = html;
@@ -601,7 +574,9 @@ function render() {
 
 function rowHtml(item) {
     const id = item.id;
-    const asmBadge = `<span class="grp-badge" style="font-size:9px">${esc(item.assembly_label)}</span>${esc(item.assembly_name)}`;
+    const asmBadge = item.assembly_id
+        ? `<span class="grp-badge" style="font-size:9px">${esc(item.assembly_label)}</span>${esc(item.assembly_name)}`
+        : `<span style="color:#555; font-size:11px; font-style:italic;">Direct</span>`;
     return `
     <tr data-iid="${id}">
         <td class="c-desc editable" data-id="${id}" data-f="description"   data-t="text"   title="${esc(item.description)}">${esc(item.description)}</td>
@@ -620,7 +595,7 @@ function rowHtml(item) {
         <td class="c-equ  calc cost"data-id="${id}" data-f="equipment_cost"          style="text-align:right">${fmt$(item.equipment_cost)}</td>
         <td class="c-tot  grand"    data-id="${id}" data-f="total_cost"              style="text-align:right">${fmt$(item.total_cost)}</td>
         <td class="c-trade editable" data-id="${id}" data-f="trade" data-t="text">${esc(item.trade)}</td>
-        <td class="c-ai"><button class="ai-btn" onclick="openAiPanel(${id})" title="Get AI cost suggestion">✨</button></td>
+        <td class="c-del"><button class="btn btn-danger btn-sm del-btn" data-id="${id}" title="Delete line item">✕</button></td>
     </tr>`;
 }
 
@@ -638,6 +613,44 @@ function startEdit(td) {
 
     const raw = item[field] ?? '';
     td.classList.add('editing');
+
+    if (field === 'trade') {
+        const trades = allProps.filter(p => p.category === 'trade');
+        let opts = '<option value="">— None —</option>';
+        trades.forEach(t => { opts += `<option value="${esc(t.name)}"${t.name === raw ? ' selected' : ''}>${esc(t.name)}</option>`; });
+        opts += '<option value="__add__">➕ Add New…</option>';
+        td.innerHTML = `<select style="width:100%;height:100%;padding:6px 8px;background:#0d1b2a;border:2px solid #e94560;color:#eee;font-size:13px;font-family:Arial,sans-serif;outline:none;">${opts}</select>`;
+        const sel = td.querySelector('select');
+        sel.focus();
+        sel.addEventListener('change', () => {
+            if (sel.value === '__add__') {
+                const name = prompt('New trade name:');
+                if (name && name.trim()) {
+                    fetch('/settings/property/new', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category:'trade', name: name.trim()}) })
+                        .then(r => r.json()).then(data => {
+                            if (data.success) {
+                                if (!allProps.find(p => p.id === data.id)) allProps.push({id: data.id, category: 'trade', name: data.name});
+                                item[field] = data.name;
+                                activeEdit = null; td.classList.remove('editing');
+                                restoreCell(td, itemId, field, false);
+                                fetch(`/lineitem/${itemId}/update`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({trade: data.name}) });
+                            }
+                        });
+                    return;
+                }
+                sel.value = raw; return;
+            }
+            const val = sel.value;
+            activeEdit = null; td.classList.remove('editing');
+            item[field] = val;
+            restoreCell(td, itemId, field, false);
+            fetch(`/lineitem/${itemId}/update`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({trade: val}) });
+        });
+        sel.addEventListener('blur', () => { if (activeEdit?.td === td) cancelEdit(activeEdit); });
+        activeEdit = { td, itemId, field, isNum: false, orig: raw };
+        return;
+    }
+
     td.innerHTML = `<input type="${isNum ? 'number' : 'text'}" step="any" value="${esc(String(raw))}" />`;
     const inp = td.querySelector('input');
     inp.focus(); inp.select();
@@ -696,14 +709,28 @@ function cancelEdit(edit) {
 }
 
 function recalcItem(item) {
-    const qty  = item.quantity || 0;
-    const rate = item.production_rate || 0;
-    item.labor_hours     = rate > 0 ? qty / rate : 0;
-    item.equipment_hours = item.labor_hours;
-    item.material_cost   = qty * (item.material_cost_per_unit || 0);
-    item.labor_cost      = item.labor_hours * (item.labor_cost_per_hour || 0);
-    item.equipment_cost  = item.equipment_hours * (item.equipment_cost_per_hour || 0);
-    item.total_cost      = item.material_cost + item.labor_cost + item.equipment_cost;
+    const qty   = item.quantity || 0;
+    const itype = item.item_type || 'labor_material';
+    const pb    = item.prod_base !== false && item.prod_base !== 0;  // default true
+    if (itype === 'equipment') {
+        item.labor_hours    = 0;
+        item.labor_cost     = 0;
+        item.material_cost  = qty * (item.material_cost_per_unit || 0);
+        item.equipment_cost = qty * (item.equipment_cost_per_unit || 0);
+    } else {
+        item.material_cost = qty * (item.material_cost_per_unit || 0);
+        if (pb) {
+            const rate = item.production_rate || 0;
+            item.labor_hours = rate > 0 ? qty / rate : 0;
+            item.labor_cost  = item.labor_hours * (item.labor_cost_per_hour || 0);
+        } else {
+            item.labor_hours = 0;
+            item.labor_cost  = qty * (item.labor_cost_per_unit || 0);
+        }
+        item.equipment_cost = 0;
+    }
+    item.equipment_hours = 0;
+    item.total_cost = (item.material_cost || 0) + (item.labor_cost || 0) + (item.equipment_cost || 0);
 }
 
 function restoreCell(td, itemId, field, isNum) {
@@ -766,145 +793,251 @@ function updateSortIcons() {
 
 // ── Modals ────────────────────────────────────────────────────────────────────
 function openModal(id)  { document.getElementById(id).style.display = 'block'; }
-function openAssemblyModal() {
-    document.getElementById('estAsmCsi1').value = '';
-    document.getElementById('estAsmCsi2').innerHTML = '<option value="">— Select Division first —</option>';
-    openModal('assemblyModal');
-}
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 window.onclick = e => { if (e.target.classList.contains('modal')) closeModal(e.target.id); };
 
-function openAddItemModal(asmId) {
-    document.getElementById('liForm').reset();
+// ── Add Line Item modal ────────────────────────────────────────────────────────
+let liSelectedLibItem = null;
+
+function openAddItemModal() {
+    liSelectedLibItem = null;
+    document.getElementById('liLibSearch').value = '';
+    document.getElementById('liLibResults').innerHTML = '<div class="lib-no-results">Start typing to search the library…</div>';
+    document.getElementById('liStep1').style.display = 'block';
+    document.getElementById('liStep2').style.display = 'none';
+    document.getElementById('liModalTitle').textContent = 'Add Line Item';
     openModal('lineItemModal');
-    const sel = document.getElementById('liAsmSelect');
-    sel.value = asmId || '';
-    document.getElementById('liAsmId').value = asmId || '';
+    setTimeout(() => document.getElementById('liLibSearch').focus(), 80);
 }
 
-function submitAssembly(event, projectId) {
-    event.preventDefault();
-    fetch('/project/' + projectId + '/assembly/new', { method: 'POST', body: new FormData(event.target) })
-        .then(r => r.json()).then(d => { if (d.success) window.location.reload(); });
+function filterLibrary() {
+    const q = document.getElementById('liLibSearch').value.trim().toLowerCase();
+    const res = document.getElementById('liLibResults');
+    if (!q) { res.innerHTML = '<div class="lib-no-results">Start typing to search the library…</div>'; return; }
+    const matches = libraryItems.filter(li =>
+        (li.description || '').toLowerCase().includes(q) ||
+        (li.csi_level_2_code || '').toLowerCase().includes(q) ||
+        (li.csi_level_1_code || '').toLowerCase().includes(q)
+    ).slice(0, 30);
+    if (!matches.length) { res.innerHTML = '<div class="lib-no-results">No matches — use Create New below.</div>'; return; }
+    res.innerHTML = matches.map(li => `
+        <div class="lib-card" onclick="selectLibItem(${li.id})">
+            <div class="lib-card-desc">${esc(li.description)}</div>
+            <div class="lib-card-meta">${li.csi_level_2_code ? esc(li.csi_level_2_code) + ' · ' : ''}${li.unit ? esc(li.unit) : ''}</div>
+        </div>`).join('');
 }
 
-function submitLineItem(event) {
-    event.preventDefault();
-    const asmId = document.getElementById('liAsmId').value;
-    if (!asmId) { alert('Please select an assembly.'); return; }
-    fetch('/assembly/' + asmId + '/lineitem/new', { method: 'POST', body: new FormData(event.target) })
-        .then(r => r.json()).then(d => { if (d.success) window.location.reload(); });
+function selectLibItem(libId) {
+    liSelectedLibItem = libId ? libraryItems.find(li => li.id === libId) : null;
+    goToStep2(liSelectedLibItem);
 }
 
-// ── AI Panel ──────────────────────────────────────────────────────────────────
-let aiCurrentItemId = null;
-let aiSuggestionData = null;
+function goToStep1() {
+    document.getElementById('liStep1').style.display = 'block';
+    document.getElementById('liStep2').style.display = 'none';
+    document.getElementById('liModalTitle').textContent = 'Add Line Item';
+}
 
-function openAiPanel(itemId) {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return;
-    aiCurrentItemId = itemId;
-    aiSuggestionData = null;
+function goToStep2(libItem) {
+    document.getElementById('liStep1').style.display = 'none';
+    document.getElementById('liStep2').style.display = 'block';
+    document.getElementById('liModalTitle').textContent = libItem ? 'Add Line Item' : 'New Line Item';
 
-    document.getElementById('aiItemName').textContent = item.description;
-    document.getElementById('aiLoading').style.display = 'block';
-    document.getElementById('aiResult').style.display = 'none';
-    document.getElementById('aiError').style.display = 'none';
-    document.getElementById('aiPanel').classList.add('open');
-    document.getElementById('aiOverlay').classList.add('open');
+    // Populate selected card
+    const card = document.getElementById('liSelectedCard');
+    if (libItem) {
+        card.style.display = 'block';
+        card.innerHTML = `<div class="lib-card-desc">${esc(libItem.description)}</div>
+            <div class="lib-card-meta">${libItem.csi_level_2_code ? esc(libItem.csi_level_2_code) + ' · ' : ''}${libItem.unit ? esc(libItem.unit) : ''}</div>`;
+    } else {
+        card.style.display = 'none';
+    }
 
-    fetch('/agent/suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            description:   item.description,
-            unit:          item.unit,
-            quantity:      item.quantity,
-            location:      projectLocation,
-            csi_code:      item.csi_level_1_code,
-            csi_title:     item.csi_level_1_title,
-            current_mat:   item.material_cost_per_unit,
-            current_labor: item.labor_cost_per_hour,
-            current_equip: item.equipment_cost_per_hour,
-            production_rate: item.production_rate,
-        })
-    }).then(r => r.json()).then(data => {
-        document.getElementById('aiLoading').style.display = 'none';
-        if (data.success) {
-            aiSuggestionData = data.suggestion;
-            showAiResult(item, data.suggestion);
-        } else {
-            document.getElementById('aiError').style.display = 'block';
-            document.getElementById('aiError').textContent = data.error || 'Unknown error.';
-        }
-    }).catch(() => {
-        document.getElementById('aiLoading').style.display = 'none';
-        document.getElementById('aiError').style.display = 'block';
-        document.getElementById('aiError').textContent = 'Could not reach the server.';
+    // Pre-fill from library item
+    document.getElementById('liDesc').value    = libItem ? (libItem.description || '') : '';
+    document.getElementById('liUnit').value    = libItem ? (libItem.unit || '') : '';
+    document.getElementById('liQty').value     = '';
+    document.getElementById('liNotes').value   = '';
+    document.getElementById('liLibItemId').value = libItem ? libItem.id : '';
+    document.getElementById('liMatCpu').value  = libItem ? (libItem.material_cost_per_unit || '') : '';
+    document.getElementById('liProdRate').value= libItem ? (libItem.production_rate || '') : '';
+    document.getElementById('liLaborCph').value= libItem ? (libItem.labor_cost_per_hour || '') : '';
+    document.getElementById('liLaborCpu').value= libItem ? (libItem.labor_cost_per_unit || '') : '';
+    document.getElementById('liEquipCpu').value= libItem ? (libItem.equipment_cost_per_unit || '') : '';
+
+    const itype  = libItem ? (libItem.item_type || 'labor_material') : 'labor_material';
+    const pbOn   = libItem ? (libItem.prod_base !== false && libItem.prod_base !== 0) : true;
+    setItemType(itype);
+    document.getElementById('liProdBase').checked = pbOn;
+    document.getElementById('liProdBaseHidden').value = pbOn ? '1' : '0';
+    updateProdBaseFields();
+
+    // Trade dropdown (library items don't carry a trade, so start unselected)
+    populateTradeSel('');
+
+    // CSI dropdowns — pre-fill from library item if available
+    const csi1Id = libItem ? (libItem.csi_level_1_id || null) : null;
+    const csi2Id = libItem ? (libItem.csi_level_2_id || null) : null;
+    populateLiCsi1(csi1Id);
+    filterLiCsi2(csi2Id);
+
+    setTimeout(() => document.getElementById('liQty').focus(), 80);
+}
+
+function populateTradeSel(selected) {
+    const sel = document.getElementById('liTradeSel');
+    const trades = allProps.filter(p => p.category === 'trade');
+    sel.innerHTML = '<option value="">— None —</option>';
+    trades.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.name; o.textContent = t.name;
+        if (t.name === selected) o.selected = true;
+        sel.appendChild(o);
+    });
+    const add = document.createElement('option');
+    add.value = '__add__'; add.textContent = '➕ Add New…';
+    sel.appendChild(add);
+}
+
+function handleTradeAddNew() {
+    const sel = document.getElementById('liTradeSel');
+    const wrap = document.getElementById('liTradeNewWrap');
+    if (sel.value === '__add__') {
+        sel.value = '';
+        wrap.style.display = 'block';
+        document.getElementById('liTradeNewVal').focus();
+    } else {
+        wrap.style.display = 'none';
+    }
+}
+
+function commitNewTrade() {
+    const inp = document.getElementById('liTradeNewVal');
+    const name = inp.value.trim();
+    if (!name) return;
+    fetch('/settings/property/new', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category:'trade', name}) })
+        .then(r => r.json()).then(data => {
+            if (data.success) {
+                if (!allProps.find(p => p.id === data.id)) allProps.push({id: data.id, category: 'trade', name: data.name});
+                inp.value = '';
+                document.getElementById('liTradeNewWrap').style.display = 'none';
+                populateTradeSel(data.name);
+            }
+        });
+}
+
+function populateLiCsi1(selectedId) {
+    const sel = document.getElementById('liCsi1');
+    sel.innerHTML = '<option value="">— None —</option>';
+    csi1List.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.id; o.textContent = d.code + ' — ' + d.title;
+        if (d.id === selectedId) o.selected = true;
+        sel.appendChild(o);
     });
 }
 
-function showAiResult(item, s) {
-    document.getElementById('aiReasoning').textContent = s.reasoning || 'No reasoning provided.';
-    const rows = [
-        ['Mat Cost / Unit',  fmt$(item.material_cost_per_unit),  fmt$(s.material_cost_per_unit)],
-        ['Labor Cost / Hr',  fmt$(item.labor_cost_per_hour),     fmt$(s.labor_cost_per_hour)],
-        ['Equip Cost / Hr',  fmt$(item.equipment_cost_per_hour), fmt$(s.equipment_cost_per_hour)],
-        ['Production Rate',  fmtN(item.production_rate, 2) + ' u/hr', fmtN(s.production_rate, 2) + ' u/hr'],
-    ];
-    document.getElementById('aiSuggestions').innerHTML = rows.map(([label, cur, ai]) =>
-        `<tr><td>${label}</td><td style="color:#888">${cur}</td><td class="ai-val">${ai}</td></tr>`
-    ).join('');
-    document.getElementById('aiResult').style.display = 'block';
+function filterLiCsi2(selectedId) {
+    const csi1Id = parseInt(document.getElementById('liCsi1').value) || null;
+    const sel = document.getElementById('liCsi2');
+    if (!csi1Id) { sel.innerHTML = '<option value="">— Select Division first —</option>'; return; }
+    const subs = csi2All.filter(s => s.parent === csi1Id);
+    sel.innerHTML = '<option value="">— None —</option>';
+    subs.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id; o.textContent = s.code + ' — ' + s.title;
+        if (selectedId && s.id === selectedId) o.selected = true;
+        sel.appendChild(o);
+    });
 }
 
-function closeAiPanel() {
-    document.getElementById('aiPanel').classList.remove('open');
-    document.getElementById('aiOverlay').classList.remove('open');
-    aiCurrentItemId = null;
-    aiSuggestionData = null;
+function setItemType(itype) {
+    document.getElementById('liItemType').value = itype;
+    document.getElementById('liTypeLabMat').classList.toggle('active', itype === 'labor_material');
+    document.getElementById('liTypeEquip').classList.toggle('active', itype === 'equipment');
+    document.getElementById('liLaborFields').style.display  = itype === 'labor_material' ? 'block' : 'none';
+    document.getElementById('liEquipFields').style.display  = itype === 'equipment'       ? 'block' : 'none';
 }
 
-function applyAiSuggestion() {
-    if (!aiCurrentItemId || !aiSuggestionData) return;
-    const s = aiSuggestionData;
-    const item = items.find(i => i.id === aiCurrentItemId);
-    if (!item) return;
+function updateProdBaseFields() {
+    const on = document.getElementById('liProdBase').checked;
+    document.getElementById('liProdBaseHidden').value = on ? '1' : '0';
+    document.getElementById('liProdBaseOn').style.display  = on ? 'grid' : 'none';
+    document.getElementById('liProdBaseOff').style.display = on ? 'none' : 'block';
+}
 
-    const fields = {
-        material_cost_per_unit:  s.material_cost_per_unit,
-        labor_cost_per_hour:     s.labor_cost_per_hour,
-        equipment_cost_per_hour: s.equipment_cost_per_hour,
-        production_rate:         s.production_rate,
+function submitLineItem() {
+    const desc  = document.getElementById('liDesc').value.trim();
+    const qty   = document.getElementById('liQty').value.trim();
+    const unit  = document.getElementById('liUnit').value.trim();
+    if (!desc || !qty || !unit) { alert('Description, Quantity, and Unit are required.'); return; }
+
+    const itype  = document.getElementById('liItemType').value;
+    const pbOn   = document.getElementById('liProdBaseHidden').value === '1';
+    const trade  = document.getElementById('liTradeSel').value !== '__add__' ? document.getElementById('liTradeSel').value : '';
+    const libId  = document.getElementById('liLibItemId').value || null;
+
+    const payload = {
+        description:     desc,
+        quantity:        qty,
+        unit:            unit,
+        trade:           trade,
+        notes:           document.getElementById('liNotes').value,
+        item_type:       itype,
+        prod_base:       pbOn ? 1 : 0,
+        library_item_id: libId,
+        csi_level_1_id:  parseInt(document.getElementById('liCsi1').value) || null,
+        csi_level_2_id:  parseInt(document.getElementById('liCsi2').value) || null,
     };
-    Object.assign(item, fields);
-    recalcItem(item);
 
-    fetch(`/lineitem/${aiCurrentItemId}/update`, {
+    if (itype === 'equipment') {
+        payload.equipment_cost_per_unit = document.getElementById('liEquipCpu').value || 0;
+    } else {
+        payload.material_cost_per_unit = document.getElementById('liMatCpu').value || 0;
+        if (pbOn) {
+            payload.production_rate     = document.getElementById('liProdRate').value || 0;
+            payload.labor_cost_per_hour = document.getElementById('liLaborCph').value || 0;
+        } else {
+            payload.labor_cost_per_unit = document.getElementById('liLaborCpu').value || 0;
+        }
+    }
+
+    fetch(`/project/${PROJECT_ID}/lineitem/new`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fields)
+        body: JSON.stringify(payload)
     }).then(r => r.json()).then(data => {
         if (data.success) {
-            Object.assign(item, {
-                labor_hours:     data.labor_hours,
-                material_cost:   data.material_cost,
-                labor_cost:      data.labor_cost,
-                equipment_hours: data.equipment_hours,
-                equipment_cost:  data.equipment_cost,
-                total_cost:      data.total_cost,
-            });
-            updateRowCalcs(aiCurrentItemId);
-            updateTotals(rollup(items));
+            closeModal('lineItemModal');
+            items.push(data.item);
+            render();
+        } else {
+            alert(data.error || 'Failed to add line item.');
         }
     });
-
-    closeAiPanel();
-    render();
 }
+
+
+// ── Delete line item ──────────────────────────────────────────────────────────
+document.getElementById('tbody').addEventListener('click', function(e) {
+    const btn = e.target.closest('.del-btn');
+    if (!btn) return;
+    const itemId = +btn.dataset.id;
+    if (!confirm('Delete this line item?')) return;
+    fetch(`/lineitem/${itemId}/delete`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                items = items.filter(i => i.id !== itemId);
+                render();
+            }
+        });
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 render();
 </script>
+
+    {% include 'agentx_panel.html' %}
 </body>
 </html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login — Construction Estimator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; color: #eee; }
+        .login-box { background: #16213e; padding: 40px; border-radius: 8px; width: 100%; max-width: 400px; border: 1px solid #0f3460; }
+        .logo { text-align: center; margin-bottom: 30px; }
+        .logo h1 { color: #e94560; font-size: 22px; margin-bottom: 4px; }
+        .logo p { color: #888; font-size: 13px; }
+        .form-group { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 6px; color: #aaa; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        input { width: 100%; padding: 11px 14px; border: 1px solid #0f3460; border-radius: 4px; background: #0f3460; color: #eee; font-size: 14px; font-family: Arial, sans-serif; transition: border-color 0.2s; }
+        input:focus { outline: none; border-color: #e94560; }
+        .btn { width: 100%; padding: 12px; background: #e94560; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; font-family: Arial, sans-serif; font-weight: bold; margin-top: 8px; transition: background 0.2s; }
+        .btn:hover { background: #c73652; }
+        .alert { padding: 12px 16px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; }
+        .alert-error { background: #3a0a12; border: 1px solid #e94560; color: #e94560; }
+        .footer-note { text-align: center; margin-top: 24px; color: #555; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <div class="logo">
+            <h1>Construction Estimator</h1>
+            <p>Sign in to your account</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="alert alert-error">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" placeholder="Enter your username" required autofocus autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn">Sign In</button>
+        </form>
+
+        <p class="footer-note">Contact your administrator to create an account.</p>
+    </div>
+</body>
+</html>

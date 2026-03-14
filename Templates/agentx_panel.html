@@ -1,0 +1,1501 @@
+<!-- AgentX AI Panel partial — included in every page template -->
+<style>
+    /* Body push — shifts page content when panel is open */
+    body {
+        transition: padding-right 0.3s ease;
+    }
+    body.ax-panel-open {
+        padding-right: 410px;
+    }
+
+    /* Tab trigger */
+    #agentx-tab {
+        position: fixed;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%) rotate(180deg);
+        writing-mode: vertical-rl;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        padding: 14px 10px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        border-radius: 6px 0 0 6px;
+        z-index: 1100;
+        letter-spacing: 1px;
+        transition: background 0.2s;
+        user-select: none;
+    }
+    #agentx-tab:hover { background: #c73652; }
+
+    /* Overlay */
+    #agentx-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 1150;
+    }
+
+    /* Panel */
+    #agentx-panel {
+        position: fixed;
+        right: -420px;
+        top: 0;
+        width: 400px;
+        height: 100vh;
+        max-height: 100vh;
+        background: #16213e;
+        border-left: 2px solid #e94560;
+        display: flex;
+        flex-direction: column;
+        z-index: 999;
+        transition: right 0.3s ease;
+        box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+        overflow: hidden;
+    }
+    #agentx-panel.open { right: 0; }
+
+    /* Header */
+    .ax-header {
+        background: #0d1b2a;
+        padding: 14px 16px 10px;
+        border-bottom: 1px solid #0f3460;
+        flex-shrink: 0;
+    }
+    .ax-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+    .ax-header-row > div {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .ax-title {
+        font-size: 16px;
+        font-weight: bold;
+        color: #e94560;
+    }
+    .ax-close {
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 22px;
+        cursor: pointer;
+        line-height: 1;
+        padding: 0 4px;
+    }
+    .ax-close:hover { color: #eee; }
+    .ax-status {
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 10px;
+    }
+
+    /* Mode selector */
+    .ax-mode-bar {
+        display: flex;
+        gap: 6px;
+    }
+    .ax-mode-btn {
+        flex: 1;
+        padding: 6px 0;
+        background: #0f3460;
+        color: #aaa;
+        border: 1px solid #1a3a5c;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+    }
+    .ax-mode-btn.active {
+        background: #e94560;
+        color: #fff;
+        border-color: #e94560;
+    }
+    .ax-mode-btn:hover:not(.active):not(:disabled) { background: #1a4a7a; color: #eee; }
+    .ax-mode-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+
+    /* Write permission row */
+    .ax-perm-row {
+        padding: 8px 16px;
+        background: #0d1b2a;
+        border-bottom: 1px solid #0f3460;
+        font-size: 12px;
+        color: #aaa;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    .ax-perm-row input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+        accent-color: #e94560;
+        cursor: pointer;
+    }
+    .ax-perm-row label { margin: 0; color: #aaa; cursor: pointer; font-weight: normal; font-size: 12px; }
+
+    /* Messages area — block (not flex) so overflow-y: scroll works reliably */
+    .ax-messages {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: scroll;
+        overflow-x: hidden;
+        padding: 14px;
+        display: block;
+    }
+    .ax-messages > * { margin-bottom: 12px; }
+    .ax-messages > *:last-child { margin-bottom: 0; }
+    .ax-messages::-webkit-scrollbar { width: 6px; }
+    .ax-messages::-webkit-scrollbar-track { background: #0d1b2a; }
+    .ax-messages::-webkit-scrollbar-thumb { background: #e94560; border-radius: 3px; }
+
+    /* Bubbles */
+    .ax-bubble {
+        display: block;
+        max-width: 88%;
+        padding: 9px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .ax-bubble.user {
+        margin-left: auto;      /* right-align user bubbles without flex */
+        background: #0f3460;
+        color: #eee;
+        border-radius: 8px 8px 2px 8px;
+    }
+    .ax-bubble.assistant {
+        margin-right: auto;
+        background: #0d1b2a;
+        color: #ddd;
+        border-left: 3px solid #e94560;
+        border-radius: 0 8px 8px 8px;
+    }
+    .ax-bubble.loading {
+        margin-right: auto;
+        background: #0d1b2a;
+        color: #666;
+        border-left: 3px solid #333;
+        font-style: italic;
+        border-radius: 0 8px 8px 8px;
+    }
+
+    /* Write proposal card */
+    .ax-proposal-card {
+        background: #0d1b2a;
+        border: 1px solid #e94560;
+        border-radius: 8px;
+        padding: 12px;
+        display: block;
+        width: 100%;
+        font-size: 12px;
+    }
+    .ax-proposal-card h4 {
+        color: #e94560;
+        margin-bottom: 8px;
+        font-size: 13px;
+    }
+    .ax-proposal-items {
+        color: #aaa;
+        margin-bottom: 10px;
+        max-height: 120px;
+        overflow-y: auto;
+    }
+    .ax-proposal-item-row {
+        padding: 3px 0;
+        border-bottom: 1px solid #1a2a3a;
+    }
+    .ax-proposal-item-row:last-child { border-bottom: none; }
+    .ax-proposal-actions { display: flex; gap: 8px; }
+    .ax-apply-btn {
+        flex: 1;
+        padding: 7px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .ax-apply-btn:hover { background: #c73652; }
+    .ax-dismiss-btn {
+        flex: 1;
+        padding: 7px;
+        background: #3a0a12;
+        color: #e94560;
+        border: 1px solid #e94560;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    .ax-dismiss-btn:hover { background: #e94560; color: #fff; }
+
+    /* Input area */
+    .ax-input-area {
+        padding: 10px 12px;
+        border-top: 1px solid #0f3460;
+        background: #0d1b2a;
+        flex-shrink: 0;
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+    }
+    #ax-input {
+        flex: 1;
+        resize: none;
+        background: #0f3460;
+        color: #eee;
+        border: 1px solid #1a3a5c;
+        border-radius: 6px;
+        padding: 9px 10px;
+        font-size: 13px;
+        font-family: Arial, sans-serif;
+        line-height: 1.4;
+        max-height: 120px;
+        overflow-y: auto;
+    }
+    #ax-input:focus { outline: none; border-color: #e94560; }
+    #ax-send {
+        padding: 9px 14px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: bold;
+        cursor: pointer;
+        white-space: nowrap;
+        align-self: flex-end;
+    }
+    #ax-send:hover { background: #c73652; }
+    #ax-send:disabled { background: #555; cursor: not-allowed; }
+
+    /* Voice input */
+    #ax-voice-status {
+        padding: 4px 12px 0;
+        font-size: 11px;
+        color: #e94560;
+        background: #0d1b2a;
+        display: none;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+    #ax-voice-status.active { display: flex; }
+    .ax-voice-dot {
+        width: 7px;
+        height: 7px;
+        background: #e94560;
+        border-radius: 50%;
+        animation: ax-pulse 1s ease-in-out infinite;
+    }
+    @keyframes ax-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+    #ax-mic {
+        padding: 9px 11px;
+        background: #0f3460;
+        color: #aaa;
+        border: 1px solid #1a3a5c;
+        border-radius: 6px;
+        font-size: 15px;
+        cursor: pointer;
+        align-self: flex-end;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        line-height: 1;
+    }
+    #ax-mic:hover { background: #1a4a7a; color: #eee; }
+    #ax-mic.listening {
+        background: #e94560;
+        color: #fff;
+        border-color: #e94560;
+        animation: ax-mic-ring 1.2s ease-in-out infinite;
+    }
+    @keyframes ax-mic-ring {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(233,69,96,0.5); }
+        50%       { box-shadow: 0 0 0 6px rgba(233,69,96,0); }
+    }
+
+    /* Toast notification */
+    #ax-toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: #e94560;
+        color: #fff;
+        border-radius: 8px;
+        padding: 12px 20px;
+        font-size: 13px;
+        font-weight: bold;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        z-index: 9999;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        pointer-events: none;
+    }
+    #ax-toast.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* Delete-action proposal card styling */
+    .ax-proposal-card.ax-delete-card {
+        border-color: #c0392b;
+    }
+    .ax-proposal-card.ax-delete-card h4 {
+        color: #e74c3c;
+    }
+    .ax-apply-btn.ax-delete-btn {
+        background: #c0392b;
+    }
+    .ax-apply-btn.ax-delete-btn:hover {
+        background: #96281b;
+    }
+    .ax-dismiss-btn.ax-dismiss-prominent {
+        background: #1a3a5c;
+        color: #eee;
+        border-color: #4a7aac;
+        font-weight: bold;
+    }
+    .ax-dismiss-btn.ax-dismiss-prominent:hover {
+        background: #2a5a8c;
+    }
+
+    /* Build Assembly button in header */
+    #ax-build-btn {
+        padding: 5px 10px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s;
+    }
+    #ax-build-btn:hover { background: #c73652; }
+    #ax-build-btn:disabled { background: #555; cursor: not-allowed; }
+
+    /* Scope Gap Check button */
+    #ax-scope-btn {
+        padding: 5px 10px;
+        background: #0f3460;
+        color: #fff;
+        border: 1px solid #e94560;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s;
+    }
+    #ax-scope-btn:hover:not(:disabled) { background: #1a4a7a; }
+    #ax-scope-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* Scope Gap Report card */
+    .ax-scope-report {
+        display: block;
+        width: 100%;
+        background: #0d1b2a;
+        border: 1px solid #1a3a5c;
+        border-radius: 8px;
+        overflow: hidden;
+        font-size: 12px;
+    }
+    .ax-scope-report-header {
+        padding: 12px 14px 10px;
+        background: #0a1520;
+        border-bottom: 1px solid #1a3a5c;
+    }
+    .ax-scope-report-title {
+        font-size: 14px;
+        font-weight: bold;
+        color: #fff;
+        margin-bottom: 2px;
+    }
+    .ax-scope-report-subtitle {
+        font-size: 11px;
+        color: #aaa;
+        margin-bottom: 10px;
+    }
+    .ax-score-bar-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .ax-score-bar-track {
+        flex: 1;
+        height: 8px;
+        background: #1a3a5c;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .ax-score-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+    }
+    .ax-score-label {
+        font-size: 12px;
+        font-weight: bold;
+        color: #eee;
+        white-space: nowrap;
+    }
+    .ax-scope-summary {
+        font-size: 11px;
+        color: #aaa;
+        font-style: italic;
+        line-height: 1.5;
+    }
+    .ax-scope-section {
+        padding: 10px 14px;
+        border-bottom: 1px solid #1a3a5c;
+    }
+    .ax-scope-section:last-child { border-bottom: none; }
+    .ax-scope-section-title {
+        font-size: 12px;
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+    .ax-gap-card {
+        background: #111c30;
+        border-left: 3px solid #888;
+        border-radius: 0 4px 4px 0;
+        padding: 8px 10px;
+        margin-bottom: 7px;
+        position: relative;
+    }
+    .ax-gap-card:last-child { margin-bottom: 0; }
+    .ax-gap-title {
+        font-size: 12px;
+        font-weight: bold;
+        color: #fff;
+        padding-right: 52px;
+        margin-bottom: 2px;
+    }
+    .ax-gap-assembly {
+        font-size: 11px;
+        color: #aaa;
+        margin-bottom: 4px;
+    }
+    .ax-gap-desc {
+        font-size: 11px;
+        color: #eee;
+        line-height: 1.45;
+        margin-bottom: 4px;
+    }
+    .ax-gap-action {
+        font-size: 11px;
+        color: #aaa;
+        font-style: italic;
+        margin-bottom: 3px;
+    }
+    .ax-gap-cost {
+        font-size: 11px;
+        color: #e94560;
+        font-weight: bold;
+    }
+    .ax-severity-badge {
+        position: absolute;
+        top: 7px;
+        right: 8px;
+        font-size: 9px;
+        font-weight: bold;
+        padding: 2px 6px;
+        border-radius: 10px;
+        color: #fff;
+        letter-spacing: 0.5px;
+    }
+    .ax-strength-item {
+        padding: 3px 0;
+        color: #eee;
+        font-size: 11px;
+        line-height: 1.45;
+    }
+    .ax-strength-item::before { content: '• '; color: #27ae60; }
+    .ax-scope-fix-btn {
+        display: block;
+        width: 100%;
+        padding: 11px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        border-radius: 0 0 6px 6px;
+        font-size: 13px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-align: center;
+    }
+    .ax-scope-fix-btn:hover { background: #c73652; }
+
+    /* Builder panel (slides in between header and messages) */
+    #ax-builder {
+        background: #0d1b2a;
+        border-bottom: 2px solid #e94560;
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.3s ease, padding 0.3s ease;
+        flex-shrink: 0;
+    }
+    #ax-builder.open { max-height: 600px; }
+
+    #ax-builder-inner { padding: 12px; }
+
+    .ax-builder-textarea {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 90px;
+        background: #0f3460;
+        color: #eee;
+        border: 1px solid #1a3a5c;
+        border-radius: 6px;
+        padding: 9px 10px;
+        font-size: 12px;
+        font-family: Arial, sans-serif;
+        line-height: 1.5;
+        resize: vertical;
+        margin-bottom: 8px;
+    }
+    .ax-builder-textarea:focus { outline: none; border-color: #e94560; }
+
+    .ax-builder-generate-btn {
+        width: 100%;
+        padding: 12px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .ax-builder-generate-btn:hover:not(:disabled) { background: #c73652; }
+    .ax-builder-generate-btn:disabled { background: #555; cursor: not-allowed; }
+
+    .ax-builder-loading {
+        text-align: center;
+        padding: 14px 0;
+        color: #aaa;
+        font-size: 12px;
+    }
+    .ax-builder-loading .ax-spin {
+        display: inline-block;
+        animation: ax-spin 1s linear infinite;
+        margin-right: 6px;
+        font-size: 16px;
+    }
+    @keyframes ax-spin { to { transform: rotate(360deg); } }
+
+    /* Builder preview card */
+    #ax-builder-preview {
+        display: none;
+        background: #111c30;
+        border: 1px solid #e94560;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .ax-bp-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 10px 12px 8px;
+        background: #0d1b2a;
+        border-bottom: 1px solid #1a3a5c;
+    }
+    .ax-bp-header-left { display: flex; flex-direction: column; gap: 2px; }
+    .ax-bp-label {
+        font-size: 11px;
+        font-weight: bold;
+        color: #e94560;
+    }
+    .ax-bp-name {
+        font-size: 13px;
+        font-weight: bold;
+        color: #fff;
+    }
+    .ax-bp-grand-total {
+        font-size: 18px;
+        font-weight: bold;
+        color: #e94560;
+        text-align: right;
+        white-space: nowrap;
+        padding-left: 8px;
+    }
+
+    .ax-bp-totals {
+        display: flex;
+        gap: 0;
+        padding: 7px 12px;
+        background: #0d1b2a;
+        border-bottom: 1px solid #1a3a5c;
+    }
+    .ax-bp-total-item {
+        flex: 1;
+        text-align: center;
+        font-size: 11px;
+        color: #aaa;
+        border-right: 1px solid #1a3a5c;
+        padding: 0 4px;
+    }
+    .ax-bp-total-item:last-child { border-right: none; }
+    .ax-bp-total-item strong { display: block; color: #ddd; font-size: 11px; }
+
+    .ax-bp-table-wrap {
+        max-height: 180px;
+        overflow-y: auto;
+        border-bottom: 1px solid #1a3a5c;
+    }
+    .ax-bp-table-wrap::-webkit-scrollbar { width: 4px; }
+    .ax-bp-table-wrap::-webkit-scrollbar-track { background: #0d1b2a; }
+    .ax-bp-table-wrap::-webkit-scrollbar-thumb { background: #0f3460; }
+
+    .ax-bp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+    }
+    .ax-bp-table thead th {
+        background: #0a1520;
+        color: #888;
+        padding: 5px 6px;
+        text-align: left;
+        font-weight: normal;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+    }
+    .ax-bp-table thead th.num { text-align: right; }
+    .ax-bp-table tbody tr:nth-child(odd)  { background: #0d1b2a; }
+    .ax-bp-table tbody tr:nth-child(even) { background: #0f3460; }
+    .ax-bp-table td {
+        padding: 4px 6px;
+        color: #ddd;
+        vertical-align: top;
+    }
+    .ax-bp-table td.num { text-align: right; white-space: nowrap; }
+
+    .ax-bp-notes {
+        padding: 8px 12px;
+        font-size: 11px;
+        color: #aaa;
+        font-style: italic;
+        border-bottom: 1px solid #1a3a5c;
+        line-height: 1.5;
+    }
+    .ax-bp-notes span { font-style: normal; font-weight: bold; color: #888; }
+
+    .ax-bp-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 12px;
+    }
+    .ax-bp-add-btn {
+        width: 100%;
+        padding: 10px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .ax-bp-add-btn:hover:not(:disabled) { background: #c73652; }
+    .ax-bp-add-btn:disabled { background: #555; cursor: not-allowed; }
+    .ax-bp-discard-btn {
+        width: 100%;
+        padding: 10px;
+        background: #0f3460;
+        color: #aaa;
+        border: 1px solid #1a3a5c;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .ax-bp-discard-btn:hover { background: #1a4a7a; color: #eee; }
+</style>
+
+<!-- Toast notification -->
+<div id="ax-toast"></div>
+
+<!-- Tab trigger -->
+<button id="agentx-tab" onclick="axToggle()">🤖 AgentX</button>
+
+<!-- Overlay -->
+<div id="agentx-overlay" onclick="axClose()"></div>
+
+<!-- Panel -->
+<div id="agentx-panel">
+    <div class="ax-header">
+        <div class="ax-header-row">
+            <span class="ax-title">🤖 AgentX</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <button id="ax-scope-btn" onclick="axRunScopeGap()" title="Scope Gap Detector" disabled>🔍 Check Scope</button>
+                <button id="ax-build-btn" onclick="axToggleBuilder()" title="Assembly Auto-Builder" disabled>⚡ Build Assembly</button>
+                <button class="ax-close" onclick="axClose()">✕</button>
+            </div>
+        </div>
+        <div class="ax-status" id="ax-status">Ready</div>
+        <div class="ax-mode-bar">
+            <button class="ax-mode-btn" data-mode="estimate" onclick="axSetMode('estimate')">Estimate</button>
+            <button class="ax-mode-btn active" data-mode="research" onclick="axSetMode('research')">Research</button>
+            <button class="ax-mode-btn"        data-mode="chat"     onclick="axSetMode('chat')">Chat</button>
+        </div>
+    </div>
+
+    <!-- Assembly Auto-Builder panel -->
+    <div id="ax-builder">
+        <div id="ax-builder-inner">
+            <div id="ax-builder-input-area">
+                <textarea class="ax-builder-textarea" id="ax-builder-desc"
+                    placeholder="Describe the work in plain English...&#10;&#10;Example: 5,000 SF of 4-inch concrete slab on grade with WWF, vapor barrier, and broom finish in Dallas TX"></textarea>
+                <button class="ax-builder-generate-btn" id="ax-builder-gen-btn" onclick="axGenerateAssembly()">⚡ Generate Assembly</button>
+            </div>
+            <div id="ax-builder-loading" class="ax-builder-loading" style="display:none;">
+                <span class="ax-spin">⚙</span>AgentX is building your assembly…
+            </div>
+            <div id="ax-builder-preview"></div>
+        </div>
+    </div>
+
+    <div class="ax-perm-row" id="ax-perm-row" style="display:none;">
+        <input type="checkbox" id="ax-write-perm">
+        <label for="ax-write-perm">Allow write proposals (add, update, or remove items)</label>
+    </div>
+
+    <div class="ax-messages" id="ax-messages">
+        <div class="ax-bubble assistant" id="ax-welcome-bubble">Hi! I'm AgentX. Use Research mode for construction knowledge, or Chat for general questions. Open a project to unlock Estimate mode.</div>
+    </div>
+
+    <div id="ax-voice-status">
+        <span class="ax-voice-dot"></span>Listening…
+    </div>
+    <div class="ax-input-area">
+        <textarea id="ax-input" rows="2" placeholder="Ask AgentX…"></textarea>
+        <button id="ax-mic" title="Voice input">🎤</button>
+        <button id="ax-send" onclick="axSend()">Send</button>
+    </div>
+</div>
+
+<script>
+    // ── AgentX state ────────────────────────────────────────────────
+    const AX_PROJECT_ID = (function() {
+        const m = window.location.pathname.match(/\/project\/(\d+)/);
+        return m ? parseInt(m[1]) : null;
+    })();
+
+    let axMode        = 'research';
+    let axIsOpen      = false;
+    let axLoading     = false;
+    let axLoadingEl   = null;
+
+    const AX_STATUS_LABELS = {
+        estimate: 'Estimate mode — reads live project data',
+        research: 'Research mode — construction knowledge base',
+        chat:     'Chat mode — general assistant',
+    };
+
+    // ── Panel open / close ──────────────────────────────────────────
+    function axToggle() {
+        axIsOpen ? axClose() : axOpen();
+    }
+    function axOpen() {
+        axIsOpen = true;
+        document.getElementById('agentx-panel').classList.add('open');
+        document.body.classList.add('ax-panel-open');
+        document.getElementById('ax-input').focus();
+    }
+    function axClose() {
+        axIsOpen = false;
+        document.getElementById('agentx-panel').classList.remove('open');
+        document.body.classList.remove('ax-panel-open');
+    }
+
+    // ── Mode switching ──────────────────────────────────────────────
+    function axSetMode(mode) {
+        if (mode === 'estimate' && !AX_PROJECT_ID) {
+            axAppendBubble('Open a project to use Estimate mode. Research and Chat are available on any page.', 'assistant');
+            return;
+        }
+        axMode = mode;
+        document.querySelectorAll('.ax-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+        document.getElementById('ax-status').textContent = AX_STATUS_LABELS[mode];
+        document.getElementById('ax-perm-row').style.display = (mode === 'estimate') ? 'flex' : 'none';
+    }
+
+    // ── Messaging helpers ───────────────────────────────────────────
+    function axAppendBubble(text, role) {
+        const msgs = document.getElementById('ax-messages');
+        const el   = document.createElement('div');
+        el.className = 'ax-bubble ' + role;
+        el.textContent = text;
+        msgs.appendChild(el);
+        msgs.scrollTop = msgs.scrollHeight;
+        return el;
+    }
+
+    function axShowLoading() {
+        axLoadingEl = axAppendBubble('AgentX is thinking…', 'loading');
+    }
+    function axRemoveLoading() {
+        if (axLoadingEl) { axLoadingEl.remove(); axLoadingEl = null; }
+    }
+
+    // ── Toast notification ──────────────────────────────────────────
+    let _axToastTimer = null;
+    function axShowToast(message) {
+        const el = document.getElementById('ax-toast');
+        el.textContent = message;
+        el.classList.add('visible');
+        if (_axToastTimer) clearTimeout(_axToastTimer);
+        _axToastTimer = setTimeout(() => {
+            el.classList.remove('visible');
+        }, 3000);
+    }
+
+    const AX_TOAST_MESSAGES = {
+        add_line_items:   '✓ Assembly added by AgentX',
+        update_line_item: '✓ Line item updated by AgentX',
+        update_assembly:  '✓ Assembly updated by AgentX',
+        delete_line_item: '✓ Line item removed by AgentX',
+        bulk_update:      '✓ Estimate recalculated by AgentX',
+    };
+
+    // ── Live estimate refresh ────────────────────────────────────────
+    async function refreshEstimateView() {
+        if (!AX_PROJECT_ID) return;
+        try {
+            const res  = await fetch(`/project/${AX_PROJECT_ID}/data`);
+            const data = await res.json();
+            if (typeof window.agentXRefresh === 'function') {
+                window.agentXRefresh(data);
+            }
+        } catch (_) { /* silent */ }
+    }
+
+    // ── Write proposal card ─────────────────────────────────────────
+    function axRenderProposal(proposal) {
+        const msgs   = document.getElementById('ax-messages');
+        const card   = document.createElement('div');
+        const action = proposal.action || 'add_line_items';
+        card.className = 'ax-proposal-card' + (action === 'delete_line_item' ? ' ax-delete-card' : '');
+
+        let headerHtml, bodyHtml, applyLabel, applyClass, dismissClass;
+        applyClass  = 'ax-apply-btn';
+        dismissClass = 'ax-dismiss-btn';
+
+        if (action === 'add_line_items') {
+            const na = proposal.new_assembly;
+            const asmLine = na
+                ? `<div style="color:#ccc;font-size:12px;margin-bottom:6px;">
+                       New assembly: <strong>${_axEsc(na.assembly_label || na.label || '')} — ${_axEsc(na.assembly_name || na.name || '')}</strong>
+                   </div>`
+                : `<div style="color:#ccc;font-size:12px;margin-bottom:6px;">Adding to assembly ${proposal.assembly_id || proposal.target_assembly_id}</div>`;
+            const rows = (proposal.line_items || []).map(li =>
+                `<div class="ax-proposal-item-row">• ${_axEsc(li.description)} — ${li.quantity} ${_axEsc(li.unit)}</div>`
+            ).join('');
+            headerHtml  = 'AgentX wants to add to your estimate';
+            bodyHtml    = asmLine + `<div class="ax-proposal-items">${rows || '<em>No items</em>'}</div>`;
+            applyLabel  = '✓ Apply to Estimate';
+
+        } else if (action === 'update_line_item' || action === 'update_assembly') {
+            headerHtml  = 'AgentX wants to update your estimate';
+            bodyHtml    = `<div style="color:#ccc;font-size:12px;margin-bottom:8px;">${_axEsc(proposal.description || '')}</div>`;
+            applyLabel  = '✓ Apply Update';
+
+        } else if (action === 'delete_line_item') {
+            headerHtml  = '⚠ AgentX wants to remove an item';
+            bodyHtml    = `<div style="color:#ccc;font-size:12px;margin-bottom:4px;">${_axEsc(proposal.item_name || 'Unknown item')}</div>
+                           <div style="color:#e74c3c;font-size:11px;margin-bottom:8px;">This cannot be undone</div>`;
+            applyLabel  = '✓ Remove Item';
+            applyClass  += ' ax-delete-btn';
+            dismissClass += ' ax-dismiss-prominent';
+
+        } else if (action === 'bulk_update') {
+            const count = (proposal.line_items || []).length;
+            headerHtml  = 'AgentX wants to recalculate your estimate';
+            bodyHtml    = `<div style="color:#ccc;font-size:12px;margin-bottom:8px;">${_axEsc(proposal.description || '')}</div>
+                           <div style="color:#aaa;font-size:11px;margin-bottom:8px;">${count} item(s) will be updated</div>`;
+            applyLabel  = '✓ Apply All Updates';
+
+        } else {
+            headerHtml = 'AgentX proposal';
+            bodyHtml   = `<pre style="font-size:11px;color:#aaa;">${_axEsc(JSON.stringify(proposal, null, 2))}</pre>`;
+            applyLabel = '✓ Apply';
+        }
+
+        card.innerHTML = `
+            <h4>${headerHtml}</h4>
+            ${bodyHtml}
+            <div class="ax-proposal-actions">
+                <button class="${applyClass}"   onclick="axApplyProposal(this)">${applyLabel}</button>
+                <button class="${dismissClass}" onclick="this.closest('.ax-proposal-card').remove()">Dismiss</button>
+            </div>`;
+
+        card._proposal = proposal;
+        msgs.appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function _axEsc(str) {
+        return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function axApplyProposal(btn) {
+        const card     = btn.closest('.ax-proposal-card');
+        const proposal = card._proposal;
+        const action   = proposal.action || 'add_line_items';
+        const origText = btn.textContent;
+        btn.disabled   = true;
+        btn.textContent = 'Applying…';
+        try {
+            const res  = await fetch('/ai/apply', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ proposal, project_id: AX_PROJECT_ID }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                card.innerHTML = `<div style="color:#4caf93;font-size:13px;padding:4px 0;">✓ Applied successfully.</div>`;
+                axShowToast(AX_TOAST_MESSAGES[action] || '✓ Applied by AgentX');
+                await refreshEstimateView();
+            } else {
+                btn.disabled    = false;
+                btn.textContent = origText;
+                axAppendBubble('Error: ' + (data.error || 'unknown error'), 'assistant');
+            }
+        } catch (err) {
+            btn.disabled    = false;
+            btn.textContent = origText;
+            axAppendBubble('Network error: ' + err.message, 'assistant');
+        }
+    }
+
+    // ── Send message ────────────────────────────────────────────────
+    async function axSend() {
+        const inputEl = document.getElementById('ax-input');
+        const message = inputEl.value.trim();
+        if (!message || axLoading) return;
+
+        axAppendBubble(message, 'user');
+        inputEl.value = '';
+        inputEl.style.height = '';
+
+        const permission = (axMode === 'estimate' && document.getElementById('ax-write-perm').checked)
+            ? 'write' : 'read';
+
+        axLoading = true;
+        document.getElementById('ax-send').disabled = true;
+        axShowLoading();
+
+        try {
+            const res  = await fetch('/ai/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message,
+                    project_id: AX_PROJECT_ID,
+                    mode:       axMode,
+                    permission,
+                }),
+            });
+            const data = await res.json();
+            axRemoveLoading();
+
+            if (!data.success) {
+                axAppendBubble('Error: ' + (data.error || 'unknown error'), 'assistant');
+            } else {
+                if (data.reply) axAppendBubble(data.reply, 'assistant');
+                if (data.write_proposal) axRenderProposal(data.write_proposal);
+            }
+        } catch (err) {
+            axRemoveLoading();
+            axAppendBubble('Network error: ' + err.message, 'assistant');
+        } finally {
+            axLoading = false;
+            document.getElementById('ax-send').disabled = false;
+        }
+    }
+
+    // ── Keyboard handling ───────────────────────────────────────────
+    document.getElementById('ax-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            axSend();
+        }
+    });
+
+    // Auto-grow textarea
+    document.getElementById('ax-input').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // ── Voice input (Web Speech API) ────────────────────────────────
+    (function() {
+        const micBtn     = document.getElementById('ax-mic');
+        const statusBar  = document.getElementById('ax-voice-status');
+        const inputEl    = document.getElementById('ax-input');
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            micBtn.style.display = 'none';
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous      = false;
+        recognition.interimResults  = true;
+        recognition.lang            = 'en-US';
+
+        let isListening    = false;
+        let interimSpan    = null;
+
+        function startListening() {
+            isListening = true;
+            micBtn.classList.add('listening');
+            statusBar.classList.add('active');
+            inputEl.placeholder = '';
+            recognition.start();
+        }
+
+        function stopListening() {
+            isListening = false;
+            micBtn.classList.remove('listening');
+            statusBar.classList.add('active');
+            try { recognition.stop(); } catch(_) {}
+        }
+
+        micBtn.addEventListener('click', function() {
+            isListening ? stopListening() : startListening();
+        });
+
+        recognition.addEventListener('result', function(e) {
+            let interim = '';
+            let final   = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                const t = e.results[i][0].transcript;
+                e.results[i].isFinal ? (final += t) : (interim += t);
+            }
+
+            const base = interimSpan
+                ? inputEl.value.slice(0, inputEl.value.length - interimSpan.length)
+                : inputEl.value;
+
+            if (final) {
+                const separator = base.trim().length ? ' ' : '';
+                inputEl.value  = base + separator + final.trim();
+                interimSpan    = null;
+            } else {
+                interimSpan    = interim;
+                inputEl.value  = base + interim;
+            }
+
+            inputEl.dispatchEvent(new Event('input'));
+        });
+
+        recognition.addEventListener('end', function() {
+            interimSpan = null;
+            isListening = false;
+            micBtn.classList.remove('listening');
+            statusBar.classList.remove('active');
+            inputEl.placeholder = 'Ask AgentX…';
+            inputEl.focus();
+        });
+
+        recognition.addEventListener('error', function(e) {
+            interimSpan = null;
+            isListening = false;
+            micBtn.classList.remove('listening');
+            statusBar.classList.remove('active');
+            inputEl.placeholder = 'Ask AgentX…';
+            if (e.error !== 'aborted' && e.error !== 'no-speech') {
+                axAppendBubble('Mic error: ' + e.error, 'assistant');
+            }
+        });
+    })();
+
+    // ── Assembly Auto-Builder ────────────────────────────────────────
+    let _axBuilderOpen   = false;
+    let _axBuilderResult = null;
+
+    function axToggleBuilder() {
+        if (!AX_PROJECT_ID) return;
+        _axBuilderOpen = !_axBuilderOpen;
+        const panel = document.getElementById('ax-builder');
+        if (_axBuilderOpen) {
+            panel.classList.add('open');
+            document.getElementById('ax-builder-desc').focus();
+        } else {
+            panel.classList.remove('open');
+        }
+    }
+
+    function _axFmt(n) {
+        return '$' + parseFloat(n || 0).toLocaleString('en-US',
+            {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    }
+
+    async function axGenerateAssembly() {
+        const desc = (document.getElementById('ax-builder-desc').value || '').trim();
+        if (!desc) return;
+        if (!AX_PROJECT_ID) return;
+
+        const genBtn  = document.getElementById('ax-builder-gen-btn');
+        const loading = document.getElementById('ax-builder-loading');
+        const preview = document.getElementById('ax-builder-preview');
+        const inputArea = document.getElementById('ax-builder-input-area');
+
+        inputArea.style.display = 'none';
+        loading.style.display   = 'block';
+        preview.style.display   = 'none';
+        preview.innerHTML       = '';
+        _axBuilderResult        = null;
+        genBtn.disabled         = true;
+
+        try {
+            const res  = await fetch('/ai/build-assembly', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ project_id: AX_PROJECT_ID, description: desc }),
+            });
+            const data = await res.json();
+            loading.style.display = 'none';
+
+            if (!data.success) {
+                inputArea.style.display = 'block';
+                genBtn.disabled = false;
+                preview.style.display = 'block';
+                preview.innerHTML = `<div style="color:#e74c3c;font-size:12px;padding:10px;">
+                    AgentX couldn't build that assembly. Try describing the work in more detail.</div>`;
+                return;
+            }
+
+            _axBuilderResult = data;
+            _axRenderBuilderPreview(data);
+            preview.style.display = 'block';
+
+        } catch (err) {
+            loading.style.display   = 'none';
+            inputArea.style.display = 'block';
+            genBtn.disabled         = false;
+            preview.style.display   = 'block';
+            preview.innerHTML = `<div style="color:#e74c3c;font-size:12px;padding:10px;">
+                AgentX couldn't build that assembly. Try describing the work in more detail.</div>`;
+        }
+    }
+
+    function _axRenderBuilderPreview(data) {
+        const asm    = data.assembly   || {};
+        const items  = data.line_items || [];
+        const totals = data.totals     || {};
+        const notes  = data.estimator_notes || '';
+
+        const rows = items.map(it => `
+            <tr>
+                <td>${_axEsc(it.description)}</td>
+                <td class="num">${parseFloat(it.quantity || 0).toLocaleString()}</td>
+                <td>${_axEsc(it.unit || '')}</td>
+                <td class="num">${it.material_cost_per_unit > 0 ? '$' + parseFloat(it.material_cost_per_unit).toFixed(2) : '—'}</td>
+                <td class="num">${it.labor_cost_per_hour > 0 ? '$' + parseFloat(it.labor_cost_per_hour).toFixed(0) : '—'}</td>
+                <td class="num">${parseFloat(it.labor_hours || 0).toFixed(1)}</td>
+                <td class="num">${_axFmt(it.total_cost)}</td>
+            </tr>`).join('');
+
+        document.getElementById('ax-builder-preview').innerHTML = `
+            <div class="ax-bp-header">
+                <div class="ax-bp-header-left">
+                    <span class="ax-bp-label">${_axEsc(asm.assembly_label || '')}</span>
+                    <span class="ax-bp-name">${_axEsc(asm.assembly_name || '')}</span>
+                </div>
+                <div class="ax-bp-grand-total">${_axFmt(totals.grand_total)}</div>
+            </div>
+            <div class="ax-bp-totals">
+                <div class="ax-bp-total-item"><span>Material</span><strong>${_axFmt(totals.total_material)}</strong></div>
+                <div class="ax-bp-total-item"><span>Labor</span><strong>${_axFmt(totals.total_labor)}</strong></div>
+                <div class="ax-bp-total-item"><span>Equipment</span><strong>${_axFmt(totals.total_equipment)}</strong></div>
+                <div class="ax-bp-total-item"><span>Hours</span><strong>${parseFloat(totals.total_hours || 0).toFixed(0)} hrs</strong></div>
+            </div>
+            <div class="ax-bp-table-wrap">
+                <table class="ax-bp-table">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th class="num">Qty</th>
+                            <th>Unit</th>
+                            <th class="num">Mat $/Unit</th>
+                            <th class="num">Labor $/Hr</th>
+                            <th class="num">Hours</th>
+                            <th class="num">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:#555;padding:12px;">No line items</td></tr>'}</tbody>
+                </table>
+            </div>
+            ${notes ? `<div class="ax-bp-notes"><span>📋 Estimator Notes</span><br>${_axEsc(notes)}</div>` : ''}
+            <div class="ax-bp-actions">
+                <button class="ax-bp-add-btn" id="ax-bp-add-btn" onclick="axApplyBuilderAssembly(this)">✓ Add to Estimate</button>
+                <button class="ax-bp-discard-btn" onclick="axDiscardBuilder()">✗ Discard</button>
+            </div>`;
+    }
+
+    async function axApplyBuilderAssembly(btn) {
+        if (!_axBuilderResult || !AX_PROJECT_ID) return;
+        const asm   = _axBuilderResult.assembly   || {};
+        const items = _axBuilderResult.line_items || [];
+
+        const proposal = {
+            action:       'add_line_items',
+            new_assembly: {
+                assembly_label: asm.assembly_label,
+                assembly_name:  asm.assembly_name,
+                description:    asm.description || '',
+                quantity:       asm.quantity || 1,
+                unit:           asm.unit || 'LS',
+            },
+            line_items: items,
+        };
+
+        const origText  = btn.textContent;
+        btn.disabled    = true;
+        btn.textContent = 'Adding…';
+
+        try {
+            const res  = await fetch('/ai/apply', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ proposal, project_id: AX_PROJECT_ID }),
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                axShowToast('✓ Assembly built and added by AgentX');
+                await refreshEstimateView();
+                // Close builder, clear textarea
+                document.getElementById('ax-builder').classList.remove('open');
+                _axBuilderOpen = false;
+                document.getElementById('ax-builder-desc').value = '';
+                document.getElementById('ax-builder-preview').style.display   = 'none';
+                document.getElementById('ax-builder-preview').innerHTML       = '';
+                document.getElementById('ax-builder-input-area').style.display = 'block';
+                document.getElementById('ax-builder-gen-btn').disabled        = false;
+                _axBuilderResult = null;
+            } else {
+                btn.disabled    = false;
+                btn.textContent = origText;
+                axAppendBubble('Error: ' + (data.error || 'unknown error'), 'assistant');
+            }
+        } catch (err) {
+            btn.disabled    = false;
+            btn.textContent = origText;
+            axAppendBubble('Network error: ' + err.message, 'assistant');
+        }
+    }
+
+    function axDiscardBuilder() {
+        document.getElementById('ax-builder-preview').style.display    = 'none';
+        document.getElementById('ax-builder-preview').innerHTML        = '';
+        document.getElementById('ax-builder-input-area').style.display = 'block';
+        document.getElementById('ax-builder-gen-btn').disabled         = false;
+        _axBuilderResult = null;
+    }
+
+    // ── Scope Gap Detector ───────────────────────────────────────────
+    async function axRunScopeGap() {
+        if (!AX_PROJECT_ID) {
+            axAppendBubble('Open a project to run a scope gap check.', 'assistant');
+            axOpen();
+            return;
+        }
+
+        axOpen();
+
+        const loadingEl = axAppendBubble(
+            '🔍 AgentX is reviewing your estimate for scope gaps…\nThis may take a few seconds.',
+            'loading'
+        );
+
+        try {
+            const res  = await fetch('/ai/scope-gap', {
+                method:  'POST',
+                headers: {'Content-Type': 'application/json'},
+                body:    JSON.stringify({ project_id: AX_PROJECT_ID }),
+            });
+            const data = await res.json();
+            loadingEl.remove();
+
+            if (!data.success) {
+                const msg = (data.error || '').toLowerCase().includes('no assembl')
+                    ? 'No assemblies found. Add some work to your estimate first and then run the scope gap check.'
+                    : 'AgentX couldn\'t complete the scope review. Make sure your estimate has at least one assembly before running a gap check.';
+                axAppendBubble(msg, 'assistant');
+                return;
+            }
+
+            if (!data.gaps || data.gaps.length === 0) {
+                // Empty estimate guard
+                if (!data.summary || data.completeness_score === 0) {
+                    axAppendBubble('No assemblies found. Add some work to your estimate first and then run the scope gap check.', 'assistant');
+                    return;
+                }
+            }
+
+            axRenderScopeReport(data);
+
+        } catch (err) {
+            loadingEl.remove();
+            axAppendBubble('AgentX couldn\'t complete the scope review. Make sure your estimate has at least one assembly before running a gap check.', 'assistant');
+        }
+    }
+
+    function axRenderScopeReport(data) {
+        const msgs    = document.getElementById('ax-messages');
+        const gaps    = data.gaps       || [];
+        const strengths = data.strengths || [];
+        const score   = parseInt(data.completeness_score || 0);
+
+        // Score bar color
+        const barColor = score >= 95 ? '#27ae60' : score >= 80 ? '#f39c12' : '#e94560';
+
+        // Severity colors and badge backgrounds
+        const sevColor = { HIGH: '#e94560', MEDIUM: '#f39c12', LOW: '#3498db' };
+
+        // Build gap cards HTML
+        const gapCards = gaps.map(g => {
+            const sc   = sevColor[g.severity] || '#888';
+            const asmLine = g.assembly_name
+                ? `<div class="ax-gap-assembly">📁 ${_axEsc(g.assembly_name)}</div>` : '';
+            const costLine = g.estimated_cost_impact
+                ? `<div class="ax-gap-cost">Est. impact: ${_axEsc(g.estimated_cost_impact)}</div>` : '';
+            const levelLabel = {
+                MISSING_LINE_ITEM:   'Line Item',
+                MISSING_ASSEMBLY:    'Assembly',
+                MISSING_CSI_DIVISION:'CSI Division',
+            }[g.level] || g.level;
+
+            return `<div class="ax-gap-card" style="border-left-color:${sc};">
+                <span class="ax-severity-badge" style="background:${sc};">${_axEsc(g.severity)}</span>
+                <div class="ax-gap-title">${_axEsc(g.title)} <span style="font-size:10px;color:#888;font-weight:normal;">[${levelLabel}]</span></div>
+                ${asmLine}
+                <div class="ax-gap-desc">${_axEsc(g.description)}</div>
+                <div class="ax-gap-action">→ ${_axEsc(g.suggested_action)}</div>
+                ${costLine}
+            </div>`;
+        }).join('');
+
+        // Build strengths HTML
+        const strengthItems = strengths.map(s =>
+            `<div class="ax-strength-item">${_axEsc(s)}</div>`
+        ).join('');
+
+        // Project name from subtitle (best effort)
+        const projectSubtitle = AX_PROJECT_ID ? `Project #${AX_PROJECT_ID}` : '';
+
+        const card = document.createElement('div');
+        card.className = 'ax-scope-report';
+        card.innerHTML = `
+            <div class="ax-scope-report-header">
+                <div class="ax-scope-report-title">Scope Gap Analysis</div>
+                <div class="ax-scope-report-subtitle">${_axEsc(projectSubtitle)}</div>
+                <div class="ax-score-bar-row">
+                    <div class="ax-score-bar-track">
+                        <div class="ax-score-bar-fill" style="width:${score}%;background:${barColor};"></div>
+                    </div>
+                    <div class="ax-score-label" style="color:${barColor};">${score} / 100</div>
+                </div>
+                <div class="ax-scope-summary">${_axEsc(data.summary || '')}</div>
+            </div>
+
+            ${gaps.length > 0 ? `
+            <div class="ax-scope-section">
+                <div class="ax-scope-section-title" style="color:#fff;">⚠ Gaps Found (${gaps.length})</div>
+                ${gapCards}
+            </div>` : `
+            <div class="ax-scope-section">
+                <div style="color:#27ae60;font-size:12px;">✓ No significant gaps found.</div>
+            </div>`}
+
+            ${strengths.length > 0 ? `
+            <div class="ax-scope-section">
+                <div class="ax-scope-section-title" style="color:#27ae60;">✓ Strengths</div>
+                ${strengthItems}
+            </div>` : ''}
+
+            ${data.review_notes ? `
+            <div class="ax-scope-section">
+                <div class="ax-scope-section-title" style="color:#aaa;">📋 Review Notes</div>
+                <div style="font-size:11px;color:#aaa;font-style:italic;line-height:1.5;">${_axEsc(data.review_notes)}</div>
+            </div>` : ''}
+
+            ${gaps.length > 0 ? `
+            <button class="ax-scope-fix-btn" onclick="axScopeFixGaps(this)">⚡ Fix Gaps — Build Missing Assemblies</button>
+            ` : ''}
+        `;
+
+        msgs.appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function axScopeFixGaps(btn) {
+        // Populate the chat input and fire a send so the estimator can review proposals one by one
+        const inputEl = document.getElementById('ax-input');
+        inputEl.value = 'Build the missing assemblies identified in the scope gap analysis';
+        axSetMode('estimate');
+        document.getElementById('ax-write-perm').checked = true;
+        // Small delay so user can see the mode switch before send
+        setTimeout(() => axSend(), 100);
+    }
+
+    // ── Initialize based on page context ────────────────────────────
+    (function() {
+        const estimateBtn = document.querySelector('.ax-mode-btn[data-mode="estimate"]');
+        if (AX_PROJECT_ID) {
+            // On a project page — enable Estimate mode and all project buttons
+            estimateBtn.disabled = false;
+            document.getElementById('ax-build-btn').disabled  = false;
+            document.getElementById('ax-scope-btn').disabled  = false;
+            axSetMode('estimate');
+            document.getElementById('ax-welcome-bubble').textContent =
+                'Hi! I\'m AgentX. I can see your full project estimate. Ask me anything — costs, quantities, missing items, or say "suggest concrete items" to get a write proposal.';
+        } else {
+            // Not on a project page — disable Estimate mode and project buttons
+            estimateBtn.disabled = true;
+            estimateBtn.title = 'Open a project to use Estimate mode';
+            document.getElementById('ax-build-btn').disabled = true;
+            document.getElementById('ax-build-btn').title = 'Open a project to use the Assembly Auto-Builder';
+            document.getElementById('ax-scope-btn').disabled = true;
+            document.getElementById('ax-scope-btn').title = 'Open a project to run a scope gap check';
+            axSetMode('research');
+            // welcome bubble text already set correctly in HTML
+        }
+    })();
+</script>

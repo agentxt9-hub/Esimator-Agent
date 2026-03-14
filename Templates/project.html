@@ -5,68 +5,187 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
-        .container { max-width: 1200px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
+        .container { max-width: 1400px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
         .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
         h1 { color: #e94560; margin-bottom: 5px; }
-        h2 { color: #eee; margin-bottom: 20px; font-size: 18px; }
         .project-meta { color: #888; font-size: 14px; }
         .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
         .btn:hover { background: #c73652; }
         .btn-secondary { background: #0f3460; }
         .btn-secondary:hover { background: #1a4a7a; }
-        .btn-group { display: flex; gap: 10px; }
-        .assembly-card { border: 1px solid #0f3460; padding: 20px; margin-top: 20px; border-radius: 8px; background: #0d1b2a; }
-        .assembly-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .assembly-label { background: #e94560; color: white; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 10px; }
-        .assembly-name { color: #eee; font-size: 16px; font-weight: bold; }
-        .assembly-meta { color: #888; font-size: 13px; margin-bottom: 15px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        table th { background: #0f3460; padding: 10px; text-align: left; color: #aaa; font-weight: bold; }
-        table td { padding: 10px; border-bottom: 1px solid #1a2a3a; color: #ccc; }
-        table tr:hover td { background: #1a2a3a; }
-        .cost-total { color: #e94560; font-weight: bold; }
-        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
-        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid #0f3460; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid #0f3460; max-height: 90vh; overflow-y: auto; }
+        .modal-content.modal-wide { max-width: 920px; }
+        /* ── Modal Tabs ───────────────────────────────────────────── */
+        .modal-tabs { display: flex; gap: 0; border-bottom: 1px solid #0f3460; margin: -10px -30px 24px; padding: 0 30px; }
+        .modal-tab { padding: 10px 20px; font-size: 13px; cursor: pointer; color: #888; background: none; border: none; border-bottom: 2px solid transparent; font-family: Arial, sans-serif; transition: color 0.15s; }
+        .modal-tab:hover { color: #eee; }
+        .modal-tab.active { color: #e94560; border-bottom-color: #e94560; font-weight: bold; }
+        .modal-pane { display: none; }
+        .modal-pane.active { display: block; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .modal-header h2 { color: #e94560; }
-        .close { color: #888; font-size: 28px; cursor: pointer; }
+        .close { color: #888; font-size: 28px; cursor: pointer; line-height: 1; }
         .close:hover { color: #eee; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: bold; }
         input, textarea, select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 14px; }
-        input:focus, textarea:focus { outline: none; border-color: #e94560; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
         .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
         .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        .empty-state { text-align: center; padding: 40px; color: #555; }
         .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
         .breadcrumb a { color: #e94560; text-decoration: none; }
         .btn-danger { background: #3a0a12; color: #e94560; border: 1px solid #e94560; }
         .btn-danger:hover { background: #e94560; color: white; }
         .btn-sm { padding: 4px 10px; font-size: 12px; }
-        .totals-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+        .totals-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
         .total-card { background: #0f3460; padding: 15px; border-radius: 8px; text-align: center; }
         .total-card h3 { color: #e94560; font-size: 20px; }
         .total-card p { color: #888; font-size: 12px; margin-top: 5px; }
+
+        /* ── Estimate Table Toolbar ─────────────────────────────── */
+        .est-toolbar { display: flex; justify-content: space-between; align-items: center; background: #16213e; padding: 8px 0 10px; border-bottom: 1px solid #0f3460; gap: 10px; flex-wrap: wrap; }
+        .est-toolbar-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .est-toolbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .btn-toolbar { display: inline-block; padding: 5px 12px; background: #0f3460; color: #ccc; border: 1px solid #1a3a5c; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; white-space: nowrap; font-family: Arial, sans-serif; }
+        .btn-toolbar:hover { background: #1a4a7a; color: #eee; }
+        .btn-toolbar-accent { background: #3a0a12; color: #e94560; border-color: #e94560; }
+        .btn-toolbar-accent:hover { background: #e94560; color: white; }
+        .groupby-wrap { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #aaa; white-space: nowrap; }
+        .groupby-wrap select { width: auto; padding: 4px 8px; font-size: 12px; background: #0f3460; border: 1px solid #1a3a5c; color: #eee; border-radius: 4px; cursor: pointer; }
+
+        /* ── Column Chooser ─────────────────────────────────────── */
+        .col-chooser-wrap { position: relative; }
+        .col-chooser-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 500; background: #16213e; border: 1px solid #0f3460; border-radius: 4px; padding: 8px; min-width: 190px; max-height: 420px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,0.6); }
+        .col-chooser-panel.open { display: block; }
+        .col-chooser-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; cursor: pointer; border-radius: 3px; font-size: 12px; color: #ccc; user-select: none; }
+        .col-chooser-item:hover { background: #0f3460; color: #eee; }
+        .col-chooser-item input[type=checkbox] { width: auto; padding: 0; margin: 0; cursor: pointer; accent-color: #e94560; flex-shrink: 0; }
+        .col-chooser-item.locked { opacity: 0.45; cursor: not-allowed; }
+        .col-chooser-divider { border-top: 1px solid #0f3460; margin: 5px 0; }
+
+        /* ── Estimate Table ─────────────────────────────────────── */
+        .est-table-wrap { overflow-x: auto; border: 1px solid #0f3460; border-top: none; border-radius: 0 0 6px 6px; }
+        .est-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .est-table thead th {
+            background: #0f3460; color: #eee; text-transform: uppercase; font-size: 11px;
+            letter-spacing: 0.5px; padding: 0; border-bottom: 2px solid #e94560;
+            position: sticky; top: 0; z-index: 10; white-space: nowrap;
+            user-select: none; overflow: hidden;
+        }
+        .est-table thead th.drag-over { background: #1a4a7a; outline: 2px solid #e94560; outline-offset: -2px; }
+        .th-inner { display: flex; align-items: center; padding: 9px 8px 9px 8px; cursor: grab; gap: 2px; }
+        .th-inner:active { cursor: grabbing; }
+        .th-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+        .resize-handle { width: 5px; min-width: 5px; height: 18px; cursor: col-resize; background: rgba(233,69,96,0.25); border-radius: 2px; flex-shrink: 0; }
+        .resize-handle:hover, .resize-handle.active { background: #e94560; }
+
+        /* Assembly group rows */
+        .asm-row td { background: #0f3460; padding: 0; height: 40px; border-bottom: 1px solid #1a3a5c; }
+        .asm-inner { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 100%; }
+        .asm-row-label { background: #e94560; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
+        .asm-row-name { flex: 1; color: #fff; font-weight: bold; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .asm-row-subtotal { color: #e94560; font-size: 13px; font-weight: bold; white-space: nowrap; }
+        .asm-row-actions { display: flex; gap: 5px; flex-shrink: 0; }
+
+        /* WBS group rows */
+        .wbs-group-row td { background: #16213e; padding: 7px 12px; border-top: 1px solid #0f3460; border-bottom: 1px solid #0f3460; }
+        .wbs-group-inner { display: flex; align-items: center; gap: 8px; }
+        .wbs-group-badge { background: #0f3460; color: #aaa; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: monospace; }
+        .wbs-group-name { color: #e94560; font-weight: bold; font-size: 12px; letter-spacing: 0.3px; flex: 1; }
+        .wbs-group-subtotal { color: #e94560; font-size: 12px; font-weight: bold; margin-left: auto; }
+
+        /* Line item rows */
+        .li-row td { padding: 6px 8px; height: 34px; border-bottom: 1px solid rgba(15,52,96,0.35); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .li-row:nth-child(odd)  td { background: #0d1b2a; }
+        .li-row:nth-child(even) td { background: #111d35; }
+        .li-row:hover td { background: #1a2a3a; cursor: default; }
+        .li-row .num { text-align: right; color: #ccc; }
+        .li-row .cost-red { text-align: right; color: #e94560; font-weight: bold; }
+        .li-row .muted { color: #666; font-size: 11px; }
+
+        /* Total row */
+        .total-row td { background: #16213e; border-top: 2px solid #e94560; padding: 9px 8px; font-weight: bold; }
+        .total-row .total-label { color: #e94560; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+        .total-row .total-val { text-align: right; color: #e94560; font-weight: bold; }
+
+        /* Empty / loading */
+        .est-loading { text-align: center; padding: 40px; color: #555; font-style: italic; font-size: 14px; background: #0d1b2a; border: 1px solid #0f3460; border-top: none; border-radius: 0 0 6px 6px; }
+
+        /* Context menu */
+        .ctx-menu { position: fixed; z-index: 9999; background: #16213e; border: 1px solid #0f3460; border-radius: 4px; min-width: 185px; box-shadow: 0 6px 16px rgba(0,0,0,0.65); font-size: 13px; }
+        .ctx-item { padding: 8px 14px; cursor: pointer; color: #ccc; display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; }
+        .ctx-item:hover { background: #0f3460; color: #eee; }
+        .ctx-item-danger { color: #e94560; }
+        .ctx-sep { border-top: 1px solid #0f3460; margin: 3px 0; }
+        .ctx-sub { position: absolute; left: 100%; top: -1px; background: #16213e; border: 1px solid #0f3460; border-radius: 4px; min-width: 170px; box-shadow: 0 6px 16px rgba(0,0,0,0.65); display: none; z-index: 10000; }
+        .ctx-item:hover > .ctx-sub { display: block; }
+        .ctx-sub-item { padding: 7px 12px; cursor: pointer; color: #ccc; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+        .ctx-sub-item:hover { background: #0f3460; color: #eee; }
+        .ctx-sub-code { color: #666; font-family: monospace; font-size: 10px; }
+
+        /* ── Inline cell editing ────────────────────────────────── */
+        .cell-inp { width: 100%; border: none; background: transparent; color: inherit; font-size: 13px; font-family: Arial, sans-serif; padding: 0; margin: 0; outline: none; min-width: 0; cursor: text; display: block; }
+        .cell-inp[type="number"] { text-align: right; }
+        .cell-inp:focus { background: #081422; border-radius: 2px; padding: 1px 3px; }
+        .li-row td:focus-within { background: #081422 !important; }
+
+        /* ── WBS / Estimate Properties ─────────────────────────── */
+        .wbs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .wbs-card { background: #16213e; border: 1px solid #0f3460; border-radius: 4px; padding: 16px; }
+        .wbs-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+        .wbs-card-title { color: #fff; font-weight: bold; font-size: 14px; }
+        .wbs-badge-template { background: #e94560; color: #fff; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+        .wbs-badge-custom { background: #0f3460; color: #e94560; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: 1px solid #e94560; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+        .wbs-value-list { list-style: none; margin-bottom: 10px; min-height: 4px; }
+        .wbs-value-item { background: #0d1b2a; padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; display: flex; align-items: center; font-size: 13px; color: #ccc; }
+        .wbs-value-item:hover { background: #1a2a3a; }
+        .wbs-value-name { flex: 1; }
+        .wbs-value-code { color: #888; font-size: 11px; font-family: monospace; margin-left: 8px; background: #0f3460; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+        .wbs-value-del { color: #e94560; background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 0 0 8px; opacity: 0.5; line-height: 1; }
+        .wbs-value-del:hover { opacity: 1; }
+        .wbs-empty-hint { color: #555; font-size: 12px; font-style: italic; padding: 6px 0 8px; }
+        .wbs-custom-placeholder { color: #555; font-size: 12px; font-style: italic; margin-bottom: 8px; }
+        .wbs-add-form { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; padding: 10px; margin-top: 8px; display: none; }
+        .wbs-add-form.open { display: block; }
+        .wbs-add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .wbs-add-row input { background: #1a1a2e; border: 1px solid #0f3460; color: #eee; padding: 5px 8px; border-radius: 4px; font-size: 12px; min-width: 0; }
+        .wbs-add-row input:focus { outline: none; border-color: #e94560; }
+        .inp-name { flex: 2; }
+        .inp-code { flex: 1; }
+        .btn-wbs-add { background: #0f3460; color: #e94560; border: 1px solid #e94560; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+        .btn-wbs-add:hover { background: #1a4a7a; }
+        .btn-wbs-cancel { background: #0f3460; color: #888; border: 1px solid #555; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+        .btn-wbs-cancel:hover { color: #eee; }
+        .wbs-name-input { background: transparent; border: none; border-bottom: 1px dashed #555; color: #fff; font-weight: bold; font-size: 14px; cursor: text; padding: 1px 2px; width: 100%; min-width: 0; }
+        .wbs-name-input:hover { border-bottom-color: #e94560; }
+        .wbs-name-input:focus { outline: none; border-bottom-color: #e94560; background: #0d1b2a; border-radius: 3px 3px 0 0; }
+        .wbs-name-input::placeholder { color: #555; font-weight: normal; font-style: italic; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="breadcrumb"><a href="/">Home</a> > {{ project.project_name }}</div>
+        {% include 'nav.html' %}
+        <div class="breadcrumb"><a href="/">Home</a> &rsaquo; {{ project.project_name }}</div>
 
         <div class="header">
             <div>
                 <h1>{{ project.project_name }}</h1>
-                <p class="project-meta">Project #: {{ project.project_number or 'N/A' }} &nbsp;|&nbsp; Location: {{ project.location or 'N/A' }}</p>
-                <p class="project-meta" style="margin-top: 5px;">{{ project.description or '' }}</p>
+                <p class="project-meta">
+                    #{{ project.project_number or 'N/A' }} &nbsp;|&nbsp;
+                    {% if project.city %}{{ project.city }}{% if project.state %}, {{ project.state }}{% endif %}{% if project.zip_code %} {{ project.zip_code }}{% endif %}{% else %}{{ project.location or 'No location' }}{% endif %}
+                    {% if project_type_name %}&nbsp;|&nbsp; {{ project_type_name }}{% endif %}
+                    {% if market_sector_name %}&nbsp;|&nbsp; {{ market_sector_name }}{% endif %}
+                </p>
+                <p class="project-meta" style="margin-top:4px">{{ project.description or '' }}</p>
             </div>
             <div class="btn-group">
                 <a href="/" class="btn btn-secondary">Back</a>
+                <button class="btn btn-secondary" onclick="openEditProjectModal()">Edit Project</button>
                 <a href="/library" class="btn btn-secondary">Library</a>
                 <a href="/templates" class="btn btn-secondary">Templates</a>
-                <a href="/project/{{ project.id }}/estimate" class="btn btn-secondary">Estimate</a>
-                <a href="/project/{{ project.id }}/report" class="btn btn-secondary">Summary</a>
                 <a href="/project/{{ project.id }}/assembly/builder" class="btn">+ Assembly Builder</a>
-                <button class="btn btn-secondary" onclick="openAssemblyModal()">+ Quick Assembly</button>
             </div>
         </div>
 
@@ -77,83 +196,123 @@
             <div class="total-card"><h3 id="total-cost">$0</h3><p>Total Cost</p></div>
         </div>
 
-        {% if assemblies %}
-            {% for assembly in assemblies %}
-                <div class="assembly-card">
-                    <div class="assembly-header">
-                        <div>
-                            <span class="assembly-label">{{ assembly.assembly_label }}</span>
-                            <span class="assembly-name">{{ assembly.assembly_name }}</span>
-                        </div>
-                        <div class="btn-group">
-                            <button class="btn" onclick="openLineItemModal({{ assembly.id }})">+ Add Line Item</button>
-                            <button class="btn btn-secondary btn-sm" onclick="openEditAssemblyModal({{ assembly.id }})">Edit</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteAssembly({{ assembly.id }}, '{{ assembly.assembly_name }}')">Delete Assembly</button>
-                        </div>
+        <!-- Estimate toolbar -->
+        <div class="est-toolbar">
+            <div class="est-toolbar-left">
+                <div class="groupby-wrap">
+                    <span>Group By:</span>
+                    <div class="col-chooser-wrap">
+                        <button class="btn-toolbar" id="groupby-btn" onclick="toggleGroupByPanel()">Assembly</button>
+                        <div id="groupby-panel" class="col-chooser-panel"></div>
                     </div>
-                    <div class="assembly-meta">
-                        {% set d1 = csi1_map.get(assembly.csi_level_1_id) %}
-                        {% set d2 = csi2_map.get(assembly.csi_level_2_id) %}
-                        CSI Div: {{ (d1.code ~ ' — ' ~ d1.title) if d1 else 'N/A' }} &nbsp;|&nbsp;
-                        CSI Sec: {{ (d2.code ~ ' — ' ~ d2.title) if d2 else 'N/A' }} &nbsp;|&nbsp;
-                        Qty: {{ assembly.quantity or 0 }} {{ assembly.unit or '' }}
-                    </div>
-
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Description</th>
-                                <th>Qty</th>
-                                <th>Unit</th>
-                                <th>Prod. Rate</th>
-                                <th>Labor Hrs</th>
-                                <th>Material</th>
-                                <th>Labor</th>
-                                <th>Equipment</th>
-                                <th>Total</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if assembly.line_items %}
-                                {% for item in assembly.line_items %}
-                                    <tr>
-                                        <td>{{ item.description }}</td>
-                                        <td>{{ item.quantity }}</td>
-                                        <td>{{ item.unit }}</td>
-                                        <td>{{ item.production_rate or '-' }}</td>
-                                        <td>{{ "%.1f"|format(item.labor_hours or 0) }}</td>
-                                        <td>${{ "%.2f"|format(item.material_cost or 0) }}</td>
-                                        <td>${{ "%.2f"|format(item.labor_cost or 0) }}</td>
-                                        <td>${{ "%.2f"|format(item.equipment_cost or 0) }}</td>
-                                        <td class="cost-total">${{ "%.2f"|format(item.total_cost or 0) }}</td>
-                                        <td><button class="btn btn-danger btn-sm" onclick="deleteLineItem({{ item.id }}, '{{ item.description }}')">✕</button></td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr><td colspan="10" style="text-align:center; color:#555; padding: 20px;">No line items yet</td></tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
                 </div>
-            {% endfor %}
-        {% else %}
-            <div class="empty-state">
-                <p style="font-size: 18px; margin-bottom: 15px;">No assemblies yet</p>
-                <p>Click "+ Add Assembly" to start building your estimate</p>
+                <div class="col-chooser-wrap">
+                    <button class="btn-toolbar" id="col-chooser-btn" onclick="toggleColChooser()">⚙ Columns</button>
+                    <div id="col-chooser-panel" class="col-chooser-panel"></div>
+                </div>
             </div>
-        {% endif %}
+            <div class="est-toolbar-right">
+                <a href="/project/{{ project.id }}/report"      class="btn-toolbar">Summary</a>
+                <a href="/project/{{ project.id }}/report/csi"  class="btn-toolbar">CSI Report</a>
+                <a href="/project/{{ project.id }}/estimate/csv" class="btn-toolbar">Export CSV</a>
+                <button class="btn-toolbar btn-toolbar-accent" onclick="openLineItemModal(null)">+ Line Item</button>
+            </div>
+        </div>
+
+        <!-- Estimate table -->
+        <div class="est-table-wrap" id="est-table-wrap">
+            <div class="est-loading" id="est-loading">Loading estimate…</div>
+            <table class="est-table" id="est-table" style="display:none">
+                <colgroup id="est-colgroup"></colgroup>
+                <thead><tr id="est-header-row"></tr></thead>
+                <tbody id="est-tbody"></tbody>
+            </table>
+        </div>
+
     </div>
 
-    <!-- Assembly Modal -->
+    <!-- Context Menu -->
+    <div id="ctx-menu" class="ctx-menu" style="display:none"></div>
+
+    <!-- Edit Project Modal -->
+    <div id="editProjectModal" class="modal">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Edit Project</h2>
+                <span class="close" onclick="closeModal('editProjectModal')">&times;</span>
+            </div>
+            <!-- Tab strip -->
+            <div class="modal-tabs">
+                <button class="modal-tab active" id="ep-tab-details"     onclick="switchEpTab('details')">Project Details</button>
+                <button class="modal-tab"         id="ep-tab-properties" onclick="switchEpTab('properties')">Estimate Properties</button>
+            </div>
+
+            <!-- Pane: Project Details -->
+            <div class="modal-pane active" id="ep-pane-details">
+                <div class="form-group">
+                    <label>Project Name</label>
+                    <input type="text" id="ep-name" />
+                </div>
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label>Project Number</label>
+                        <input type="text" id="ep-number" />
+                    </div>
+                    <div class="form-group"></div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>City</label>
+                        <input type="text" id="ep-city" />
+                    </div>
+                    <div class="form-group">
+                        <label>State</label>
+                        <input type="text" id="ep-state" maxlength="2" style="text-transform:uppercase" />
+                    </div>
+                    <div class="form-group">
+                        <label>Zip Code</label>
+                        <input type="text" id="ep-zip" />
+                    </div>
+                </div>
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label>Project Type</label>
+                        <select id="ep-project-type"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Market Sector</label>
+                        <select id="ep-market-sector"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="ep-description" rows="3"></textarea>
+                </div>
+                <button class="btn" onclick="saveProject()">Save Changes</button>
+            </div>
+
+            <!-- Pane: Estimate Properties (WBS) -->
+            <div class="modal-pane" id="ep-pane-properties">
+                <p style="color:#888;font-size:13px;margin-bottom:18px">
+                    Define WBS codes and other estimate properties for this project.
+                    Values defined here can be assigned to line items to enable grouping and filtering.
+                </p>
+                <div id="wbs-grid" class="wbs-grid">
+                    <div style="color:#555;font-style:italic;font-size:13px;grid-column:span 3;">Loading…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Assembly Modal -->
     <div id="assemblyModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="assemblyModalTitle">Add Assembly</h2>
+                <h2>Edit Assembly</h2>
                 <span class="close" onclick="closeModal('assemblyModal')">&times;</span>
             </div>
-            <form id="assemblyForm" onsubmit="saveAssembly(event, {{ project.id }})">
-                <input type="hidden" id="assemblyEditId" value="">
+            <form id="assemblyForm" onsubmit="saveAssembly(event)">
+                <input type="hidden" id="assemblyEditId">
                 <div class="form-grid-2">
                     <div class="form-group">
                         <label>Assembly Label *</label>
@@ -161,7 +320,7 @@
                     </div>
                     <div class="form-group">
                         <label>Assembly Name *</label>
-                        <input type="text" name="assembly_name" placeholder="e.g., Foundation Excavation" required>
+                        <input type="text" name="assembly_name" placeholder="e.g., Foundation" required>
                     </div>
                 </div>
                 <div class="form-grid-2">
@@ -171,7 +330,7 @@
                     </div>
                     <div class="form-group">
                         <label>Unit</label>
-                        <input type="text" name="unit" placeholder="e.g., LS, SF, CY">
+                        <input type="text" name="unit" placeholder="LS, SF, CY…">
                     </div>
                 </div>
                 <div class="form-grid-2">
@@ -193,14 +352,14 @@
                 </div>
                 <div class="form-group">
                     <label>Description</label>
-                    <textarea name="description" rows="2" placeholder="Optional description..."></textarea>
+                    <textarea name="description" rows="2" placeholder="Optional…"></textarea>
                 </div>
-                <button type="submit" id="assemblySubmitBtn" class="btn" style="width:100%; margin-top:10px;">Add Assembly</button>
+                <button type="submit" class="btn" style="width:100%;margin-top:8px">Save Changes</button>
             </form>
         </div>
     </div>
 
-    <!-- Line Item Modal -->
+    <!-- Add Line Item Modal -->
     <div id="lineItemModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -209,6 +368,12 @@
             </div>
             <form id="lineItemForm" onsubmit="createLineItem(event)">
                 <input type="hidden" id="lineItemAssemblyId">
+                <div class="form-group" id="li-assembly-group">
+                    <label>Assembly (optional)</label>
+                    <select id="li-assembly-select" onchange="document.getElementById('lineItemAssemblyId').value=this.value">
+                        <option value="">— Standalone line item —</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label>Description *</label>
                     <input type="text" name="description" placeholder="e.g., Excavate trench" required>
@@ -220,7 +385,7 @@
                     </div>
                     <div class="form-group">
                         <label>Unit *</label>
-                        <input type="text" name="unit" placeholder="e.g., CY" required>
+                        <input type="text" name="unit" placeholder="CY" required>
                     </div>
                     <div class="form-group">
                         <label>Production Rate (units/hr)</label>
@@ -243,127 +408,857 @@
                 </div>
                 <div class="form-group">
                     <label>Notes</label>
-                    <textarea name="notes" rows="2" placeholder="Optional notes..."></textarea>
+                    <textarea name="notes" rows="2" placeholder="Optional notes…"></textarea>
                 </div>
-                <button type="submit" class="btn" style="width:100%; margin-top:10px;">Add Line Item</button>
+                <button type="submit" class="btn" style="width:100%;margin-top:8px">Add Line Item</button>
             </form>
         </div>
     </div>
 
-    <script id="csi2Data" type="application/json">{{ csi2_json | safe }}</script>
-    <script id="assembliesData" type="application/json">{{ assemblies_json | safe }}</script>
+    {% include 'agentx_panel.html' %}
+
+    <script id="csi2Data"   type="application/json">{{ csi2_json | safe }}</script>
+    <script id="propsData"  type="application/json">{{ props_json | safe }}</script>
+    <script id="projectData" type="application/json">{{ {
+        'id': project.id,
+        'project_name': project.project_name,
+        'project_number': project.project_number or '',
+        'city': project.city or '',
+        'state': project.state or '',
+        'zip_code': project.zip_code or '',
+        'project_type_id': project.project_type_id,
+        'market_sector_id': project.market_sector_id,
+        'description': project.description or ''
+    } | tojson }}</script>
+
     <script>
-        const csi2All = JSON.parse(document.getElementById('csi2Data').textContent);
-        const assembliesData = JSON.parse(document.getElementById('assembliesData').textContent);
+    // ─────────────────────────────────────────────────────────────────
+    // GLOBALS & COLUMN DEFINITIONS
+    // ─────────────────────────────────────────────────────────────────
+    const csi2All     = JSON.parse(document.getElementById('csi2Data').textContent);
+    const allProps    = JSON.parse(document.getElementById('propsData').textContent);
+    const projectData = JSON.parse(document.getElementById('projectData').textContent);
+    const PROJECT_ID  = projectData.id;
+    const LS          = 'proj_' + PROJECT_ID + '_';
 
-        function filterCsi2() {
-            const parentId = parseInt(document.getElementById('asmCsi1').value);
-            const sel = document.getElementById('asmCsi2');
-            sel.innerHTML = '<option value="">— None —</option>';
-            if (!parentId) return;
-            csi2All.filter(s => s.parent === parentId).forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.id;
-                opt.textContent = s.code + ' — ' + s.title;
-                sel.appendChild(opt);
-            });
+    const EST_COLS = [
+        {id:'description',    label:'Description',  defaultOn:true,  always:true,  width:220},
+        {id:'quantity',       label:'Qty',           defaultOn:true,  always:false, width:65},
+        {id:'unit',           label:'Unit',          defaultOn:true,  always:false, width:55},
+        {id:'prod_rate',      label:'Prod Rate',     defaultOn:true,  always:false, width:82},
+        {id:'prod_unit',      label:'Prod Unit',     defaultOn:false, always:false, width:72},
+        {id:'mat_per_unit',   label:'Mat $/Unit',    defaultOn:true,  always:false, width:90},
+        {id:'material_cost',  label:'Material $',    defaultOn:true,  always:false, width:95},
+        {id:'lab_per_hr',     label:'Labor $/Hr',    defaultOn:false, always:false, width:86},
+        {id:'labor_hours',    label:'Labor Hrs',     defaultOn:true,  always:false, width:76},
+        {id:'labor_cost',     label:'Labor $',       defaultOn:true,  always:false, width:90},
+        {id:'equip_per_hr',   label:'Equip $/Hr',    defaultOn:false, always:false, width:86},
+        {id:'equipment_cost', label:'Equipment $',   defaultOn:false, always:false, width:95},
+        {id:'total_cost',     label:'Total $',       defaultOn:true,  always:true,  width:100},
+        {id:'notes',          label:'Notes',         defaultOn:false, always:false, width:160},
+        {id:'csi_division',   label:'CSI Division',  defaultOn:false, always:false, width:145},
+        {id:'csi_section',    label:'CSI Section',   defaultOn:false, always:false, width:145},
+        {id:'wbs_location_1', label:'Location 1',    defaultOn:false, always:false, width:105, wbs:'location_1'},
+        {id:'wbs_location_2', label:'Location 2',    defaultOn:false, always:false, width:105, wbs:'location_2'},
+        {id:'wbs_location_3', label:'Location 3',    defaultOn:false, always:false, width:105, wbs:'location_3'},
+        {id:'wbs_bid_package',label:'Bid Package',   defaultOn:false, always:false, width:115, wbs:'bid_package'},
+        {id:'wbs_custom_1',   label:'Custom 1',      defaultOn:false, always:false, width:100, wbs:'custom_1'},
+        {id:'wbs_custom_2',   label:'Custom 2',      defaultOn:false, always:false, width:100, wbs:'custom_2'},
+        {id:'wbs_custom_3',   label:'Custom 3',      defaultOn:false, always:false, width:100, wbs:'custom_3'},
+        {id:'wbs_custom_4',   label:'Custom 4',      defaultOn:false, always:false, width:100, wbs:'custom_4'},
+    ];
+
+    let estData       = null;
+    let wbsData       = [];
+    let colVisibility = {};
+    let colOrder      = [];
+    let colWidths     = {};
+    let groupBy       = [];   // array of property_type strings, ordered
+    let dragSrcCol    = null;
+    let resizeColId   = null, resizeStartX = 0, resizeStartW = 0;
+
+    // ─── Persistence ─────────────────────────────────────────────────
+    function initColState() {
+        const sv = JSON.parse(localStorage.getItem(LS+'vis')    || 'null');
+        const so = JSON.parse(localStorage.getItem(LS+'order')  || 'null');
+        const sw = JSON.parse(localStorage.getItem(LS+'widths') || 'null');
+        const sg = JSON.parse(localStorage.getItem(LS+'group')  || '[]');
+        EST_COLS.forEach(c => {
+            colVisibility[c.id] = c.always ? true : (sv ? (sv[c.id] ?? c.defaultOn) : c.defaultOn);
+        });
+        const allIds = EST_COLS.map(c => c.id);
+        colOrder = (so && so.length === allIds.length && so.every(id => allIds.includes(id)))
+            ? so : [...allIds];
+        colWidths = {};
+        EST_COLS.forEach(c => { colWidths[c.id] = sw?.[c.id] ?? c.width; });
+        groupBy = Array.isArray(sg) ? sg : [];
+    }
+    function saveColState() {
+        localStorage.setItem(LS+'vis',    JSON.stringify(colVisibility));
+        localStorage.setItem(LS+'order',  JSON.stringify(colOrder));
+        localStorage.setItem(LS+'widths', JSON.stringify(colWidths));
+        localStorage.setItem(LS+'group',  JSON.stringify(groupBy));
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────
+    function esc(s) {
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function fmtCost(n) {
+        return '$' + parseFloat(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    }
+    function fmtNum(n) {
+        const f = parseFloat(n||0);
+        return f === 0 ? '<span class="muted">—</span>' : f.toLocaleString('en-US',{maximumFractionDigits:3});
+    }
+    function getColLabel(col) {
+        if (!col.wbs) return col.label;
+        const prop = wbsData.find(p => p.property_type === col.wbs);
+        return prop ? prop.property_name : col.label;
+    }
+    function getVisibleCols() {
+        return colOrder.map(id => EST_COLS.find(c => c.id === id)).filter(c => c && colVisibility[c.id]);
+    }
+    function updateTotalsBar(data) {
+        const s = data.summary;
+        if (!s) return;
+        const fmt = n => '$' + parseFloat(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        document.getElementById('total-material').textContent  = fmt(s.total_material_cost);
+        document.getElementById('total-labor').textContent     = fmt(s.total_labor_cost);
+        document.getElementById('total-equipment').textContent = fmt(s.total_equipment_cost);
+        document.getElementById('total-cost').textContent      = fmt(s.total_cost);
+    }
+
+    // ─── Data Loading ─────────────────────────────────────────────────
+    async function loadEstimateData() {
+        const r = await fetch('/project/' + PROJECT_ID + '/data');
+        estData = await r.json();
+    }
+    async function refreshTotals() {
+        const r = await fetch('/project/' + PROJECT_ID + '/summary');
+        updateTotalsBar(await r.json());
+    }
+
+    // ─── Table Render ─────────────────────────────────────────────────
+    function renderTable() {
+        const table   = document.getElementById('est-table');
+        const loading = document.getElementById('est-loading');
+        if (!estData) { loading.style.display='block'; table.style.display='none'; return; }
+        loading.style.display = 'none';
+        table.style.display   = 'table';
+        renderColgroup();
+        renderHeader();
+        renderBody();
+    }
+
+    function renderColgroup() {
+        const vis = getVisibleCols();
+        document.getElementById('est-colgroup').innerHTML =
+            vis.map(c => `<col data-col="${c.id}" style="width:${colWidths[c.id]}px">`).join('');
+    }
+
+    function renderHeader() {
+        const vis = getVisibleCols();
+        document.getElementById('est-header-row').innerHTML = vis.map(c => `
+            <th data-col="${c.id}" draggable="true"
+                ondragstart="dragColStart(event,'${c.id}')"
+                ondragover="dragColOver(event,'${c.id}')"
+                ondragleave="dragColLeave(event)"
+                ondrop="dropCol(event,'${c.id}')">
+              <div class="th-inner">
+                <span class="th-label">${esc(getColLabel(c))}</span>
+                <span class="resize-handle"
+                      onmousedown="resizeStart(event,'${c.id}')"
+                      ondragstart="event.stopPropagation()"></span>
+              </div>
+            </th>`).join('');
+    }
+
+    function allLineItems() {
+        const items = [];
+        for (const asm of (estData.assemblies||[])) {
+            for (const it of (asm.line_items||[])) items.push(it);
         }
+        for (const it of (estData.direct_items||[])) items.push(it);
+        return items;
+    }
 
-        // Populate totals bar on load
-        fetch('/project/{{ project.id }}/summary')
-            .then(r => r.json())
-            .then(data => {
-                const s = data.summary;
-                const fmt = n => '$' + n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                document.getElementById('total-material').textContent = fmt(s.total_material_cost);
-                document.getElementById('total-labor').textContent = fmt(s.total_labor_cost);
-                document.getElementById('total-equipment').textContent = fmt(s.total_equipment_cost);
-                document.getElementById('total-cost').textContent = fmt(s.total_cost);
-            });
+    function renderBody() {
+        const vis   = getVisibleCols();
+        const nCols = vis.length;
+        const grand = {mat:0,lab:0,equ:0,hrs:0,tot:0};
+        let rows = '';
 
-        function openAssemblyModal() {
-            // Reset to create mode
-            document.getElementById('assemblyEditId').value = '';
-            document.getElementById('assemblyModalTitle').textContent = 'Add Assembly';
-            document.getElementById('assemblySubmitBtn').textContent = 'Add Assembly';
-            document.getElementById('assemblyForm').reset();
-            document.getElementById('asmCsi1').value = '';
-            document.getElementById('asmCsi2').innerHTML = '<option value="">— Select Division first —</option>';
-            document.getElementById('assemblyModal').style.display = 'block';
-        }
-
-        function openEditAssemblyModal(assemblyId) {
-            const assembly = assembliesData.find(a => a.id === assemblyId);
-            if (!assembly) return;
-
-            // Switch modal to edit mode
-            document.getElementById('assemblyEditId').value = assembly.id;
-            document.getElementById('assemblyModalTitle').textContent = 'Edit Assembly';
-            document.getElementById('assemblySubmitBtn').textContent = 'Save Changes';
-
-            // Populate fields
-            document.querySelector('#assemblyForm [name="assembly_label"]').value = assembly.label;
-            document.querySelector('#assemblyForm [name="assembly_name"]').value = assembly.name;
-            document.querySelector('#assemblyForm [name="quantity"]').value = assembly.quantity || '';
-            document.querySelector('#assemblyForm [name="unit"]').value = assembly.unit || '';
-            document.querySelector('#assemblyForm [name="description"]').value = assembly.description || '';
-
-            // Set CSI dropdowns
-            document.getElementById('asmCsi1').value = assembly.csi_level_1_id || '';
-            filterCsi2();
-            if (assembly.csi_level_2_id) {
-                document.getElementById('asmCsi2').value = assembly.csi_level_2_id;
+        if (groupBy.length === 0) {
+            for (const asm of (estData.assemblies || [])) {
+                const sub = calcSubtotals(asm.line_items || []);
+                addToGrand(grand, sub);
+                rows += renderAsmRow(asm, sub, nCols);
+                for (const it of (asm.line_items || [])) rows += renderLiRow(it, vis);
             }
-
-            document.getElementById('assemblyModal').style.display = 'block';
+            const direct = estData.direct_items || [];
+            if (direct.length) {
+                const sub = calcSubtotals(direct);
+                addToGrand(grand, sub);
+                rows += `<tr class="asm-row"><td colspan="${nCols}"><div class="asm-inner">
+                    <span class="asm-row-label" style="background:#3a4a5a">—</span>
+                    <span class="asm-row-name">Standalone Line Items</span>
+                    <span class="asm-row-subtotal">${fmtCost(sub.tot)}</span>
+                    <span class="asm-row-actions">
+                        <button class="btn-toolbar btn-toolbar-accent" style="font-size:11px" onclick="openLineItemModal(null)">+ Item</button>
+                    </span>
+                </div></td></tr>`;
+                for (const it of direct) rows += renderLiRow(it, vis);
+            }
+        } else {
+            const items = allLineItems();
+            const grandSub = calcSubtotals(items);
+            addToGrand(grand, grandSub);
+            rows += renderBodyGrouped(vis, nCols, items, 0, 0);
         }
 
-        function openLineItemModal(assemblyId) {
-            document.getElementById('lineItemAssemblyId').value = assemblyId;
-            document.getElementById('lineItemModal').style.display = 'block';
-        }
+        rows += renderTotalRow(vis, grand);
+        document.getElementById('est-tbody').innerHTML = rows;
+    }
 
-        function closeModal(id) {
-            document.getElementById(id).style.display = 'none';
+    function calcSubtotals(items) {
+        const s = {mat:0,lab:0,equ:0,hrs:0,tot:0};
+        for (const it of items) {
+            s.mat += parseFloat(it.material_cost  || 0);
+            s.lab += parseFloat(it.labor_cost     || 0);
+            s.equ += parseFloat(it.equipment_cost || 0);
+            s.hrs += parseFloat(it.labor_hours    || 0);
+            s.tot += parseFloat(it.total_cost     || 0);
         }
+        return s;
+    }
+    function addToGrand(grand, sub) {
+        for (const k of Object.keys(grand)) grand[k] += sub[k];
+    }
 
-        // Close on backdrop click
-        window.onclick = function(e) {
-            if (e.target.classList.contains('modal')) closeModal(e.target.id);
+    function renderAsmRow(asm, sub, nCols) {
+        return `<tr class="asm-row" data-asm-id="${asm.id}">
+            <td colspan="${nCols}"><div class="asm-inner">
+                <span class="asm-row-label">${esc(asm.assembly_label)}</span>
+                <span class="asm-row-name">${esc(asm.assembly_name)}</span>
+                <span class="asm-row-subtotal">${fmtCost(sub.tot)}</span>
+                <span class="asm-row-actions">
+                    <button class="btn-toolbar" style="font-size:11px" onclick="openEditAssemblyModal(${asm.id})">Edit</button>
+                    <button class="btn-toolbar btn-toolbar-accent" style="font-size:11px" onclick="openLineItemModal(${asm.id})">+ Item</button>
+                    <button class="btn-toolbar" style="font-size:11px;color:#e94560;border-color:#e94560" onclick="deleteAssembly(${asm.id},${JSON.stringify(asm.assembly_name)})">✕</button>
+                </span>
+            </div></td>
+        </tr>`;
+    }
+
+    function renderBodyGrouped(vis, nCols, items, dimIndex, depth) {
+        if (dimIndex >= groupBy.length) {
+            return items.map(it => renderLiRow(it, vis)).join('');
+        }
+        const propType = groupBy[dimIndex];
+        const prop = wbsData.find(p => p.property_type === propType);
+        if (!prop) return renderBodyGrouped(vis, nCols, items, dimIndex + 1, depth);
+
+        const valMap = Object.fromEntries(prop.values.map(v => [v.id, v]));
+        const groups = new Map();
+        for (const it of items) {
+            const wv = it.wbs && it.wbs[propType];
+            const key = wv ? wv.wbs_value_id : null;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(it);
+        }
+        const named = [...groups.keys()].filter(k => k !== null)
+            .sort((a,b) => prop.values.findIndex(v=>v.id===a) - prop.values.findIndex(v=>v.id===b));
+        const keys = groups.has(null) ? [...named, null] : named;
+
+        const indent = 12 + depth * 18;
+        const fontSize = Math.max(11, 13 - depth);
+        let rows = '';
+        for (const key of keys) {
+            const grpItems = groups.get(key);
+            const sub = calcSubtotals(grpItems);
+            const name = key ? (valMap[key]?.value_name || 'Unknown') : '(Unassigned)';
+            const code = key ? (valMap[key]?.value_code || '') : '';
+            const dimLabel = groupBy.length > 1
+                ? `<span style="color:#555;font-size:10px;margin-left:6px">${esc(prop.property_name)}</span>` : '';
+            rows += `<tr class="wbs-group-row"><td colspan="${nCols}">
+                <div class="wbs-group-inner" style="padding-left:${indent}px">
+                    ${code ? `<span class="wbs-group-badge">${esc(code)}</span>` : ''}
+                    <span class="wbs-group-name" style="font-size:${fontSize}px">${esc(name)}</span>
+                    ${dimLabel}
+                    <span class="wbs-group-subtotal">${fmtCost(sub.tot)}</span>
+                </div>
+            </td></tr>`;
+            rows += renderBodyGrouped(vis, nCols, grpItems, dimIndex + 1, depth + 1);
+        }
+        return rows;
+    }
+
+    function renderLiRow(it, vis) {
+        const cells = vis.map(c => {
+            const [val, cls] = getCellContent(it, c);
+            return `<td class="${cls}">${val}</td>`;
+        }).join('');
+        return `<tr class="li-row" data-li-id="${it.id}" oncontextmenu="showCtxMenu(event,${it.id})">${cells}</tr>`;
+    }
+
+    function cellInp(it, field, val, inputType) {
+        const t = inputType || 'text';
+        const ta = t === 'number' ? 'type="number" step="any" min="0"' : '';
+        return `<input class="cell-inp" ${ta} data-li-id="${it.id}" data-field="${field}"
+                       value="${esc(String(val == null ? '' : val))}"
+                       onblur="saveCellEdit(this)" onkeydown="cellKeyDown(event,this)">`;
+    }
+
+    function getCellContent(it, col) {
+        switch (col.id) {
+            case 'description':    return [cellInp(it, 'description', it.description), ''];
+            case 'quantity':       return [cellInp(it, 'quantity', it.quantity || '', 'number'), 'num'];
+            case 'unit':           return [cellInp(it, 'unit', it.unit || ''), 'muted'];
+            case 'prod_rate':      return [cellInp(it, 'production_rate', it.production_rate || '', 'number'), 'num'];
+            case 'prod_unit':      return [esc(it.production_unit||''), 'muted'];
+            case 'mat_per_unit':   return [cellInp(it, 'material_cost_per_unit', it.material_cost_per_unit || '', 'number'), 'num'];
+            case 'material_cost':  return [fmtCost(it.material_cost), 'num'];
+            case 'lab_per_hr':     return [cellInp(it, 'labor_cost_per_hour', it.labor_cost_per_hour || '', 'number'), 'num'];
+            case 'labor_hours':    return [parseFloat(it.labor_hours||0) > 0 ? fmtNum(it.labor_hours) : '<span class="muted">—</span>', 'num'];
+            case 'labor_cost':     return [fmtCost(it.labor_cost), 'num'];
+            case 'equip_per_hr':   return [cellInp(it, 'equipment_cost_per_hour', it.equipment_cost_per_hour || '', 'number'), 'num'];
+            case 'equipment_cost': return [fmtCost(it.equipment_cost), 'num'];
+            case 'total_cost':     return [fmtCost(it.total_cost), 'cost-red'];
+            case 'notes':          return [cellInp(it, 'notes', it.notes || ''), 'muted'];
+            case 'csi_division':   return [esc(it.csi_division||''), 'muted'];
+            case 'csi_section':    return [esc(it.csi_section||''), 'muted'];
+            default:
+                if (col.wbs) {
+                    const wv = it.wbs && it.wbs[col.wbs];
+                    if (wv) return [`${esc(wv.value_name)}${wv.value_code ? ` <span class="ctx-sub-code">[${esc(wv.value_code)}]</span>` : ''}`, ''];
+                    return ['<span class="muted">—</span>', ''];
+                }
+                return ['', ''];
+        }
+    }
+
+    function renderTotalRow(vis, grand) {
+        const cells = vis.map((c, i) => {
+            if (i === 0) return `<td class="total-label">ESTIMATE TOTAL</td>`;
+            switch (c.id) {
+                case 'material_cost':  return `<td class="total-val">${fmtCost(grand.mat)}</td>`;
+                case 'labor_cost':     return `<td class="total-val">${fmtCost(grand.lab)}</td>`;
+                case 'labor_hours':    return `<td class="total-val">${parseFloat(grand.hrs).toLocaleString('en-US',{maximumFractionDigits:1})}</td>`;
+                case 'equipment_cost': return `<td class="total-val">${fmtCost(grand.equ)}</td>`;
+                case 'total_cost':     return `<td class="total-val">${fmtCost(grand.tot)}</td>`;
+                default:               return '<td></td>';
+            }
+        }).join('');
+        return `<tr class="total-row">${cells}</tr>`;
+    }
+
+    // ─── Column Chooser ───────────────────────────────────────────────
+    function toggleColChooser() {
+        const panel = document.getElementById('col-chooser-panel');
+        const isOpen = panel.classList.toggle('open');
+        if (isOpen) renderColChooser();
+    }
+    function renderColChooser() {
+        let html = '', lastWasWbs = false;
+        for (const c of EST_COLS) {
+            const isWbs = !!c.wbs;
+            if (isWbs && !lastWasWbs) html += '<div class="col-chooser-divider"></div>';
+            lastWasWbs = isWbs;
+            const label   = getColLabel(c);
+            const checked = colVisibility[c.id] ? 'checked' : '';
+            const locked  = c.always ? ' locked' : '';
+            const disabled = c.always ? ' disabled' : '';
+            html += `<label class="col-chooser-item${locked}">
+                <input type="checkbox" ${checked}${disabled} onchange="toggleColVis('${c.id}',this.checked)">
+                ${esc(label)}
+            </label>`;
+        }
+        document.getElementById('col-chooser-panel').innerHTML = html;
+    }
+    function toggleColVis(colId, visible) {
+        colVisibility[colId] = visible;
+        saveColState();
+        renderTable();
+    }
+    document.addEventListener('click', e => {
+        const btn   = document.getElementById('col-chooser-btn');
+        const panel = document.getElementById('col-chooser-panel');
+        if (btn && !btn.contains(e.target) && !panel.contains(e.target))
+            panel.classList.remove('open');
+    });
+
+    // ─── Drag-to-Reorder Columns ──────────────────────────────────────
+    function dragColStart(e, colId) {
+        dragSrcCol = colId;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', colId);
+    }
+    function dragColOver(e, colId) {
+        if (dragSrcCol && dragSrcCol !== colId) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('drag-over');
+        }
+    }
+    function dragColLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+    function dropCol(e, targetId) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        if (!dragSrcCol || dragSrcCol === targetId) return;
+        const si = colOrder.indexOf(dragSrcCol);
+        const ti = colOrder.indexOf(targetId);
+        if (si < 0 || ti < 0) return;
+        colOrder.splice(si, 1);
+        colOrder.splice(ti, 0, dragSrcCol);
+        dragSrcCol = null;
+        saveColState();
+        renderTable();
+    }
+
+    // ─── Column Resize ────────────────────────────────────────────────
+    function resizeStart(e, colId) {
+        e.stopPropagation();
+        e.preventDefault();
+        resizeColId  = colId;
+        resizeStartX = e.clientX;
+        resizeStartW = colWidths[colId] || EST_COLS.find(c => c.id === colId)?.width || 100;
+        e.currentTarget.classList.add('active');
+        document.addEventListener('mousemove', resizeMove);
+        document.addEventListener('mouseup',   resizeEnd);
+    }
+    function resizeMove(e) {
+        if (!resizeColId) return;
+        const newW = Math.max(50, resizeStartW + (e.clientX - resizeStartX));
+        colWidths[resizeColId] = newW;
+        const col = document.querySelector(`#est-colgroup col[data-col="${resizeColId}"]`);
+        if (col) col.style.width = newW + 'px';
+    }
+    function resizeEnd() {
+        if (!resizeColId) return;
+        saveColState();
+        document.querySelectorAll('.resize-handle.active').forEach(h => h.classList.remove('active'));
+        resizeColId = null;
+        document.removeEventListener('mousemove', resizeMove);
+        document.removeEventListener('mouseup',   resizeEnd);
+    }
+
+    // ─── Group By (multi-select) ──────────────────────────────────────
+    function toggleGroupByPanel() {
+        const panel = document.getElementById('groupby-panel');
+        const isOpen = panel.classList.toggle('open');
+        if (isOpen) renderGroupByPanel();
+    }
+    function renderGroupByPanel() {
+        const active = wbsData.filter(p => p.values.length > 0);
+        let html = '';
+        if (!active.length) {
+            html = '<div style="color:#555;font-size:12px;padding:8px 6px;">No WBS values — define them in Edit Project</div>';
+        } else {
+            for (const prop of active) {
+                const checked = groupBy.includes(prop.property_type) ? 'checked' : '';
+                html += `<label class="col-chooser-item">
+                    <input type="checkbox" ${checked} onchange="toggleGroupByDim('${prop.property_type}',this.checked)">
+                    ${esc(prop.property_name)}
+                </label>`;
+            }
+        }
+        if (groupBy.length > 0) {
+            html += `<div class="col-chooser-divider"></div>
+                     <div class="col-chooser-item" style="color:#e94560;cursor:pointer" onclick="clearGroupBy()">✕ Clear all</div>`;
+        }
+        document.getElementById('groupby-panel').innerHTML = html;
+    }
+    function toggleGroupByDim(propType, checked) {
+        if (checked) { if (!groupBy.includes(propType)) groupBy.push(propType); }
+        else { groupBy = groupBy.filter(g => g !== propType); }
+        saveColState();
+        updateGroupByBtn();
+        renderTable();
+    }
+    function clearGroupBy() {
+        groupBy = [];
+        saveColState();
+        updateGroupByBtn();
+        renderGroupByPanel();
+        renderTable();
+    }
+    function updateGroupByBtn() {
+        const btn = document.getElementById('groupby-btn');
+        if (!btn) return;
+        if (groupBy.length === 0) { btn.textContent = 'Assembly'; return; }
+        btn.textContent = groupBy.map(gt => {
+            const p = wbsData.find(p => p.property_type === gt);
+            return p ? p.property_name : gt;
+        }).join(' → ');
+    }
+    document.addEventListener('click', e => {
+        const gbBtn   = document.getElementById('groupby-btn');
+        const gbPanel = document.getElementById('groupby-panel');
+        if (gbBtn && !gbBtn.contains(e.target) && gbPanel && !gbPanel.contains(e.target))
+            gbPanel.classList.remove('open');
+    });
+
+    // ─── Inline Cell Editing ──────────────────────────────────────────
+    function findLineItem(liId) {
+        for (const asm of (estData?.assemblies||[])) {
+            for (const it of (asm.line_items||[])) { if (it.id === liId) return it; }
+        }
+        for (const it of (estData?.direct_items||[])) { if (it.id === liId) return it; }
+        return null;
+    }
+    function refreshRow(liId) {
+        const vis = getVisibleCols();
+        const it = findLineItem(liId);
+        if (!it) return;
+        const tr = document.querySelector(`tr.li-row[data-li-id="${liId}"]`);
+        if (!tr || tr.contains(document.activeElement)) return;
+        tr.innerHTML = vis.map(c => {
+            const [val, cls] = getCellContent(it, c);
+            return `<td class="${cls}">${val}</td>`;
+        }).join('');
+    }
+    async function saveCellEdit(input) {
+        const liId  = parseInt(input.dataset.liId);
+        const field = input.dataset.field;
+        const val   = input.value;
+        const it    = findLineItem(liId);
+        if (!it) return;
+        // skip if unchanged
+        const orig = String(it[field] == null ? '' : it[field]);
+        if (val === orig) return;
+        // optimistic update
+        it[field] = (input.type === 'number') ? (parseFloat(val) || 0) : val;
+        const r = await fetch('/lineitem/' + liId + '/update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({[field]: val}),
+        });
+        const d = await r.json();
+        if (d.success) {
+            it.labor_hours    = d.labor_hours;
+            it.material_cost  = d.material_cost;
+            it.labor_cost     = d.labor_cost;
+            it.equipment_cost = d.equipment_cost;
+            it.total_cost     = d.total_cost;
+            refreshRow(liId);
+            refreshTotals();
+        }
+    }
+    function cellKeyDown(e, input) {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') {
+            const it = findLineItem(parseInt(input.dataset.liId));
+            if (it) input.value = it[input.dataset.field] == null ? '' : it[input.dataset.field];
+            input.blur();
+        }
+    }
+
+    // ─── Context Menu ─────────────────────────────────────────────────
+    function showCtxMenu(e, lineItemId) {
+        e.preventDefault();
+        hideCtxMenu();
+        const active = wbsData.filter(p => p.values.length > 0);
+        let html = '';
+        for (const prop of active) {
+            const subs = prop.values.map(v =>
+                `<div class="ctx-sub-item" onclick="assignWBS(${lineItemId},${prop.id},${v.id})">
+                    ${esc(v.value_name)}
+                    ${v.value_code ? `<span class="ctx-sub-code">[${esc(v.value_code)}]</span>` : ''}
+                 </div>`
+            ).join('');
+            html += `<div class="ctx-item" style="position:relative">
+                Assign: ${esc(prop.property_name)} ▶
+                <div class="ctx-sub">${subs}</div>
+            </div>`;
+        }
+        html += `<div class="ctx-sep"></div>
+                 <div class="ctx-item ctx-item-danger" onclick="deleteLineItem(${lineItemId},'this line item')">✕ Delete Line Item</div>`;
+        const menu = document.getElementById('ctx-menu');
+        menu.innerHTML = html;
+        menu.style.display = 'block';
+        menu.style.left = Math.min(e.clientX, window.innerWidth  - 220) + 'px';
+        menu.style.top  = Math.min(e.clientY, window.innerHeight - 200) + 'px';
+    }
+    function hideCtxMenu() { document.getElementById('ctx-menu').style.display = 'none'; }
+    document.addEventListener('click',       hideCtxMenu);
+    document.addEventListener('contextmenu', e => { if (!e.target.closest('.li-row')) hideCtxMenu(); });
+
+    async function assignWBS(lineItemId, propId, valueId) {
+        hideCtxMenu();
+        await fetch('/line-item/' + lineItemId + '/wbs', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({wbs_property_id: propId, wbs_value_id: valueId}),
+        });
+        await loadEstimateData();
+        renderTable();
+    }
+
+    // ─── Assembly / Line Item Modals ──────────────────────────────────
+    function filterCsi2() {
+        const parentId = parseInt(document.getElementById('asmCsi1').value);
+        const sel = document.getElementById('asmCsi2');
+        sel.innerHTML = '<option value="">— None —</option>';
+        if (!parentId) return;
+        csi2All.filter(s => s.parent === parentId).forEach(s => {
+            const o = document.createElement('option');
+            o.value = s.id; o.textContent = s.code + ' — ' + s.title;
+            sel.appendChild(o);
+        });
+    }
+
+    function openEditAssemblyModal(assemblyId) {
+        const asm = estData?.assemblies?.find(a => a.id === assemblyId);
+        if (!asm) return;
+        document.getElementById('assemblyEditId').value = asm.id;
+        document.querySelector('#assemblyForm [name="assembly_label"]').value = asm.assembly_label || '';
+        document.querySelector('#assemblyForm [name="assembly_name"]').value  = asm.assembly_name  || '';
+        document.querySelector('#assemblyForm [name="quantity"]').value       = asm.quantity || '';
+        document.querySelector('#assemblyForm [name="unit"]').value           = asm.unit     || '';
+        document.querySelector('#assemblyForm [name="description"]').value    = asm.description || '';
+        document.getElementById('asmCsi1').value = asm.csi_level_1_id || '';
+        filterCsi2();
+        if (asm.csi_level_2_id) document.getElementById('asmCsi2').value = asm.csi_level_2_id;
+        document.getElementById('assemblyModal').style.display = 'block';
+    }
+
+    function openLineItemModal(assemblyId) {
+        // Populate assembly dropdown
+        const sel = document.getElementById('li-assembly-select');
+        sel.innerHTML = '<option value="">— Standalone line item —</option>';
+        for (const asm of (estData?.assemblies || [])) {
+            const o = document.createElement('option');
+            o.value = asm.id;
+            o.textContent = asm.assembly_label + ' — ' + asm.assembly_name;
+            if (asm.id === assemblyId) o.selected = true;
+            sel.appendChild(o);
+        }
+        document.getElementById('lineItemAssemblyId').value = assemblyId || '';
+        sel.value = assemblyId || '';
+        document.getElementById('lineItemForm').reset();
+        document.getElementById('lineItemAssemblyId').value = assemblyId || '';
+        sel.value = assemblyId || '';
+        document.getElementById('lineItemModal').style.display = 'block';
+    }
+
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    window.onclick = function(e) { if (e.target.classList.contains('modal')) closeModal(e.target.id); };
+
+    async function saveAssembly(event) {
+        event.preventDefault();
+        const editId = document.getElementById('assemblyEditId').value;
+        const r = await fetch('/assembly/' + editId + '/update', { method:'POST', body: new FormData(event.target) });
+        if ((await r.json()).success) {
+            closeModal('assemblyModal');
+            await loadEstimateData();
+            renderTable();
+        }
+    }
+
+    async function createLineItem(event) {
+        event.preventDefault();
+        const assemblyId = document.getElementById('lineItemAssemblyId').value;
+        const url = assemblyId
+            ? '/assembly/' + assemblyId + '/lineitem/new'
+            : '/project/' + PROJECT_ID + '/lineitem/new';
+        const r = await fetch(url, { method:'POST', body: new FormData(event.target) });
+        if ((await r.json()).success) {
+            closeModal('lineItemModal');
+            await loadEstimateData();
+            renderTable();
+            refreshTotals();
+        }
+    }
+
+    async function deleteLineItem(id, description) {
+        if (!confirm('Delete line item "' + description + '"?')) return;
+        hideCtxMenu();
+        await fetch('/lineitem/' + id + '/delete', { method:'POST' });
+        await loadEstimateData();
+        renderTable();
+        refreshTotals();
+    }
+
+    async function deleteAssembly(id, name) {
+        if (!confirm('Delete assembly "' + name + '" and ALL its line items?')) return;
+        await fetch('/assembly/' + id + '/delete', { method:'POST' });
+        await loadEstimateData();
+        renderTable();
+        refreshTotals();
+    }
+
+    // ─── Edit Project ─────────────────────────────────────────────────
+    function populateEpDropdown(elId, category, selectedId) {
+        const sel = document.getElementById(elId);
+        sel.innerHTML = '<option value="">— Select —</option>';
+        allProps.filter(p => p.category === category).forEach(p => {
+            const o = document.createElement('option');
+            o.value = p.id; o.textContent = p.name;
+            if (p.id == selectedId) o.selected = true;
+            sel.appendChild(o);
+        });
+    }
+    function switchEpTab(tab) {
+        ['details', 'properties'].forEach(t => {
+            document.getElementById('ep-tab-' + t).classList.toggle('active', t === tab);
+            document.getElementById('ep-pane-' + t).classList.toggle('active', t === tab);
+        });
+    }
+    function openEditProjectModal(tab) {
+        document.getElementById('ep-name').value        = projectData.project_name;
+        document.getElementById('ep-number').value      = projectData.project_number;
+        document.getElementById('ep-city').value        = projectData.city;
+        document.getElementById('ep-state').value       = projectData.state;
+        document.getElementById('ep-zip').value         = projectData.zip_code;
+        document.getElementById('ep-description').value = projectData.description;
+        populateEpDropdown('ep-project-type',  'project_type',  projectData.project_type_id);
+        populateEpDropdown('ep-market-sector', 'market_sector', projectData.market_sector_id);
+        switchEpTab(tab || 'details');
+        document.getElementById('editProjectModal').style.display = 'block';
+        wbsLoad(); // refresh WBS grid whenever modal opens
+    }
+    function saveProject() {
+        const payload = {
+            project_name:     document.getElementById('ep-name').value.trim(),
+            project_number:   document.getElementById('ep-number').value.trim(),
+            city:             document.getElementById('ep-city').value.trim(),
+            state:            document.getElementById('ep-state').value.trim(),
+            zip_code:         document.getElementById('ep-zip').value.trim(),
+            project_type_id:  document.getElementById('ep-project-type').value  || null,
+            market_sector_id: document.getElementById('ep-market-sector').value || null,
+            description:      document.getElementById('ep-description').value.trim(),
         };
+        fetch('/project/' + PROJECT_ID + '/update', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        }).then(r => r.json()).then(d => { if (d.success) window.location.reload(); });
+    }
 
-        function saveAssembly(event, projectId) {
-            event.preventDefault();
-            const editId = document.getElementById('assemblyEditId').value;
-            const url = editId
-                ? '/assembly/' + editId + '/update'
-                : '/project/' + projectId + '/assembly/new';
-            fetch(url, { method: 'POST', body: new FormData(event.target) })
-                .then(r => r.json())
-                .then(data => { if (data.success) window.location.reload(); });
+    // ─── WBS / Estimate Properties ────────────────────────────────────
+    const WBS_PROJECT_ID = PROJECT_ID;
+    function _escHtmlWbs(str) {
+        return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    async function wbsInit() {
+        await fetch('/project/' + WBS_PROJECT_ID + '/wbs/initialize', { method:'POST' });
+        await wbsLoad();
+    }
+    async function wbsLoad() {
+        const r = await fetch('/project/' + WBS_PROJECT_ID + '/wbs');
+        const d = await r.json();
+        if (d.success) { wbsData = d.properties; renderWBS(); updateGroupByBtn(); }
+    }
+    function renderWBS() {
+        const grid = document.getElementById('wbs-grid');
+        if (!wbsData.length) {
+            grid.innerHTML = '<div style="color:#555;font-style:italic;font-size:13px;grid-column:span 3">No WBS properties found.</div>';
+            return;
         }
+        grid.innerHTML = wbsData.map(renderWBSCard).join('');
+    }
+    function renderWBSCard(prop) {
+        const badge = prop.is_template
+            ? '<span class="wbs-badge-template">TEMPLATE</span>'
+            : '<span class="wbs-badge-custom">CUSTOM</span>';
+        const isDefaultName = /^Custom \d+$/.test(prop.property_name);
+        const titleHtml = prop.is_custom
+            ? `<input class="wbs-name-input" type="text" value="${_escHtmlWbs(prop.property_name)}"
+                   data-prop-id="${prop.id}" data-prop-type="${_escHtmlWbs(prop.property_type)}"
+                   placeholder="Name this property…"
+                   onblur="wbsRenameProperty(this)" onkeydown="if(event.key==='Enter')this.blur()">`
+            : `<span class="wbs-card-title">${_escHtmlWbs(prop.property_name)}</span>`;
+        const valueRows = prop.values.length
+            ? prop.values.map(v => `<li class="wbs-value-item">
+                <span class="wbs-value-name">${_escHtmlWbs(v.value_name)}</span>
+                ${v.value_code ? `<span class="wbs-value-code">${_escHtmlWbs(v.value_code)}</span>` : ''}
+                <button class="wbs-value-del" onclick="wbsDeleteValue(${v.id},${prop.id})" title="Remove">✕</button>
+              </li>`).join('')
+            : `<li><div class="wbs-empty-hint">No values yet</div></li>`;
+        const placeholder = prop.is_custom && isDefaultName
+            ? `<div class="wbs-custom-placeholder">Click the name above to rename, then add values below</div>` : '';
+        return `<div class="wbs-card" id="wbs-card-${prop.id}">
+            <div class="wbs-card-header"><div style="flex:1;min-width:0">${titleHtml}</div>${badge}</div>
+            ${placeholder}
+            <ul class="wbs-value-list">${valueRows}</ul>
+            <button class="btn-wbs-add" onclick="wbsToggleAddForm(${prop.id})">+ Add Value</button>
+            <div class="wbs-add-form" id="wbs-add-form-${prop.id}">
+                <div class="wbs-add-row">
+                    <input class="inp-name" type="text" id="wbs-inp-name-${prop.id}" placeholder="Value name *" />
+                    <input class="inp-code" type="text" id="wbs-inp-code-${prop.id}" placeholder="Code (opt)" maxlength="20" />
+                    <button class="btn-wbs-add" onclick="wbsSaveValue(${prop.id})">Save</button>
+                    <button class="btn-wbs-cancel" onclick="wbsToggleAddForm(${prop.id})">Cancel</button>
+                </div>
+            </div>
+        </div>`;
+    }
+    function wbsToggleAddForm(propId) {
+        const form = document.getElementById('wbs-add-form-' + propId);
+        const open = form.classList.toggle('open');
+        if (open) document.getElementById('wbs-inp-name-' + propId).focus();
+    }
+    async function wbsSaveValue(propId) {
+        const nameEl = document.getElementById('wbs-inp-name-' + propId);
+        const codeEl = document.getElementById('wbs-inp-code-' + propId);
+        const name   = nameEl.value.trim();
+        if (!name) { nameEl.style.borderColor = '#e94560'; nameEl.focus(); return; }
+        nameEl.style.borderColor = '';
+        const r = await fetch('/project/' + WBS_PROJECT_ID + '/wbs/value', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({wbs_property_id: propId, value_name: name, value_code: codeEl.value.trim() || null}),
+        });
+        if ((await r.json()).success) {
+            nameEl.value = ''; codeEl.value = '';
+            wbsToggleAddForm(propId);
+            await wbsLoad();
+            renderTable(); // refresh col chooser labels
+        }
+    }
+    async function wbsDeleteValue(valueId) {
+        if (!confirm('Remove this value? Line items assigned to it will lose this WBS tag.')) return;
+        const r = await fetch('/project/' + WBS_PROJECT_ID + '/wbs/value/' + valueId, { method:'DELETE' });
+        if ((await r.json()).success) { await wbsLoad(); renderTable(); }
+    }
+    async function wbsRenameProperty(input) {
+        const propId   = input.dataset.propId;
+        const propType = input.dataset.propType;
+        const newName  = input.value.trim();
+        if (!newName) return;
+        const r = await fetch('/project/' + WBS_PROJECT_ID + '/wbs/property', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({property_type: propType, property_name: newName}),
+        });
+        const d = await r.json();
+        if (d.success) {
+            const prop = wbsData.find(p => p.id == propId);
+            if (prop) prop.property_name = newName;
+            updateGroupByBtn();
+            renderColChooser();
+        }
+    }
 
-        function createLineItem(event) {
-            event.preventDefault();
-            const assemblyId = document.getElementById('lineItemAssemblyId').value;
-            fetch('/assembly/' + assemblyId + '/lineitem/new', { method: 'POST', body: new FormData(event.target) })
-                .then(r => r.json())
-                .then(data => { if (data.success) window.location.reload(); });
-        }
+    // ─── AgentX hook ──────────────────────────────────────────────────
+    window.agentXRefresh = async function(data) {
+        const t = data.totals || {};
+        document.getElementById('total-material').textContent  = fmtCost(t.total_material);
+        document.getElementById('total-labor').textContent     = fmtCost(t.total_labor);
+        document.getElementById('total-equipment').textContent = fmtCost(t.total_equipment);
+        document.getElementById('total-cost').textContent      = fmtCost(t.total_cost);
+        await loadEstimateData();
+        renderTable();
+    };
 
-        function deleteLineItem(id, description) {
-            if (!confirm('Delete line item "' + description + '"?\n\nThis cannot be undone.')) return;
-            fetch('/lineitem/' + id + '/delete', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => { if (data.success) window.location.reload(); });
-        }
-
-        function deleteAssembly(id, name) {
-            if (!confirm('Delete assembly "' + name + '" and ALL its line items?\n\nThis cannot be undone.')) return;
-            fetch('/assembly/' + id + '/delete', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => { if (data.success) window.location.reload(); });
-        }
+    // ─── Page Init ────────────────────────────────────────────────────
+    async function pageInit() {
+        await wbsInit();           // POST initialize → GET wbs → wbsData populated
+        await loadEstimateData();  // GET /project/<id>/data → estData populated
+        initColState();
+        updateGroupByBtn();
+        renderTable();
+        renderColChooser();
+        refreshTotals();
+    }
+    pageInit();
     </script>
 </body>
 </html>

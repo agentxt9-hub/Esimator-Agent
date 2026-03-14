@@ -1,66 +1,161 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>New Project - Construction Estimator</title>
+    <title>New Project — Construction Estimator</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
-        .container { max-width: 600px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
-        h1 { color: #e94560; margin-bottom: 10px; }
-        .subtitle { color: #888; margin-bottom: 30px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; color: #ccc; font-weight: bold; font-size: 14px; }
-        input, textarea { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0f3460; color: #eee; font-size: 14px; }
-        input:focus, textarea:focus { outline: none; border-color: #e94560; }
-        textarea { resize: vertical; min-height: 100px; }
-        .btn { padding: 12px 24px; background: #e94560; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .container { max-width: 640px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
+        h1 { color: #e94560; margin-bottom: 6px; }
+        .subtitle { color: #888; margin-bottom: 28px; font-size: 13px; }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 6px; color: #aaa; font-weight: bold; font-size: 12px; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0f3460; color: #eee; font-size: 13px; font-family: Arial, sans-serif; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
+        select option { background: #0d1b2a; }
+        textarea { resize: vertical; min-height: 80px; }
+        .btn { padding: 10px 22px; background: #e94560; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif; }
         .btn:hover { background: #c73652; }
-        .btn-secondary { background: #0f3460; margin-left: 10px; text-decoration: none; display: inline-block; padding: 12px 24px; border-radius: 4px; color: white; }
+        .btn-secondary { background: #0f3460; margin-left: 10px; text-decoration: none; display: inline-block; padding: 10px 22px; border-radius: 4px; color: white; font-size: 14px; }
         .btn-secondary:hover { background: #1a4a7a; }
-        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
+        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 13px; }
         .breadcrumb a { color: #e94560; text-decoration: none; }
+        .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .fg3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
+        .section-label { color: #888; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 12px; padding-top: 14px; border-top: 1px solid #0f3460; }
+        .add-new-wrap { display: none; margin-top: 6px; }
+        .add-new-wrap input { background: #0d1b2a; border-color: #e94560; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="breadcrumb"><a href="/">Home</a> > New Project</div>
+        {% include 'nav.html' %}
+        <div class="breadcrumb"><a href="/">Home</a> &gt; New Project</div>
         <h1>Create New Project</h1>
         <p class="subtitle">Fill in the project details below</p>
 
         <form onsubmit="createProject(event)">
             <div class="form-group">
-                <label for="project_name">Project Name *</label>
-                <input type="text" id="project_name" name="project_name" placeholder="e.g., Downtown Office Building" required>
+                <label>Project Name *</label>
+                <input type="text" name="project_name" placeholder="e.g., Downtown Office Building" required>
             </div>
             <div class="form-group">
-                <label for="project_number">Project Number</label>
-                <input type="text" id="project_number" name="project_number" placeholder="e.g., 2024-001">
+                <label>Project Number</label>
+                <input type="text" name="project_number" placeholder="e.g., 2024-001">
             </div>
+
+            <div class="section-label">Location</div>
+            <div class="fg3">
+                <div class="form-group">
+                    <label>City</label>
+                    <input type="text" name="city" placeholder="e.g., Denver">
+                </div>
+                <div class="form-group">
+                    <label>State</label>
+                    <input type="text" name="state" placeholder="CO" maxlength="2" style="text-transform:uppercase">
+                </div>
+                <div class="form-group">
+                    <label>Zip Code</label>
+                    <input type="text" name="zip_code" placeholder="80202">
+                </div>
+            </div>
+
+            <div class="section-label">Classification</div>
+            <div class="fg2">
+                <div class="form-group">
+                    <label>Project Type</label>
+                    <select name="project_type_id" id="sel-project_type" onchange="handleAddNew(this,'project_type')">
+                        <option value="">— Select —</option>
+                    </select>
+                    <div class="add-new-wrap" id="new-project_type-wrap">
+                        <input type="text" id="new-project_type-val" placeholder="Type name…"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();commitNew('project_type')}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Market Sector</label>
+                    <select name="market_sector_id" id="sel-market_sector" onchange="handleAddNew(this,'market_sector')">
+                        <option value="">— Select —</option>
+                    </select>
+                    <div class="add-new-wrap" id="new-market_sector-wrap">
+                        <input type="text" id="new-market_sector-val" placeholder="Sector name…"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();commitNew('market_sector')}">
+                    </div>
+                </div>
+            </div>
+
             <div class="form-group">
-                <label for="location">Location</label>
-                <input type="text" id="location" name="location" placeholder="e.g., Denver, CO">
+                <label>Description</label>
+                <textarea name="description" placeholder="Brief project description…"></textarea>
             </div>
-            <div class="form-group">
-                <label for="description">Description</label>
-                <textarea id="description" name="description" placeholder="Brief project description..."></textarea>
-            </div>
-            <div style="margin-top: 30px;">
+
+            <div style="margin-top: 26px;">
                 <button type="submit" class="btn">Create Project</button>
                 <a href="/" class="btn-secondary">Cancel</a>
             </div>
         </form>
     </div>
 
+    <script id="propsData" type="application/json">{{ props_json | safe }}</script>
     <script>
-        function createProject(event) {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            fetch('/project/new', { method: 'POST', body: formData })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) window.location.href = '/project/' + data.project_id;
-            });
+    let allProps = JSON.parse(document.getElementById('propsData').textContent);
+
+    function populateSel(category, selectedId) {
+        const sel = document.getElementById('sel-' + category);
+        sel.innerHTML = '<option value="">— Select —</option>';
+        allProps.filter(p => p.category === category).forEach(p => {
+            const o = document.createElement('option');
+            o.value = p.id; o.textContent = p.name;
+            if (selectedId && p.id == selectedId) o.selected = true;
+            sel.appendChild(o);
+        });
+        const addOpt = document.createElement('option');
+        addOpt.value = '__add__'; addOpt.textContent = '➕ Add New…';
+        sel.appendChild(addOpt);
+    }
+
+    function handleAddNew(sel, category) {
+        const wrap = document.getElementById('new-' + category + '-wrap');
+        if (sel.value === '__add__') {
+            sel.value = '';
+            wrap.style.display = 'block';
+            document.getElementById('new-' + category + '-val').focus();
+        } else {
+            wrap.style.display = 'none';
         }
+    }
+
+    function commitNew(category) {
+        const inp = document.getElementById('new-' + category + '-val');
+        const name = inp.value.trim();
+        if (!name) return;
+        fetch('/settings/property/new', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category, name })
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                if (!allProps.find(p => p.id === data.id))
+                    allProps.push({ id: data.id, category, name: data.name });
+                inp.value = '';
+                document.getElementById('new-' + category + '-wrap').style.display = 'none';
+                populateSel(category, data.id);
+            }
+        });
+    }
+
+    function createProject(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        fetch('/project/new', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => { if (data.success) window.location.href = '/project/' + data.project_id; });
+    }
+
+    populateSel('project_type');
+    populateSel('market_sector');
     </script>
+
+    {% include 'agentx_panel.html' %}
 </body>
 </html>

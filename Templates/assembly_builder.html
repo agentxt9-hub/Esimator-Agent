@@ -61,8 +61,16 @@
                               border-radius: 3px; font-size: 10px; margin-right: 4px; }
         .lib-empty { padding: 30px; text-align: center; color: #555; font-size: 13px; }
         .add-custom-btn { display: block; width: 100%; padding: 10px; background: none; border: none;
-                          border-top: 1px solid #0f3460; color: #e94560; cursor: pointer; font-size: 13px; }
-        .add-custom-btn:hover { background: #0d1b2a; }
+                          border-top: 1px solid #0f3460; color: #888; cursor: pointer; font-size: 12px; }
+        .add-custom-btn:hover { background: #0d1b2a; color: #e94560; }
+        /* New library item mini-modal */
+        .mini-modal { display: none; position: fixed; z-index: 100; inset: 0; background: rgba(0,0,0,0.7); }
+        .mini-modal-content { background: #16213e; margin: 8% auto; padding: 24px; border-radius: 8px;
+                               width: 90%; max-width: 520px; border: 1px solid #0f3460; }
+        .mini-modal h3 { color: #e94560; margin-bottom: 16px; }
+        .mini-form-group { margin-bottom: 12px; }
+        .mini-form-group label { display: block; color: #aaa; font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+        .mini-fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
         /* Composition panel */
         .comp-panel { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; overflow: hidden; }
@@ -111,7 +119,7 @@
     </style>
 </head>
 <body>
-
+{% include 'nav.html' %}
 <!-- Sticky top bar -->
 <div class="top-bar">
     <div>
@@ -189,7 +197,7 @@
                 <input type="text" id="libSearch" placeholder="Search description, CSI, unit..." oninput="filterLibrary()">
             </div>
             <div class="lib-items" id="libItems"></div>
-            <button class="add-custom-btn" onclick="addCustomItem()">+ Add Custom Line Item</button>
+            <button class="add-custom-btn" onclick="openNewLibItemModal()">➕ Create New Library Item</button>
         </div>
 
         <!-- Right: Composition -->
@@ -233,6 +241,41 @@
         <div class="actions" style="margin-top: 16px;">
             <a href="/project/{{ project.id }}" class="btn btn-secondary">Cancel</a>
             <button class="btn btn-lg" onclick="saveAssembly()">Save Assembly to Project</button>
+        </div>
+    </div>
+</div>
+
+<!-- New Library Item Mini-Modal -->
+<div id="newLibModal" class="mini-modal">
+    <div class="mini-modal-content">
+        <h3>New Library Item</h3>
+        <div class="mini-form-group">
+            <label>Description *</label>
+            <input type="text" id="nlDesc" placeholder="e.g., Concrete footing pour" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+        </div>
+        <div class="mini-fg2">
+            <div class="mini-form-group">
+                <label>Unit *</label>
+                <input type="text" id="nlUnit" placeholder="CY, SF, EA…" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+            </div>
+            <div class="mini-form-group">
+                <label>Production Rate (units/hr)</label>
+                <input type="number" id="nlProdRate" step="0.01" placeholder="0" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+            </div>
+        </div>
+        <div class="mini-fg2">
+            <div class="mini-form-group">
+                <label>Mat Cost / Unit ($)</label>
+                <input type="number" id="nlMatCpu" step="0.01" placeholder="0.00" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+            </div>
+            <div class="mini-form-group">
+                <label>Labor Cost / Hr ($)</label>
+                <input type="number" id="nlLaborCph" step="0.01" placeholder="0.00" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+            <button class="btn" style="flex:1;" onclick="saveNewLibItem()">Save &amp; Add to Composition</button>
+            <button class="btn btn-secondary" style="flex:0 0 auto;" onclick="closeNewLibItemModal()">Cancel</button>
         </div>
     </div>
 </div>
@@ -361,22 +404,58 @@ function addFromLibrary(itemId) {
     updateAllQtys();
 }
 
-function addCustomItem() {
-    composition.push({
-        library_item_id: null,
-        description: 'New Item',
-        unit: '',
-        formula: 'fixed',
-        divisor: 1,
-        manual_qty: 0,
-        production_rate: 1,
-        mat_cost: 0,
-        labor_rate: 0,
-        equip_rate: 0,
-        qty: 0,
-    });
-    renderComposition();
+function openNewLibItemModal() {
+    document.getElementById('nlDesc').value = '';
+    document.getElementById('nlUnit').value = '';
+    document.getElementById('nlProdRate').value = '';
+    document.getElementById('nlMatCpu').value = '';
+    document.getElementById('nlLaborCph').value = '';
+    document.getElementById('newLibModal').style.display = 'block';
+    setTimeout(() => document.getElementById('nlDesc').focus(), 60);
 }
+
+function closeNewLibItemModal() {
+    document.getElementById('newLibModal').style.display = 'none';
+}
+
+function saveNewLibItem() {
+    const desc = document.getElementById('nlDesc').value.trim();
+    const unit = document.getElementById('nlUnit').value.trim();
+    if (!desc || !unit) { alert('Description and Unit are required.'); return; }
+
+    const payload = new FormData();
+    payload.append('description', desc);
+    payload.append('unit', unit);
+    payload.append('production_rate', document.getElementById('nlProdRate').value || '');
+    payload.append('material_cost_per_unit', document.getElementById('nlMatCpu').value || '');
+    payload.append('labor_cost_per_hour', document.getElementById('nlLaborCph').value || '');
+    payload.append('item_type', 'labor_material');
+    payload.append('prod_base', 'true');
+
+    fetch('/library/item/new', { method: 'POST', body: payload })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const newItem = {
+                    id: data.item_id,
+                    description: data.description,
+                    unit: data.unit || '',
+                    production_rate: data.production_rate || 0,
+                    material_cost_per_unit: data.material_cost_per_unit || 0,
+                    labor_cost_per_hour: data.labor_cost_per_hour || 0,
+                    equipment_cost_per_hour: 0,
+                };
+                allLibraryItems.push(newItem);
+                closeNewLibItemModal();
+                addFromLibrary(data.item_id);
+                renderLibrary();
+            }
+        });
+}
+
+window.addEventListener('click', e => {
+    if (e.target === document.getElementById('newLibModal')) closeNewLibItemModal();
+});
 
 // ── COMPOSITION RENDERING ──
 function renderComposition() {
@@ -515,5 +594,7 @@ if (templatePreload) {
     updateAllQtys();
 }
 </script>
+
+    {% include 'agentx_panel.html' %}
 </body>
 </html>

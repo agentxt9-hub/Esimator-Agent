@@ -138,7 +138,7 @@
 </head>
 <body>
 <div class="page"><div class="inner">
-
+{% include 'nav.html' %}
     <div class="breadcrumb no-print">
         <a href="/">Home</a> &gt;
         <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
@@ -376,5 +376,7 @@
     {% endif %}
 
 </div></div>
+
+    {% include 'agentx_panel.html' %}
 </body>
 </html>

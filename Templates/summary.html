@@ -43,6 +43,7 @@
 </head>
 <body>
     <div class="container">
+        {% include 'nav.html' %}
         <div class="breadcrumb">
             <a href="/">Home</a> &gt;
             <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
@@ -146,5 +147,7 @@
             <p class="no-data">No assemblies or line items found for this project.</p>
         {% endif %}
     </div>
+
+    {% include 'agentx_panel.html' %}
 </body>
 </html>

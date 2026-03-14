@@ -30,6 +30,7 @@
 </head>
 <body>
     <div class="container">
+        {% include 'nav.html' %}
         <h1>Construction Estimator</h1>
         <p class="subtitle">Your AI-powered construction estimating tool</p>
 
@@ -48,10 +49,11 @@
             </div>
         </div>
 
-        <div style="display:flex; gap:10px; margin-bottom:0;">
+        <div style="display:flex; gap:10px; margin-bottom:0; flex-wrap:wrap;">
             <a href="/project/new" class="btn">+ New Project</a>
             <a href="/library" class="btn btn-secondary">Line Item Library</a>
             <a href="/templates" class="btn btn-secondary">Assembly Templates</a>
+            <a href="/settings" class="btn btn-secondary">Settings</a>
         </div>
 
         {% if projects %}
@@ -60,7 +62,7 @@
                     <div class="project-card">
                         <h3>{{ project.project_name }}</h3>
                         <p><strong>Project #:</strong> {{ project.project_number or 'N/A' }}</p>
-                        <p><strong>Location:</strong> {{ project.location or 'N/A' }}</p>
+                        <p><strong>Location:</strong> {% if project.city %}{{ project.city }}{% if project.state %}, {{ project.state }}{% endif %}{% if project.zip_code %} {{ project.zip_code }}{% endif %}{% else %}{{ project.location or 'N/A' }}{% endif %}</p>
                         <p>{{ project.description or 'No description' }}</p>
                         <div class="btn-group">
                             <a href="/project/{{ project.id }}" class="btn">Open</a>
@@ -86,5 +88,7 @@
                 .then(data => { if (data.success) window.location.reload(); });
         }
     </script>
+
+    {% include 'agentx_panel.html' %}
 </body>
 </html>

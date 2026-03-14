@@ -80,7 +80,7 @@
 </head>
 <body>
 <div class="container">
-
+{% include 'nav.html' %}
     <div class="breadcrumb">
         <a href="/">Home</a> &gt; Assembly Templates
     </div>
@@ -291,5 +291,7 @@ function doOpenBuilder() {
 // ── Init ──
 renderGrid();
 </script>
+
+    {% include 'agentx_panel.html' %}
 </body>
 </html>
