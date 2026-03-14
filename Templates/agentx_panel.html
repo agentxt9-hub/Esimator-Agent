@@ -740,6 +740,129 @@
         transition: background 0.15s;
     }
     .ax-bp-discard-btn:hover { background: #1a4a7a; color: #eee; }
+
+    /* ── Rate Lookup Button ─────────────────────────────────────── */
+    #ax-rates-btn {
+        padding: 5px 10px;
+        background: #0f3460;
+        color: #fff;
+        border: 1px solid #e94560;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s;
+    }
+    #ax-rates-btn:hover { background: #1a4a7a; }
+
+    /* ── Rate Lookup Panel ──────────────────────────────────────── */
+    #ax-rates-panel {
+        background: #0d1b2a;
+        border-bottom: 2px solid #e94560;
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.35s ease;
+        flex-shrink: 0;
+    }
+    #ax-rates-panel.open { max-height: 720px; overflow-y: auto; }
+    #ax-rates-inner { padding: 12px; }
+    .ax-rates-input {
+        width: 100%;
+        box-sizing: border-box;
+        background: #0f3460;
+        color: #eee;
+        border: 1px solid #1a3a5c;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 12px;
+        font-family: Arial, sans-serif;
+        margin-bottom: 8px;
+    }
+    .ax-rates-input:focus { outline: none; border-color: #e94560; }
+    .ax-rates-lookup-btn {
+        width: 100%;
+        padding: 10px;
+        background: #0f3460;
+        color: #fff;
+        border: 1px solid #e94560;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .ax-rates-lookup-btn:hover:not(:disabled) { background: #1a4a7a; }
+    .ax-rates-lookup-btn:disabled { background: #555; cursor: not-allowed; border-color: #555; }
+    .ax-rates-loading { text-align: center; color: #aaa; font-size: 12px; padding: 14px 0; }
+    .ax-rates-summary {
+        color: #eee; font-size: 12px; font-style: italic; margin-bottom: 10px;
+        line-height: 1.5; padding: 8px 10px; background: #111c30;
+        border-radius: 4px; border-left: 3px solid #e94560;
+    }
+    .ax-rates-table-wrap {
+        overflow-x: auto; overflow-y: auto; max-height: 280px;
+        border-radius: 4px; margin-bottom: 10px;
+        scrollbar-width: thin; scrollbar-color: #e94560 #0d1b2a;
+    }
+    .ax-rates-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 480px; }
+    .ax-rates-table thead th {
+        background: #0f3460; color: #eee; padding: 6px 7px; text-align: left;
+        text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;
+        white-space: nowrap; position: sticky; top: 0; z-index: 2;
+    }
+    .ax-rates-table thead th.num { text-align: right; }
+    .ax-rates-table tbody tr:nth-child(odd)  td { background: #0d1b2a; }
+    .ax-rates-table tbody tr:nth-child(even) td { background: #111d35; }
+    .ax-rates-table tbody tr:hover td { background: #1a2a3a; }
+    .ax-rates-table td {
+        padding: 5px 7px; color: #ccc; vertical-align: top;
+        border-bottom: 1px solid rgba(15,52,96,0.35);
+    }
+    .ax-rates-table td.num { text-align: right; white-space: nowrap; }
+    .ax-rate-typical { color: #e94560; font-weight: bold; }
+    .ax-rate-range   { color: #888; font-size: 10px; }
+    .ax-source-badge {
+        display: inline-block; font-size: 9px; font-weight: bold;
+        padding: 1px 5px; border-radius: 10px; white-space: nowrap;
+    }
+    .ax-source-db { background: #e94560; color: #fff; }
+    .ax-source-kb { background: #0f3460; color: #aaa; border: 1px solid #1a3a5c; }
+    .ax-rates-use-btn {
+        padding: 2px 7px; background: #0f3460; color: #aaa;
+        border: 1px solid #1a3a5c; border-radius: 3px; font-size: 10px;
+        cursor: pointer; white-space: nowrap;
+    }
+    .ax-rates-use-btn:hover { background: #1a4a7a; color: #eee; }
+    .ax-rates-section-label {
+        font-size: 10px; color: #888; font-weight: bold; margin-bottom: 4px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .ax-rates-regional {
+        font-size: 11px; color: #aaa; font-style: italic; line-height: 1.5;
+        margin-bottom: 10px; padding: 6px 8px; background: #111c30; border-radius: 4px;
+    }
+    .ax-rates-recommendation {
+        font-size: 12px; color: #eee; line-height: 1.5; padding: 8px 10px;
+        background: #111c30; border-radius: 4px;
+        border-left: 3px solid #e94560; margin-bottom: 8px;
+    }
+
+    /* ── Validate Rate badge (rendered inside project.html rows) ─── */
+    .ax-validate-badge {
+        display: inline-block; font-size: 10px; font-weight: bold;
+        padding: 1px 6px; border-radius: 10px; cursor: help; white-space: nowrap;
+        vertical-align: middle; margin-left: 4px;
+    }
+    .ax-validate-ok     { background: #1a4a2a; color: #4caf93; border: 1px solid #4caf93; }
+    .ax-validate-review { background: #3a2a00; color: #f39c12; border: 1px solid #f39c12; }
+    .ax-validate-btn {
+        padding: 2px 7px; background: #0f3460; color: #aaa;
+        border: 1px solid #1a3a5c; border-radius: 3px; font-size: 10px;
+        cursor: pointer; white-space: nowrap;
+    }
+    .ax-validate-btn:hover { background: #1a4a7a; color: #eee; }
+    .ax-validate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 
 <!-- Toast notification -->
@@ -757,6 +880,7 @@
         <div class="ax-header-row">
             <span class="ax-title">🤖 AgentX</span>
             <div style="display:flex;gap:6px;align-items:center;">
+                <button id="ax-rates-btn" onclick="axToggleRates()" title="Production Rate & Pricing Assistant">📊 Rates</button>
                 <button id="ax-scope-btn" onclick="axRunScopeGap()" title="Scope Gap Detector" disabled>🔍 Check Scope</button>
                 <button id="ax-build-btn" onclick="axToggleBuilder()" title="Assembly Auto-Builder" disabled>⚡ Build Assembly</button>
                 <button class="ax-close" onclick="axClose()">✕</button>
@@ -767,6 +891,22 @@
             <button class="ax-mode-btn" data-mode="estimate" onclick="axSetMode('estimate')">Estimate</button>
             <button class="ax-mode-btn active" data-mode="research" onclick="axSetMode('research')">Research</button>
             <button class="ax-mode-btn"        data-mode="chat"     onclick="axSetMode('chat')">Chat</button>
+        </div>
+    </div>
+
+    <!-- Rate Lookup panel -->
+    <div id="ax-rates-panel">
+        <div id="ax-rates-inner">
+            <input class="ax-rates-input" id="ax-rates-query" type="text"
+                placeholder="Search production rates… e.g. metal stud framing, concrete slab, drywall hanging" />
+            <select class="ax-rates-input" id="ax-rates-trade">
+                <option value="">All trades</option>
+            </select>
+            <button class="ax-rates-lookup-btn" id="ax-rates-lookup-btn" onclick="axLookUpRates()">🔍 Look Up Rates</button>
+            <div id="ax-rates-loading" class="ax-rates-loading" style="display:none;">
+                <span class="ax-spin">⚙</span> Looking up rates and regional pricing…
+            </div>
+            <div id="ax-rates-results" style="display:none;"></div>
         </div>
     </div>
 
@@ -1052,6 +1192,10 @@
             e.preventDefault();
             axSend();
         }
+    });
+
+    document.getElementById('ax-rates-query').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); axLookUpRates(); }
     });
 
     // Auto-grow textarea
@@ -1474,6 +1618,221 @@
         // Small delay so user can see the mode switch before send
         setTimeout(() => axSend(), 100);
     }
+
+    // ── Rate Lookup Assistant ────────────────────────────────────────
+    let _axRatesOpen = false;
+
+    function axToggleRates() {
+        _axRatesOpen = !_axRatesOpen;
+        const panel = document.getElementById('ax-rates-panel');
+        if (_axRatesOpen) {
+            panel.classList.add('open');
+            // Close builder if open
+            if (_axBuilderOpen) {
+                document.getElementById('ax-builder').classList.remove('open');
+                _axBuilderOpen = false;
+            }
+            axOpen();
+            _axLoadTrades();
+            document.getElementById('ax-rates-query').focus();
+        } else {
+            panel.classList.remove('open');
+        }
+    }
+
+    async function _axLoadTrades() {
+        const sel = document.getElementById('ax-rates-trade');
+        if (sel.options.length > 1) return; // already loaded
+        try {
+            const r = await fetch('/settings/properties');
+            const d = await r.json();
+            (d.trade || []).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.name;
+                opt.textContent = t.name;
+                sel.appendChild(opt);
+            });
+        } catch (_) { /* silent */ }
+    }
+
+    async function axLookUpRates() {
+        const query = (document.getElementById('ax-rates-query').value || '').trim();
+        if (!query) {
+            document.getElementById('ax-rates-query').focus();
+            return;
+        }
+        const trade     = document.getElementById('ax-rates-trade').value;
+        const lookupBtn = document.getElementById('ax-rates-lookup-btn');
+        const loadingEl = document.getElementById('ax-rates-loading');
+        const resultsEl = document.getElementById('ax-rates-results');
+
+        lookupBtn.disabled       = true;
+        loadingEl.style.display  = 'block';
+        resultsEl.style.display  = 'none';
+        resultsEl.innerHTML      = '';
+
+        try {
+            const payload = { query };
+            if (trade)          payload.trade      = trade;
+            if (AX_PROJECT_ID)  payload.project_id = AX_PROJECT_ID;
+
+            const res  = await fetch('/ai/production-rate', {
+                method:  'POST',
+                headers: {'Content-Type': 'application/json'},
+                body:    JSON.stringify(payload),
+            });
+            const data = await res.json();
+            loadingEl.style.display = 'none';
+
+            if (!data.success) {
+                resultsEl.style.display = 'block';
+                resultsEl.innerHTML = `<div style="color:#e74c3c;font-size:12px;padding:6px 0;">
+                    Couldn't look up rates: ${_axEsc(data.error || 'unknown error')}</div>`;
+            } else {
+                axRenderRateResults(data, resultsEl);
+                resultsEl.style.display = 'block';
+            }
+        } catch (err) {
+            loadingEl.style.display = 'none';
+            resultsEl.style.display = 'block';
+            resultsEl.innerHTML = `<div style="color:#e74c3c;font-size:12px;padding:6px 0;">
+                Network error: ${_axEsc(err.message)}</div>`;
+        } finally {
+            lookupBtn.disabled = false;
+        }
+    }
+
+    function axRenderRateResults(data, container) {
+        const rates = data.rates || [];
+
+        const tableRows = rates.map(r => {
+            const srcClass = (r.source || '').toLowerCase().includes('database')
+                ? 'ax-source-db' : 'ax-source-kb';
+            const srcLabel = (r.source || '').toLowerCase().includes('database')
+                ? 'DB' : 'KB';
+            const fmtRate = (v) => v != null ? parseFloat(v).toFixed(2) : '—';
+            const fmtCost = (v) => v != null ? '$' + parseFloat(v).toFixed(2) : '—';
+
+            return `<tr>
+                <td>
+                    ${_axEsc(r.description || '')}
+                    ${r.notes ? `<div style="color:#666;font-size:10px;margin-top:2px;">${_axEsc(r.notes)}</div>` : ''}
+                </td>
+                <td>${_axEsc(r.unit || '')}</td>
+                <td class="num">
+                    <span class="ax-rate-typical">${fmtRate(r.typical_rate)}</span>
+                    <div class="ax-rate-range">${fmtRate(r.min_rate)} – ${fmtRate(r.max_rate)}</div>
+                </td>
+                <td class="num">
+                    <span class="ax-rate-typical">${fmtCost(r.labor_rate_typical)}</span>
+                    <div class="ax-rate-range">${fmtCost(r.labor_rate_min)} – ${fmtCost(r.labor_rate_max)}</div>
+                </td>
+                <td class="num">
+                    <span class="ax-rate-typical">${fmtCost(r.material_cost_typical)}</span>
+                    <div class="ax-rate-range">${fmtCost(r.material_cost_min)} – ${fmtCost(r.material_cost_max)}</div>
+                </td>
+                <td><span class="ax-source-badge ${srcClass}">${srcLabel}</span></td>
+                <td>
+                    <button class="ax-rates-use-btn"
+                        onclick="axUseRate(${JSON.stringify(_axEsc(r.description || ''))},${parseFloat(r.typical_rate||0)},${JSON.stringify(_axEsc(r.unit||''))})">
+                        → Use
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        const tableHtml = rates.length ? `
+            <div class="ax-rates-table-wrap">
+                <table class="ax-rates-table">
+                    <thead>
+                        <tr>
+                            <th>Work Item</th>
+                            <th>Unit</th>
+                            <th class="num">Prod Rate (units/hr)</th>
+                            <th class="num">Labor $/Hr</th>
+                            <th class="num">Material $/Unit</th>
+                            <th>Source</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            </div>` : '<div style="color:#666;font-size:11px;padding:6px 0;">No rate items returned.</div>';
+
+        const regionalHtml = data.regional_notes
+            ? `<div class="ax-rates-section-label">📍 Regional Notes</div>
+               <div class="ax-rates-regional">${_axEsc(data.regional_notes)}</div>`
+            : '';
+
+        const recHtml = data.recommendation
+            ? `<div class="ax-rates-section-label">💡 Recommendation</div>
+               <div class="ax-rates-recommendation">${_axEsc(data.recommendation)}</div>`
+            : '';
+
+        container.innerHTML =
+            (data.summary ? `<div class="ax-rates-summary">${_axEsc(data.summary)}</div>` : '') +
+            tableHtml +
+            regionalHtml +
+            recHtml;
+    }
+
+    function axUseRate(description, typicalRate, unit) {
+        const inputEl = document.getElementById('ax-input');
+        inputEl.value = `Update ${description} to use a production rate of ${typicalRate} ${unit} per hour`;
+        // Close rates panel, scroll to input
+        document.getElementById('ax-rates-panel').classList.remove('open');
+        _axRatesOpen = false;
+        inputEl.focus();
+        inputEl.dispatchEvent(new Event('input'));
+    }
+
+    // ── Validate Rate (callable from project.html) ───────────────────
+    window.axValidateRate = async function(lineItemId, btnEl) {
+        if (!AX_PROJECT_ID) return;
+        const origText  = btnEl.textContent;
+        btnEl.disabled  = true;
+        btnEl.textContent = '…';
+
+        // Remove any existing badge on this row
+        const row = btnEl.closest('tr');
+        if (row) {
+            const old = row.querySelector('.ax-validate-badge');
+            if (old) old.remove();
+        }
+
+        try {
+            const res  = await fetch('/ai/validate-rate', {
+                method:  'POST',
+                headers: {'Content-Type': 'application/json'},
+                body:    JSON.stringify({ line_item_id: lineItemId, project_id: AX_PROJECT_ID }),
+            });
+            const data = await res.json();
+
+            if (!data.success) {
+                axShowToast('Validate failed: ' + (data.error || 'unknown error'));
+                return;
+            }
+
+            const badge    = document.createElement('span');
+            const ok       = data.assessment === 'REASONABLE';
+            badge.className = 'ax-validate-badge ' + (ok ? 'ax-validate-ok' : 'ax-validate-review');
+            badge.textContent = ok ? '✓ Reasonable' : '⚠ Review';
+            const tip = `${data.assessment}: ${data.explanation}\n→ ${data.recommendation}`;
+            badge.title = tip;
+
+            // Insert badge after the button
+            btnEl.parentNode.insertBefore(badge, btnEl.nextSibling);
+
+            // Auto-remove after 10 seconds
+            setTimeout(() => badge.remove(), 10000);
+
+        } catch (err) {
+            axShowToast('Validate error: ' + err.message);
+        } finally {
+            btnEl.disabled    = false;
+            btnEl.textContent = origText;
+        }
+    };
 
     // ── Initialize based on page context ────────────────────────────
     (function() {

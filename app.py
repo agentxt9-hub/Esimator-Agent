@@ -1786,9 +1786,11 @@ def project_data(project_id):
 @login_required
 def wbs_initialize(project_id):
     get_project_or_403(project_id)
-    # Only initialize if no WBS properties exist yet for this project
     if WBSProperty.query.filter_by(project_id=project_id).count() == 0:
         _initialize_wbs(project_id)
+    else:
+        # Backfill location_2 / location_3 for projects created before they were added
+        _backfill_wbs_locations(project_id)
     return jsonify({'success': True})
 
 
@@ -1871,6 +1873,41 @@ def wbs_add_value(project_id):
     db.session.add(val)
     db.session.commit()
     return jsonify({'success': True, 'id': val.id})
+
+
+@app.route('/project/<int:project_id>/wbs/value/reorder', methods=['POST'])
+@login_required
+def wbs_reorder_values(project_id):
+    get_project_or_403(project_id)
+    data = request.get_json() or {}
+    for item in data.get('orders', []):
+        val = db.session.query(WBSValue).join(WBSProperty).filter(
+            WBSValue.id == item['id'],
+            WBSProperty.project_id == project_id
+        ).first()
+        if val:
+            val.display_order = item['display_order']
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/project/<int:project_id>/wbs/value/<int:value_id>', methods=['PUT'])
+@login_required
+def wbs_update_value(project_id, value_id):
+    get_project_or_403(project_id)
+    val = db.session.query(WBSValue).join(WBSProperty).filter(
+        WBSValue.id == value_id,
+        WBSProperty.project_id == project_id
+    ).first_or_404()
+    data = request.get_json() or {}
+    if 'value_name' in data:
+        name = (data['value_name'] or '').strip()
+        if name:
+            val.value_name = name
+    if 'value_code' in data:
+        val.value_code = (data['value_code'] or '').strip() or None
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @app.route('/project/<int:project_id>/wbs/value/<int:value_id>', methods=['DELETE'])
@@ -2788,6 +2825,264 @@ Severity values must be one of: HIGH, MEDIUM, LOW"""
 
 
 # ─────────────────────────────────────────
+# AI PRODUCTION RATE ASSISTANT
+# ─────────────────────────────────────────
+
+def _build_rates_text(standards):
+    """Format a list of ProductionRateStandard rows into a compact text block."""
+    if not standards:
+        return "  (no matching records in database)"
+    lines = []
+    for s in standards:
+        lines.append(
+            f"  [{s.trade or 'General'}] {s.description} | unit={s.unit} | "
+            f"min={float(s.min_rate or 0):.2f} typ={float(s.typical_rate or 0):.2f} "
+            f"max={float(s.max_rate or 0):.2f} units/hr"
+            + (f" | notes: {s.source_notes}" if s.source_notes else "")
+        )
+    return "\n".join(lines)
+
+
+@app.route('/ai/production-rate', methods=['POST'])
+@login_required
+def ai_production_rate():
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    if not api_key:
+        return jsonify({'success': False, 'error': 'ANTHROPIC_API_KEY not configured'}), 500
+
+    data           = request.get_json() or {}
+    query          = (data.get('query') or '').strip()
+    project_id     = data.get('project_id')
+    trade_filter   = (data.get('trade') or '').strip()
+    csi1_filter    = data.get('csi_level_1_id')
+
+    if not query:
+        return jsonify({'success': False, 'error': 'query is required'}), 400
+
+    # ── Fuzzy-search production_rate_standards ────────────────────────────
+    std_q = ProductionRateStandard.query
+    if trade_filter:
+        std_q = std_q.filter(ProductionRateStandard.trade.ilike(f'%{trade_filter}%'))
+    if csi1_filter:
+        std_q = std_q.filter_by(csi_level_1_id=int(csi1_filter))
+
+    # Pull up to 20 rows whose description or trade contains any word in the query
+    words = [w for w in re.split(r'\s+', query) if len(w) > 2]
+    if words:
+        from sqlalchemy import or_
+        conditions = []
+        for w in words[:6]:            # cap to avoid giant OR chains
+            conditions.append(ProductionRateStandard.description.ilike(f'%{w}%'))
+            conditions.append(ProductionRateStandard.trade.ilike(f'%{w}%'))
+        std_q = std_q.filter(or_(*conditions))
+
+    standards = std_q.order_by(ProductionRateStandard.trade,
+                                ProductionRateStandard.description).limit(20).all()
+
+    # ── Project location context ──────────────────────────────────────────
+    location_context = ""
+    if project_id:
+        project = Project.query.filter_by(
+            id=project_id, company_id=current_user.company_id).first()
+        if project and (project.city or project.state):
+            location_context = f"{project.city or ''}, {project.state or ''}".strip(', ')
+
+    # ── Company trades (for labor rate context) ───────────────────────────
+    trades = GlobalProperty.query.filter_by(
+        company_id=current_user.company_id, category='trade').order_by(
+        GlobalProperty.sort_order).all()
+    trades_text = ", ".join(t.name for t in trades) if trades else "not specified"
+
+    # ── Build system prompt ───────────────────────────────────────────────
+    system_prompt = """You are an expert construction cost estimator and RS Means specialist with 25 years of field and estimating experience. You provide specific, actionable production rates and pricing data.
+
+RULES:
+- Always provide min, typical, and max ranges — never a single number without a range
+- Rates are in UNITS PER HOUR (how many units one crew installs per hour)
+- Labor rates are in USD per hour for the full crew (not per worker)
+- Material costs are in USD per unit of the work item
+- Factor in regional cost adjustments when a location is provided
+- Reference the database records below when they are relevant; supplement with RS Means knowledge when not
+- Explain what drives variation: crew size, access, substrate conditions, complexity, repetition
+- Return ONLY valid JSON — no markdown fences, no text outside the JSON object
+
+REQUIRED JSON FORMAT:
+{
+  "summary": "direct answer in 1-2 sentences",
+  "rates": [
+    {
+      "description": "specific work item",
+      "unit": "SF/LF/EA/CY etc",
+      "min_rate": <number>,
+      "typical_rate": <number>,
+      "max_rate": <number>,
+      "unit_label": "units per hour",
+      "labor_rate_min": <number>,
+      "labor_rate_typical": <number>,
+      "labor_rate_max": <number>,
+      "material_cost_min": <number>,
+      "material_cost_typical": <number>,
+      "material_cost_max": <number>,
+      "source": "database" or "RS Means knowledge",
+      "notes": "factors affecting this rate"
+    }
+  ],
+  "regional_notes": "pricing notes specific to the project location, or empty string if no location",
+  "recommendation": "what the estimator should use for this project and why"
+}"""
+
+    # ── User message ──────────────────────────────────────────────────────
+    user_message_parts = [f"QUESTION: {query}"]
+    if location_context:
+        user_message_parts.append(f"PROJECT LOCATION: {location_context}")
+    user_message_parts.append(f"COMPANY TRADES ON FILE: {trades_text}")
+    user_message_parts.append(
+        f"\nDATABASE PRODUCTION RATE RECORDS (use these when relevant):\n{_build_rates_text(standards)}"
+    )
+    user_message = "\n\n".join(user_message_parts)
+
+    # ── Call Claude ───────────────────────────────────────────────────────
+    try:
+        client   = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model='claude-sonnet-4-20250514',
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{'role': 'user', 'content': user_message}],
+        )
+        raw_text = response.content[0].text.strip()
+    except anthropic.AuthenticationError:
+        return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── Parse JSON ────────────────────────────────────────────────────────
+    json_text = raw_text
+    fence = re.search(r'```(?:json)?\s*([\s\S]*?)```', raw_text)
+    if fence:
+        json_text = fence.group(1).strip()
+
+    try:
+        result = json.loads(json_text)
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'success': False,
+                        'error': f'Claude returned invalid JSON: {str(e)}',
+                        'raw': raw_text}), 500
+
+    return jsonify({'success': True, **result})
+
+
+@app.route('/ai/validate-rate', methods=['POST'])
+@login_required
+def ai_validate_rate():
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    if not api_key:
+        return jsonify({'success': False, 'error': 'ANTHROPIC_API_KEY not configured'}), 500
+
+    data        = request.get_json() or {}
+    li_id       = data.get('line_item_id')
+    project_id  = data.get('project_id')
+
+    if not li_id:
+        return jsonify({'success': False, 'error': 'line_item_id is required'}), 400
+
+    # ── Fetch and authorise line item ─────────────────────────────────────
+    item = get_lineitem_or_403(li_id)
+
+    if item.production_rate is None:
+        return jsonify({'success': False,
+                        'error': 'Line item has no production rate to validate'}), 400
+
+    current_rate = float(item.production_rate)
+
+    # ── Fuzzy-match standards on description ─────────────────────────────
+    words = [w for w in re.split(r'\s+', item.description) if len(w) > 2]
+    standards = []
+    if words:
+        from sqlalchemy import or_
+        conditions = []
+        for w in words[:6]:
+            conditions.append(ProductionRateStandard.description.ilike(f'%{w}%'))
+            if item.trade:
+                conditions.append(ProductionRateStandard.trade.ilike(f'%{item.trade}%'))
+        standards = (ProductionRateStandard.query
+                     .filter(or_(*conditions))
+                     .order_by(ProductionRateStandard.trade, ProductionRateStandard.description)
+                     .limit(10).all())
+
+    # ── Project location ──────────────────────────────────────────────────
+    location_context = ""
+    if project_id:
+        project = Project.query.filter_by(
+            id=project_id, company_id=current_user.company_id).first()
+        if project and (project.city or project.state):
+            location_context = f"{project.city or ''}, {project.state or ''}".strip(', ')
+
+    # ── System prompt ─────────────────────────────────────────────────────
+    system_prompt = """You are an expert construction cost estimator reviewing a line item's production rate for reasonableness.
+
+Rates are expressed as UNITS PER HOUR (how many units one crew installs per hour).
+Compare the current rate against typical industry rates for the work type and location.
+Return ONLY valid JSON — no markdown, no text outside the JSON.
+
+REQUIRED JSON FORMAT:
+{
+  "is_reasonable": true or false,
+  "current_rate": <number — the rate being reviewed>,
+  "typical_range": {"min": <number>, "typical": <number>, "max": <number>},
+  "assessment": "HIGH" or "LOW" or "REASONABLE",
+  "explanation": "clear explanation of why this rate is or is not reasonable",
+  "recommendation": "specific suggested rate or range to use instead, or confirmation to keep as-is"
+}"""
+
+    # ── User message ──────────────────────────────────────────────────────
+    li_block = (
+        f"LINE ITEM TO VALIDATE:\n"
+        f"  Description: {item.description}\n"
+        f"  Quantity: {float(item.quantity or 0)} {item.unit or ''}\n"
+        f"  Production rate: {current_rate} {item.unit or 'units'}/hr\n"
+        f"  Item type: {item.item_type or 'labor_material'}\n"
+        f"  Trade: {item.trade or 'not specified'}\n"
+    )
+    if location_context:
+        li_block += f"  Project location: {location_context}\n"
+
+    db_block = f"\nDATABASE REFERENCE RATES:\n{_build_rates_text(standards)}"
+
+    user_message = li_block + db_block
+
+    # ── Call Claude ───────────────────────────────────────────────────────
+    try:
+        client   = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model='claude-sonnet-4-20250514',
+            max_tokens=1024,
+            system=system_prompt,
+            messages=[{'role': 'user', 'content': user_message}],
+        )
+        raw_text = response.content[0].text.strip()
+    except anthropic.AuthenticationError:
+        return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # ── Parse JSON ────────────────────────────────────────────────────────
+    json_text = raw_text
+    fence = re.search(r'```(?:json)?\s*([\s\S]*?)```', raw_text)
+    if fence:
+        json_text = fence.group(1).strip()
+
+    try:
+        result = json.loads(json_text)
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'success': False,
+                        'error': f'Claude returned invalid JSON: {str(e)}',
+                        'raw': raw_text}), 500
+
+    return jsonify({'success': True, **result})
+
+
+# ─────────────────────────────────────────
 # STARTUP HELPERS
 # ─────────────────────────────────────────
 
@@ -2807,6 +3102,45 @@ def _seed_company_properties(company_id):
             if name not in existing:
                 db.session.add(GlobalProperty(company_id=company_id,
                                               category=category, name=name, sort_order=i))
+
+def _backfill_wbs_locations(project_id):
+    """Normalize WBS for existing projects: rename area→location_1, fix display_orders,
+    add missing location_2/3, delete bid_package."""
+    props = {p.property_type: p for p in WBSProperty.query.filter_by(project_id=project_id).all()}
+
+    # Rename 'area' → 'location_1'
+    if 'area' in props and 'location_1' not in props:
+        p = props.pop('area')
+        p.property_type = 'location_1'
+        p.property_name = 'Location 1'
+        props['location_1'] = p
+
+    # Add missing location_2 / location_3
+    for prop_type, prop_name in [('location_2', 'Location 2'), ('location_3', 'Location 3')]:
+        if prop_type not in props:
+            new_prop = WBSProperty(
+                project_id=project_id, property_type=prop_type, property_name=prop_name,
+                is_template=True, display_order=99
+            )
+            db.session.add(new_prop)
+            db.session.flush()
+            props[prop_type] = new_prop
+
+    # Fix display_orders so location_1/2/3 come first, then custom_1..4
+    order_map = {'location_1': 1, 'location_2': 2, 'location_3': 3,
+                 'custom_1': 5, 'custom_2': 6, 'custom_3': 7, 'custom_4': 8}
+    for prop_type, order in order_map.items():
+        if prop_type in props:
+            props[prop_type].display_order = order
+
+    # Delete bid_package and all its values
+    if 'bid_package' in props:
+        bp = props['bid_package']
+        WBSValue.query.filter_by(wbs_property_id=bp.id).delete()
+        db.session.delete(bp)
+
+    db.session.commit()
+
 
 def _initialize_wbs(project_id):
     """Seed default WBS properties and values for a new project."""
@@ -2841,25 +3175,7 @@ def _initialize_wbs(project_id):
     )
     db.session.add(loc3)
 
-    # Bid Package
-    bid_prop = WBSProperty(
-        project_id=project_id, property_type='bid_package', property_name='Bid Package',
-        is_template=True, display_order=4
-    )
-    db.session.add(bid_prop)
-    db.session.flush()
-    for i, (name, code) in enumerate([
-        ('General Conditions', 'GC'), ('Sitework', 'SITE'), ('Concrete', 'CONC'),
-        ('Masonry', 'MAS'), ('Structural Steel', 'STL'), ('Carpentry', 'CARP'),
-        ('Mechanical', 'MECH'), ('Electrical', 'ELEC'), ('Plumbing', 'PLMB'),
-        ('Finishes', 'FIN'),
-    ]):
-        db.session.add(WBSValue(
-            wbs_property_id=bid_prop.id, value_name=name,
-            value_code=code, display_order=i
-        ))
-
-    # Custom properties (no default values)
+    # Custom properties (no default values) — display_order 5-8
     for i in range(1, 5):
         db.session.add(WBSProperty(
             project_id=project_id, property_type=f'custom_{i}',

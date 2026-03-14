@@ -15,7 +15,7 @@
         .btn-secondary:hover { background: #1a4a7a; }
         .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
-        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid #0f3460; max-height: 90vh; overflow-y: auto; }
+        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid #0f3460; max-height: 75vh; overflow-y: auto; }
         .modal-content.modal-wide { max-width: 920px; }
         /* ── Modal Tabs ───────────────────────────────────────────── */
         .modal-tabs { display: flex; gap: 0; border-bottom: 1px solid #0f3460; margin: -10px -30px 24px; padding: 0 30px; }
@@ -132,22 +132,35 @@
         .li-row td:focus-within { background: #081422 !important; }
 
         /* ── WBS / Estimate Properties ─────────────────────────── */
-        .wbs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-        .wbs-card { background: #16213e; border: 1px solid #0f3460; border-radius: 4px; padding: 16px; }
-        .wbs-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+        .wbs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+        .wbs-card { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; }
+        .wbs-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
         .wbs-card-title { color: #fff; font-weight: bold; font-size: 14px; }
         .wbs-badge-template { background: #e94560; color: #fff; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
         .wbs-badge-custom { background: #0f3460; color: #e94560; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: 1px solid #e94560; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
-        .wbs-value-list { list-style: none; margin-bottom: 10px; min-height: 4px; }
-        .wbs-value-item { background: #0d1b2a; padding: 6px 10px; border-radius: 4px; margin-bottom: 4px; display: flex; align-items: center; font-size: 13px; color: #ccc; }
+        .wbs-value-list { list-style: none; min-height: 4px; overflow-y: auto; max-height: 300px; scrollbar-width: thin; scrollbar-color: #e94560 #0d1b2a; }
+        .wbs-value-item { background: #0d1b2a; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; display: flex; align-items: center; font-size: 13px; color: #ccc; border: 1px solid transparent; }
         .wbs-value-item:hover { background: #1a2a3a; }
-        .wbs-value-name { flex: 1; }
-        .wbs-value-code { color: #888; font-size: 11px; font-family: monospace; margin-left: 8px; background: #0f3460; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
-        .wbs-value-del { color: #e94560; background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 0 0 8px; opacity: 0.5; line-height: 1; }
+        .wbs-value-item.dragging { opacity: 0.35; }
+        .wbs-value-item.drag-over { border-top: 2px solid #e94560; }
+        .wbs-drag-handle { cursor: grab; color: #444; font-size: 15px; padding: 0 6px 0 0; user-select: none; flex-shrink: 0; line-height: 1; }
+        .wbs-drag-handle:hover { color: #888; }
+        .wbs-drag-handle:active { cursor: grabbing; }
+        .wbs-value-name { flex: 1; cursor: pointer; }
+        .wbs-value-name:hover { color: #fff; }
+        .wbs-value-code { color: #888; font-size: 11px; font-family: monospace; margin-left: 8px; background: #0f3460; padding: 1px 5px; border-radius: 3px; white-space: nowrap; cursor: pointer; }
+        .wbs-value-code:hover { background: #1a3a5c; color: #ccc; }
+        .wbs-value-code-empty { color: #444; background: transparent; font-size: 10px; font-family: monospace; margin-left: 8px; border: 1px dashed #333; padding: 1px 5px; border-radius: 3px; white-space: nowrap; cursor: pointer; font-style: italic; }
+        .wbs-value-code-empty:hover { border-color: #555; color: #666; }
+        .wbs-value-del { color: #e94560; background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 0 0 8px; opacity: 0.5; line-height: 1; flex-shrink: 0; }
         .wbs-value-del:hover { opacity: 1; }
+        .wbs-inline-inp { background: #0f3460; border: 1px solid #e94560; color: #fff; font-size: 13px; border-radius: 3px; padding: 1px 5px; outline: none; min-width: 40px; width: 100%; }
+        .wbs-value-code .wbs-inline-inp, .wbs-value-code-empty .wbs-inline-inp { font-size: 11px; font-family: monospace; width: 70px; }
         .wbs-empty-hint { color: #555; font-size: 12px; font-style: italic; padding: 6px 0 8px; }
-        .wbs-custom-placeholder { color: #555; font-size: 12px; font-style: italic; margin-bottom: 8px; }
-        .wbs-add-form { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; padding: 10px; margin-top: 8px; display: none; }
+        .wbs-custom-placeholder { color: #555; font-size: 12px; font-style: italic; margin-bottom: 8px; flex-shrink: 0; }
+        .btn-wbs-add-bar { margin-top: 8px; flex-shrink: 0; }
+        .btn-wbs-add { flex-shrink: 0; }
+        .wbs-add-form { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; padding: 10px; margin-top: 8px; display: none; flex-shrink: 0; }
         .wbs-add-form.open { display: block; }
         .wbs-add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .wbs-add-row input { background: #1a1a2e; border: 1px solid #0f3460; color: #eee; padding: 5px 8px; border-radius: 4px; font-size: 12px; min-width: 0; }
@@ -973,6 +986,8 @@
             </div>`;
         }
         html += `<div class="ctx-sep"></div>
+                 <div class="ctx-item" onclick="ctxValidateRate(${lineItemId},this)">✓ Validate Rate</div>
+                 <div class="ctx-sep"></div>
                  <div class="ctx-item ctx-item-danger" onclick="deleteLineItem(${lineItemId},'this line item')">✕ Delete Line Item</div>`;
         const menu = document.getElementById('ctx-menu');
         menu.innerHTML = html;
@@ -993,6 +1008,53 @@
         });
         await loadEstimateData();
         renderTable();
+    }
+
+    async function ctxValidateRate(lineItemId, menuItemEl) {
+        hideCtxMenu();
+        const row = document.querySelector(`tr[data-li-id="${lineItemId}"]`);
+        if (!row) return;
+
+        // Remove any existing badge on this row
+        const oldBadge = row.querySelector('.ax-validate-badge');
+        if (oldBadge) oldBadge.remove();
+
+        // Show spinner in first cell briefly
+        const firstTd = row.querySelector('td');
+        const spinEl  = document.createElement('span');
+        spinEl.className   = 'ax-validate-badge ax-validate-review';
+        spinEl.textContent = '…';
+        spinEl.style.fontStyle = 'normal';
+        if (firstTd) firstTd.appendChild(spinEl);
+
+        try {
+            const res  = await fetch('/ai/validate-rate', {
+                method:  'POST',
+                headers: {'Content-Type': 'application/json'},
+                body:    JSON.stringify({ line_item_id: lineItemId, project_id: PROJECT_ID }),
+            });
+            const data = await res.json();
+            spinEl.remove();
+
+            if (!data.success) {
+                alert('Validate failed: ' + (data.error || 'unknown error'));
+                return;
+            }
+
+            const badge      = document.createElement('span');
+            const ok         = data.assessment === 'REASONABLE';
+            badge.className  = 'ax-validate-badge ' + (ok ? 'ax-validate-ok' : 'ax-validate-review');
+            badge.textContent = ok ? '✓ Reasonable' : '⚠ Review';
+            badge.title      = `${data.assessment}: ${data.explanation}\n→ ${data.recommendation}`;
+            if (firstTd) firstTd.appendChild(badge);
+
+            // Auto-remove after 10 seconds
+            setTimeout(() => badge.remove(), 10000);
+
+        } catch (err) {
+            spinEl.remove();
+            alert('Validate error: ' + err.message);
+        }
     }
 
     // ─── Assembly / Line Item Modals ──────────────────────────────────
@@ -1155,7 +1217,9 @@
             grid.innerHTML = '<div style="color:#555;font-style:italic;font-size:13px;grid-column:span 3">No WBS properties found.</div>';
             return;
         }
-        grid.innerHTML = wbsData.map(renderWBSCard).join('');
+        const sorted = [...wbsData].sort((a, b) => a.display_order - b.display_order);
+        grid.innerHTML = sorted.map(renderWBSCard).join('');
+        sorted.forEach(prop => wbsInitDrag(prop.id));
     }
     function renderWBSCard(prop) {
         const badge = prop.is_template
@@ -1169,9 +1233,12 @@
                    onblur="wbsRenameProperty(this)" onkeydown="if(event.key==='Enter')this.blur()">`
             : `<span class="wbs-card-title">${_escHtmlWbs(prop.property_name)}</span>`;
         const valueRows = prop.values.length
-            ? prop.values.map(v => `<li class="wbs-value-item">
-                <span class="wbs-value-name">${_escHtmlWbs(v.value_name)}</span>
-                ${v.value_code ? `<span class="wbs-value-code">${_escHtmlWbs(v.value_code)}</span>` : ''}
+            ? prop.values.map(v => `<li class="wbs-value-item" data-value-id="${v.id}" data-prop-id="${prop.id}">
+                <span class="wbs-drag-handle" title="Drag to reorder">⠿</span>
+                <span class="wbs-value-name" onclick="wbsEditValueField(this,${v.id},'name')" title="Click to edit">${_escHtmlWbs(v.value_name)}</span>
+                ${v.value_code
+                    ? `<span class="wbs-value-code" onclick="wbsEditValueField(this,${v.id},'code')" title="Click to edit code">${_escHtmlWbs(v.value_code)}</span>`
+                    : `<span class="wbs-value-code-empty" onclick="wbsEditValueField(this,${v.id},'code')" title="Click to add code">+code</span>`}
                 <button class="wbs-value-del" onclick="wbsDeleteValue(${v.id},${prop.id})" title="Remove">✕</button>
               </li>`).join('')
             : `<li><div class="wbs-empty-hint">No values yet</div></li>`;
@@ -1181,13 +1248,15 @@
             <div class="wbs-card-header"><div style="flex:1;min-width:0">${titleHtml}</div>${badge}</div>
             ${placeholder}
             <ul class="wbs-value-list">${valueRows}</ul>
-            <button class="btn-wbs-add" onclick="wbsToggleAddForm(${prop.id})">+ Add Value</button>
-            <div class="wbs-add-form" id="wbs-add-form-${prop.id}">
-                <div class="wbs-add-row">
-                    <input class="inp-name" type="text" id="wbs-inp-name-${prop.id}" placeholder="Value name *" />
-                    <input class="inp-code" type="text" id="wbs-inp-code-${prop.id}" placeholder="Code (opt)" maxlength="20" />
-                    <button class="btn-wbs-add" onclick="wbsSaveValue(${prop.id})">Save</button>
-                    <button class="btn-wbs-cancel" onclick="wbsToggleAddForm(${prop.id})">Cancel</button>
+            <div class="btn-wbs-add-bar">
+                <button class="btn-wbs-add" onclick="wbsToggleAddForm(${prop.id})">+ Add Value</button>
+                <div class="wbs-add-form" id="wbs-add-form-${prop.id}">
+                    <div class="wbs-add-row">
+                        <input class="inp-name" type="text" id="wbs-inp-name-${prop.id}" placeholder="Value name *" />
+                        <input class="inp-code" type="text" id="wbs-inp-code-${prop.id}" placeholder="Code (opt)" maxlength="20" />
+                        <button class="btn-wbs-add" onclick="wbsSaveValue(${prop.id})">Save</button>
+                        <button class="btn-wbs-cancel" onclick="wbsToggleAddForm(${prop.id})">Cancel</button>
+                    </div>
                 </div>
             </div>
         </div>`;
@@ -1235,6 +1304,91 @@
             updateGroupByBtn();
             renderColChooser();
         }
+    }
+
+    // ─── WBS Value inline editing ─────────────────────────────────────
+    function wbsEditValueField(span, valueId, field) {
+        if (span.querySelector('input')) return; // already open
+        const orig = span.textContent;
+        const inp = document.createElement('input');
+        inp.className = 'wbs-inline-inp';
+        inp.value = (orig === '+code') ? '' : orig;
+        if (field === 'code') inp.maxLength = 20;
+        span.textContent = '';
+        span.appendChild(inp);
+        inp.focus();
+        inp.select();
+        let saved = false;
+        async function commit() {
+            if (saved) return;
+            saved = true;
+            const newVal = inp.value.trim();
+            if (newVal === orig || (orig === '+code' && !newVal)) {
+                // No change — restore
+                span.textContent = orig;
+                return;
+            }
+            const payload = field === 'name' ? { value_name: newVal } : { value_code: newVal || null };
+            const r = await fetch('/project/' + WBS_PROJECT_ID + '/wbs/value/' + valueId, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if ((await r.json()).success) {
+                await wbsLoad();
+                renderTable();
+            } else {
+                span.textContent = orig;
+            }
+        }
+        inp.addEventListener('blur', commit);
+        inp.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+            if (e.key === 'Escape') { saved = true; span.textContent = orig; }
+        });
+    }
+
+    // ─── WBS Value drag-to-reorder ────────────────────────────────────
+    let _wbsDragSrc = null;
+    function wbsInitDrag(propId) {
+        const list = document.querySelector('#wbs-card-' + propId + ' .wbs-value-list');
+        if (!list) return;
+        list.querySelectorAll('.wbs-value-item[data-value-id]').forEach(item => {
+            const handle = item.querySelector('.wbs-drag-handle');
+            // Only start drag from the handle
+            handle.addEventListener('mousedown', () => item.setAttribute('draggable', 'true'));
+            item.addEventListener('dragstart', e => {
+                _wbsDragSrc = item;
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            item.addEventListener('dragend', () => {
+                item.setAttribute('draggable', 'false');
+                item.classList.remove('dragging');
+                list.querySelectorAll('.wbs-value-item').forEach(i => i.classList.remove('drag-over'));
+            });
+            item.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                list.querySelectorAll('.wbs-value-item').forEach(i => i.classList.remove('drag-over'));
+                if (item !== _wbsDragSrc) item.classList.add('drag-over');
+            });
+            item.addEventListener('drop', async e => {
+                e.preventDefault();
+                if (!_wbsDragSrc || _wbsDragSrc === item) return;
+                const items = [...list.querySelectorAll('.wbs-value-item[data-value-id]')];
+                const fromIdx = items.indexOf(_wbsDragSrc);
+                const toIdx   = items.indexOf(item);
+                if (fromIdx < toIdx) list.insertBefore(_wbsDragSrc, item.nextSibling);
+                else                 list.insertBefore(_wbsDragSrc, item);
+                item.classList.remove('drag-over');
+                const orders = [...list.querySelectorAll('.wbs-value-item[data-value-id]')]
+                    .map((el, i) => ({ id: parseInt(el.dataset.valueId), display_order: i }));
+                await fetch('/project/' + WBS_PROJECT_ID + '/wbs/value/reorder', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orders })
+                });
+            });
+        });
     }
 
     // ─── AgentX hook ──────────────────────────────────────────────────
