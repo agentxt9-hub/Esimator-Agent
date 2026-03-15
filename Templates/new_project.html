@@ -1,35 +1,33 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>New Project — Construction Estimator</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
-        .container { max-width: 640px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
-        h1 { color: #e94560; margin-bottom: 6px; }
-        .subtitle { color: #888; margin-bottom: 28px; font-size: 13px; }
-        .form-group { margin-bottom: 16px; }
-        label { display: block; margin-bottom: 6px; color: #aaa; font-weight: bold; font-size: 12px; }
-        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0f3460; color: #eee; font-size: 13px; font-family: Arial, sans-serif; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
-        select option { background: #0d1b2a; }
-        textarea { resize: vertical; min-height: 80px; }
-        .btn { padding: 10px 22px; background: #e94560; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif; }
-        .btn:hover { background: #c73652; }
-        .btn-secondary { background: #0f3460; margin-left: 10px; text-decoration: none; display: inline-block; padding: 10px 22px; border-radius: 4px; color: white; font-size: 14px; }
-        .btn-secondary:hover { background: #1a4a7a; }
-        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 13px; }
-        .breadcrumb a { color: #e94560; text-decoration: none; }
-        .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .fg3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
-        .section-label { color: #888; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 12px; padding-top: 14px; border-top: 1px solid #0f3460; }
-        .add-new-wrap { display: none; margin-top: 6px; }
-        .add-new-wrap input { background: #0d1b2a; border-color: #e94560; }
-    </style>
-</head>
-<body>
+{% extends "app_base.html" %}
+{% block title %}New Project - Zenbid{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container { max-width: 640px; margin: 0 auto; }
+    h1 { color: var(--accent-coral); margin-bottom: 6px; }
+    .subtitle { color: var(--text-secondary); margin-bottom: 28px; font-size: 13px; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-weight: bold; font-size: 12px; }
+    input, textarea, select { width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-input); color: var(--text-primary); font-size: 13px; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-coral); }
+    select option { background: var(--app-input); }
+    textarea { resize: vertical; min-height: 80px; }
+    .btn { padding: 10px 22px; background: var(--primary-brand); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--app-input); color: var(--text-primary); border: 1px solid var(--app-border); margin-left: 10px; text-decoration: none; display: inline-block; padding: 10px 22px; border-radius: 4px; font-size: 14px; }
+    .btn-secondary:hover { background: var(--app-hover); }
+    .breadcrumb { color: var(--text-secondary); margin-bottom: 20px; font-size: 13px; }
+    .breadcrumb a { color: var(--accent-coral); text-decoration: none; }
+    .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .fg3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
+    .section-label { color: var(--text-secondary); font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 12px; padding-top: 14px; border-top: 1px solid var(--app-border); }
+    .add-new-wrap { display: none; margin-top: 6px; }
+    .add-new-wrap input { background: var(--app-input); border-color: var(--accent-coral); }
+</style>
+{% endblock %}
+
+{% block content %}
     <div class="container">
-        {% include 'nav.html' %}
         <div class="breadcrumb"><a href="/">Home</a> &gt; New Project</div>
         <h1>Create New Project</h1>
         <p class="subtitle">Fill in the project details below</p>
@@ -97,6 +95,9 @@
     </div>
 
     <script id="propsData" type="application/json">{{ props_json | safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
     <script>
     let allProps = JSON.parse(document.getElementById('propsData').textContent);
 
@@ -157,5 +158,4 @@
     </script>
 
     {% include 'agentx_panel.html' %}
-</body>
-</html>
+{% endblock %}

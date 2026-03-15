@@ -1,144 +1,138 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>CSI Report — {{ project.project_name }}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; }
+{% extends "app_base.html" %}
+{% block title %}CSI Report — {{ project.project_name }} - Zenbid{% endblock %}
 
-        .page  { padding: 20px; }
-        .inner { background: #16213e; border-radius: 8px; padding: 28px; }
+{% block extra_css %}
+<style>
+    .breadcrumb   { color: var(--text-secondary); margin-bottom: 16px; font-size: 13px; }
+    .breadcrumb a { color: var(--accent-coral); text-decoration: none; }
 
-        .breadcrumb   { color: #888; margin-bottom: 16px; font-size: 13px; }
-        .breadcrumb a { color: #e94560; text-decoration: none; }
+    .report-header { display: flex; justify-content: space-between; align-items: flex-start;
+                     margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--app-border); }
+    .report-header h1 { color: var(--accent-coral); font-size: 22px; margin-bottom: 4px; }
+    .report-meta  { color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+    .report-date  { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
 
-        .report-header { display: flex; justify-content: space-between; align-items: flex-start;
-                         margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid #0f3460; }
-        .report-header h1 { color: #e94560; font-size: 22px; margin-bottom: 4px; }
-        .report-meta  { color: #888; font-size: 13px; line-height: 1.6; }
-        .report-date  { color: #555; font-size: 12px; margin-top: 4px; }
+    .btn          { display: inline-block; padding: 8px 16px; background: var(--primary-brand); color: white;
+                    text-decoration: none; border-radius: 4px; border: none; cursor: pointer;
+                    font-size: 13px; }
+    .btn:hover    { background: var(--primary-hover); }
+    .btn-secondary { background: var(--app-input); color: var(--text-primary); border: 1px solid var(--app-border); }
+    .btn-secondary:hover { background: var(--app-hover); }
+    .btn-row      { display: flex; gap: 10px; flex-wrap: wrap; }
 
-        .btn          { display: inline-block; padding: 8px 16px; background: #e94560; color: white;
-                        text-decoration: none; border-radius: 4px; border: none; cursor: pointer;
-                        font-size: 13px; font-family: Arial, sans-serif; }
-        .btn:hover    { background: #c73652; }
-        .btn-secondary { background: #0f3460; }
-        .btn-secondary:hover { background: #1a4a7a; }
-        .btn-row      { display: flex; gap: 10px; flex-wrap: wrap; }
+    /* Grand total summary */
+    .grand-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+    .gs-card       { background: var(--app-input); padding: 14px 16px; border-radius: 8px; text-align: center; }
+    .gs-card h3    { color: var(--accent-coral); font-size: 16px; margin-bottom: 4px; }
+    .gs-card p     { color: var(--text-secondary); font-size: 11px; }
 
-        /* Grand total summary */
-        .grand-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
-        .gs-card       { background: #0f3460; padding: 14px 16px; border-radius: 8px; text-align: center; }
-        .gs-card h3    { color: #e94560; font-size: 16px; margin-bottom: 4px; }
-        .gs-card p     { color: #888; font-size: 11px; }
+    /* Division block */
+    .division      { margin-bottom: 28px; border: 1px solid var(--app-border); border-radius: 6px; overflow: hidden; }
+    .div-header    { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
+                     border-left: 5px solid var(--text-muted); }
+    .div-title     { font-weight: bold; font-size: 14px; color: var(--text-primary); }
+    .div-code      { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+    .div-totals    { display: flex; gap: 24px; font-size: 12px; text-align: right; }
+    .div-totals span { color: var(--text-secondary); }
+    .div-totals strong { color: var(--text-primary); display: block; font-size: 14px; }
 
-        /* Division block */
-        .division      { margin-bottom: 28px; border: 1px solid #0f3460; border-radius: 6px; overflow: hidden; }
-        .div-header    { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
-                         border-left: 5px solid #888; }
-        .div-title     { font-weight: bold; font-size: 14px; color: #eee; }
-        .div-code      { color: #aaa; font-size: 12px; margin-top: 2px; }
-        .div-totals    { display: flex; gap: 24px; font-size: 12px; text-align: right; }
-        .div-totals span { color: #888; }
-        .div-totals strong { color: #eee; display: block; font-size: 14px; }
+    /* Section block */
+    .section       { border-top: 1px solid var(--app-border); }
+    .sec-header    { padding: 8px 16px; background: var(--app-input); display: flex;
+                     justify-content: space-between; align-items: center; }
+    .sec-title     { color: var(--text-secondary); font-size: 13px; font-weight: bold; }
+    .sec-subtotal  { color: var(--accent-coral); font-size: 13px; font-weight: bold; }
 
-        /* Section block */
-        .section       { border-top: 1px solid #0f3460; }
-        .sec-header    { padding: 8px 16px; background: #0d1b2a; display: flex;
-                         justify-content: space-between; align-items: center; }
-        .sec-title     { color: #ccc; font-size: 13px; font-weight: bold; }
-        .sec-subtotal  { color: #e94560; font-size: 13px; font-weight: bold; }
+    /* Line items table */
+    table          { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th       { background: var(--app-input); color: var(--text-secondary); padding: 7px 10px; text-align: left;
+                     white-space: nowrap; border-right: 1px solid var(--app-border); }
+    thead th:last-child { border-right: none; }
+    tbody tr       { border-bottom: 1px solid var(--app-border); }
+    tbody tr:hover td { background: var(--app-hover); }
+    td             { padding: 7px 10px; color: var(--text-secondary); white-space: nowrap; border-right: 1px solid var(--app-border); }
+    td:last-child  { border-right: none; }
+    td.num         { text-align: right; color: var(--text-primary); }
+    td.grand       { text-align: right; color: var(--accent-coral); font-weight: bold; }
+    td.asm-badge   { }
+    .badge         { display: inline-block; background: var(--accent-coral); color: white; padding: 1px 6px;
+                     border-radius: 3px; font-size: 10px; font-weight: bold; margin-right: 4px; }
+    .desc          { min-width: 180px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+    .trade-pill    { display: inline-block; background: var(--app-input); color: var(--text-secondary); padding: 1px 6px;
+                     border-radius: 10px; font-size: 10px; }
 
-        /* Line items table */
-        table          { width: 100%; border-collapse: collapse; font-size: 12px; }
-        thead th       { background: #111e2e; color: #888; padding: 7px 10px; text-align: left;
-                         white-space: nowrap; border-right: 1px solid #1a2a3a; }
-        thead th:last-child { border-right: none; }
-        tbody tr       { border-bottom: 1px solid #1a2a3a; }
-        tbody tr:hover td { background: #1a2a3a; }
-        td             { padding: 7px 10px; color: #ccc; white-space: nowrap; border-right: 1px solid #162030; }
-        td:last-child  { border-right: none; }
-        td.num         { text-align: right; color: #ddd; }
-        td.grand       { text-align: right; color: #e94560; font-weight: bold; }
-        td.asm-badge   { }
-        .badge         { display: inline-block; background: #e94560; color: white; padding: 1px 6px;
-                         border-radius: 3px; font-size: 10px; font-weight: bold; margin-right: 4px; }
-        .desc          { min-width: 180px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
-        .trade-pill    { display: inline-block; background: #0f3460; color: #aaa; padding: 1px 6px;
-                         border-radius: 10px; font-size: 10px; }
+    /* Subtotal rows */
+    tr.subtotal td { background: var(--app-input); color: var(--text-primary); font-weight: bold;
+                     border-top: 1px solid var(--app-border); padding: 7px 10px; }
+    tr.subtotal td.grand { color: var(--accent-coral); }
 
-        /* Subtotal rows */
-        tr.subtotal td { background: #0d1b2a; color: #eee; font-weight: bold;
-                         border-top: 1px solid #0f3460; padding: 7px 10px; }
-        tr.subtotal td.grand { color: #e94560; }
+    /* Division total row */
+    .div-total-row { background: var(--app-input); padding: 10px 16px; display: flex;
+                     justify-content: flex-end; gap: 32px; font-size: 13px;
+                     border-top: 2px solid var(--accent-coral); }
+    .div-total-row .lbl { color: var(--text-secondary); margin-right: 6px; }
+    .div-total-row .val { color: var(--text-primary); font-weight: bold; }
+    .div-total-row .total-val { color: var(--accent-coral); font-weight: bold; font-size: 15px; }
 
-        /* Division total row */
-        .div-total-row { background: #0f3460; padding: 10px 16px; display: flex;
-                         justify-content: flex-end; gap: 32px; font-size: 13px;
-                         border-top: 2px solid #e94560; }
-        .div-total-row .lbl { color: #888; margin-right: 6px; }
-        .div-total-row .val { color: #eee; font-weight: bold; }
-        .div-total-row .total-val { color: #e94560; font-weight: bold; font-size: 15px; }
+    /* Uncategorized */
+    .uncat-header  { padding: 12px 16px; background: var(--app-input); border-left: 5px solid var(--text-secondary);
+                     color: var(--text-secondary); font-size: 13px; font-style: italic; }
 
-        /* Uncategorized */
-        .uncat-header  { padding: 12px 16px; background: #0d1b2a; border-left: 5px solid #555;
-                         color: #888; font-size: 13px; font-style: italic; }
+    /* Grand total block */
+    .grand-total   { background: var(--app-input); border: 2px solid var(--accent-coral); border-radius: 6px;
+                     padding: 16px 20px; margin-top: 28px; display: flex;
+                     justify-content: space-between; align-items: center; }
+    .grand-total h2 { color: var(--text-primary); font-size: 15px; }
+    .grand-total-grid { display: flex; gap: 40px; }
+    .gt-item .lbl { color: var(--text-secondary); font-size: 11px; }
+    .gt-item .val { color: var(--text-primary); font-size: 16px; font-weight: bold; }
+    .gt-item.highlight .val { color: var(--accent-coral); font-size: 20px; }
 
-        /* Grand total block */
-        .grand-total   { background: #0f3460; border: 2px solid #e94560; border-radius: 6px;
-                         padding: 16px 20px; margin-top: 28px; display: flex;
-                         justify-content: space-between; align-items: center; }
-        .grand-total h2 { color: #eee; font-size: 15px; }
-        .grand-total-grid { display: flex; gap: 40px; }
-        .gt-item .lbl { color: #888; font-size: 11px; }
-        .gt-item .val { color: #eee; font-size: 16px; font-weight: bold; }
-        .gt-item.highlight .val { color: #e94560; font-size: 20px; }
+    /* No data */
+    .no-data { text-align: center; color: var(--text-muted); padding: 40px; font-size: 14px; }
 
-        /* No data */
-        .no-data { text-align: center; color: #555; padding: 40px; font-size: 14px; }
+    /* ── Print ── */
+    @media print {
+        body { background: white; color: #000; }
+        .app-sidebar, .app-topbar { display: none !important; }
+        .app-main { margin-left: 0 !important; }
+        .app-content { padding: 0 !important; }
+        .breadcrumb, .btn-row { display: none !important; }
+        .gs-card { background: #f0f0f0; border: 1px solid #ccc; }
+        .gs-card h3 { color: #c00; font-size: 14px; }
+        .gs-card p { color: #555; }
+        .report-header h1 { color: #c00; }
+        .report-header { border-color: #ccc; }
+        .division { border-color: #ccc; page-break-inside: avoid; }
+        .div-header { background: #f5f5f5 !important; }
+        .div-title, .div-code { color: #000; }
+        .div-totals span, .div-totals strong { color: #333; }
+        .sec-header { background: #ebebeb !important; }
+        .sec-title { color: #333; }
+        .sec-subtotal { color: #c00; }
+        thead th { background: #e8e8e8 !important; color: #333; }
+        tbody tr:hover td { background: transparent; }
+        td { color: #333; border-color: #ddd; }
+        td.num { color: #333; }
+        td.grand { color: #c00; }
+        tr.subtotal td { background: #ebebeb; color: #000; border-color: #ccc; }
+        tr.subtotal td.grand { color: #c00; }
+        .div-total-row { background: #e8e8e8; border-color: #c00; }
+        .div-total-row .lbl, .div-total-row .val { color: #333; }
+        .div-total-row .total-val { color: #c00; }
+        .grand-total { background: #f0f0f0; border-color: #c00; }
+        .grand-total h2 { color: #000; }
+        .gt-item .lbl { color: #555; }
+        .gt-item .val { color: #000; }
+        .gt-item.highlight .val { color: #c00; }
+        .badge { background: #c00; }
+        .trade-pill { background: #e0e0e0; color: #555; }
+        .uncat-header { background: #f5f5f5; color: #555; border-left-color: #999; }
+    }
+</style>
+{% endblock %}
 
-        /* ── Print ── */
-        @media print {
-            body { background: white; color: #000; }
-            .page { padding: 0; }
-            .inner { background: white; padding: 16px; border-radius: 0; }
-            .breadcrumb, .btn-row { display: none !important; }
-            .gs-card { background: #f0f0f0; border: 1px solid #ccc; }
-            .gs-card h3 { color: #c00; font-size: 14px; }
-            .gs-card p { color: #555; }
-            .report-header h1 { color: #c00; }
-            .report-header { border-color: #ccc; }
-            .division { border-color: #ccc; page-break-inside: avoid; }
-            .div-header { background: #f5f5f5 !important; }
-            .div-title, .div-code { color: #000; }
-            .div-totals span, .div-totals strong { color: #333; }
-            .sec-header { background: #ebebeb !important; }
-            .sec-title { color: #333; }
-            .sec-subtotal { color: #c00; }
-            thead th { background: #e8e8e8 !important; color: #333; }
-            tbody tr:hover td { background: transparent; }
-            td { color: #333; border-color: #ddd; }
-            td.num { color: #333; }
-            td.grand { color: #c00; }
-            tr.subtotal td { background: #ebebeb; color: #000; border-color: #ccc; }
-            tr.subtotal td.grand { color: #c00; }
-            .div-total-row { background: #e8e8e8; border-color: #c00; }
-            .div-total-row .lbl, .div-total-row .val { color: #333; }
-            .div-total-row .total-val { color: #c00; }
-            .grand-total { background: #f0f0f0; border-color: #c00; }
-            .grand-total h2 { color: #000; }
-            .gt-item .lbl { color: #555; }
-            .gt-item .val { color: #000; }
-            .gt-item.highlight .val { color: #c00; }
-            .badge { background: #c00; }
-            .trade-pill { background: #e0e0e0; color: #555; }
-            .uncat-header { background: #f5f5f5; color: #555; border-left-color: #999; }
-        }
-    </style>
-</head>
-<body>
-<div class="page"><div class="inner">
-{% include 'nav.html' %}
+{% block content %}
     <div class="breadcrumb no-print">
         <a href="/">Home</a> &gt;
         <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
@@ -213,7 +207,7 @@
                 </div>
                 <div>
                     <span>Division Total</span>
-                    <strong style="color: #e94560; font-size: 15px;">${{ "%.2f"|format(div_block.total.total_cost) }}</strong>
+                    <strong style="color: var(--accent-coral); font-size: 15px;">${{ "%.2f"|format(div_block.total.total_cost) }}</strong>
                 </div>
             </div>
         </div>
@@ -374,9 +368,8 @@
         </div>
     </div>
     {% endif %}
+{% endblock %}
 
-</div></div>
-
+{% block extra_js %}
     {% include 'agentx_panel.html' %}
-</body>
-</html>
+{% endblock %}

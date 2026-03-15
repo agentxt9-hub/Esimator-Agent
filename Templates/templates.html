@@ -1,86 +1,82 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Assembly Templates</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
-        .container { max-width: 1200px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
-        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
-        .breadcrumb a { color: #e94560; text-decoration: none; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
-        h1 { color: #e94560; margin-bottom: 5px; }
-        .subtitle { color: #888; font-size: 14px; }
-        .btn { display: inline-block; padding: 9px 18px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
-        .btn:hover { background: #c73652; }
-        .btn-secondary { background: #0f3460; }
-        .btn-secondary:hover { background: #1a4a7a; }
-        .btn-sm { padding: 5px 12px; font-size: 12px; }
+{% extends "app_base.html" %}
+{% block title %}Assembly Templates - Zenbid{% endblock %}
 
-        /* Toolbar */
-        .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 22px; }
-        .search-box { flex: 1; max-width: 380px; }
-        .search-box input { width: 100%; padding: 9px 12px; background: #0d1b2a; border: 1px solid #0f3460;
-                            border-radius: 4px; color: #eee; font-size: 14px; }
-        .search-box input:focus { outline: none; border-color: #e94560; }
-        .count-badge { color: #888; font-size: 13px; }
+{% block extra_css %}
+<style>
+    .breadcrumb { color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; }
+    .breadcrumb a { color: var(--accent-coral); text-decoration: none; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--app-border); }
+    h1 { color: var(--accent-coral); margin-bottom: 5px; }
+    .subtitle { color: var(--text-secondary); font-size: 14px; }
+    .btn { display: inline-block; padding: 9px 18px; background: var(--primary-brand); color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--app-input); color: var(--text-primary); border: 1px solid var(--app-border); }
+    .btn-secondary:hover { background: var(--app-hover); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
 
-        /* Empty state */
-        .empty-state { text-align: center; padding: 80px 20px; color: #555; }
-        .empty-state h2 { font-size: 22px; margin-bottom: 12px; color: #888; }
-        .empty-state p  { font-size: 14px; line-height: 1.6; }
+    /* Toolbar */
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 22px; }
+    .search-box { flex: 1; max-width: 380px; }
+    .search-box input { width: 100%; padding: 9px 12px; background: var(--app-input); border: 1px solid var(--app-border);
+                        border-radius: 4px; color: var(--text-primary); font-size: 14px; }
+    .search-box input:focus { outline: none; border-color: var(--accent-coral); }
+    .count-badge { color: var(--text-secondary); font-size: 13px; }
 
-        /* Template grid */
-        .templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+    /* Empty state */
+    .empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+    .empty-state h2 { font-size: 22px; margin-bottom: 12px; color: var(--text-secondary); }
+    .empty-state p  { font-size: 14px; line-height: 1.6; }
 
-        /* Template card */
-        .tpl-card { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 8px; overflow: hidden;
-                    display: flex; flex-direction: column; }
-        .tpl-card:hover { border-color: #e94560; }
-        .tpl-header { padding: 14px 16px 10px; border-bottom: 1px solid #0f3460; }
-        .tpl-label-badge { background: #e94560; color: white; padding: 2px 8px; border-radius: 3px;
-                           font-size: 11px; font-weight: bold; margin-right: 7px; }
-        .tpl-name { color: #eee; font-size: 15px; font-weight: bold; }
-        .tpl-desc { color: #666; font-size: 12px; margin-top: 5px; }
-        .tpl-meta { padding: 10px 16px; border-bottom: 1px solid #0d1b2a; display: flex; gap: 16px; flex-wrap: wrap; }
-        .tpl-meta-item { font-size: 12px; }
-        .tpl-meta-item .key { color: #555; }
-        .tpl-meta-item .val { color: #aaa; font-weight: bold; }
-        .tpl-measurements { padding: 8px 16px; border-bottom: 1px solid #0d1b2a; display: flex; gap: 12px; flex-wrap: wrap; }
-        .meas-chip { background: #0f3460; border-radius: 3px; padding: 3px 8px; font-size: 11px; color: #888; }
-        .meas-chip span { color: #eee; font-weight: bold; }
-        .tpl-items { padding: 10px 16px; flex: 1; }
-        .tpl-items .item-row { display: flex; align-items: center; gap: 6px; padding: 3px 0;
-                                border-bottom: 1px solid #0d1b2a; font-size: 12px; color: #888; }
-        .tpl-items .item-row:last-child { border-bottom: none; }
-        .formula-tag { background: #1a2a3a; color: #7bde9b; padding: 1px 5px; border-radius: 2px; font-size: 10px; white-space: nowrap; }
-        .more-items { color: #555; font-size: 11px; padding-top: 5px; }
-        .tpl-footer { padding: 12px 16px; border-top: 1px solid #0f3460; display: flex; align-items: center; justify-content: space-between; }
-        .tpl-cost { color: #e94560; font-weight: bold; font-size: 15px; }
-        .tpl-cost-label { color: #555; font-size: 11px; }
-        .tpl-actions { display: flex; gap: 8px; }
+    /* Template grid */
+    .templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
 
-        /* Modal */
-        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
-        .modal-content { background: #16213e; margin: 8% auto; padding: 28px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #0f3460; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-        .modal-header h2 { color: #e94560; font-size: 17px; }
-        .close { color: #888; font-size: 26px; cursor: pointer; line-height: 1; }
-        .close:hover { color: #eee; }
-        .form-group { margin-bottom: 14px; }
-        label { display: block; margin-bottom: 5px; color: #aaa; font-size: 12px; font-weight: bold; }
-        input, select { width: 100%; padding: 9px; border: 1px solid #0f3460; border-radius: 4px;
-                        background: #0d1b2a; color: #eee; font-size: 14px; }
-        input:focus, select:focus { outline: none; border-color: #e94560; }
-        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
-        .modal-actions .btn { flex: 1; text-align: center; }
-        .selected-tpl-name { color: #eee; font-size: 13px; padding: 8px 12px; background: #0d1b2a;
-                              border-radius: 4px; border-left: 3px solid #e94560; margin-bottom: 16px; }
-    </style>
-</head>
-<body>
-<div class="container">
-{% include 'nav.html' %}
+    /* Template card */
+    .tpl-card { background: var(--app-input); border: 1px solid var(--app-border); border-radius: 8px; overflow: hidden;
+                display: flex; flex-direction: column; }
+    .tpl-card:hover { border-color: var(--accent-coral); }
+    .tpl-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--app-border); }
+    .tpl-label-badge { background: var(--accent-coral); color: white; padding: 2px 8px; border-radius: 3px;
+                       font-size: 11px; font-weight: bold; margin-right: 7px; }
+    .tpl-name { color: var(--text-primary); font-size: 15px; font-weight: bold; }
+    .tpl-desc { color: var(--text-muted); font-size: 12px; margin-top: 5px; }
+    .tpl-meta { padding: 10px 16px; border-bottom: 1px solid var(--app-border); display: flex; gap: 16px; flex-wrap: wrap; }
+    .tpl-meta-item { font-size: 12px; }
+    .tpl-meta-item .key { color: var(--text-muted); }
+    .tpl-meta-item .val { color: var(--text-secondary); font-weight: bold; }
+    .tpl-measurements { padding: 8px 16px; border-bottom: 1px solid var(--app-border); display: flex; gap: 12px; flex-wrap: wrap; }
+    .meas-chip { background: var(--app-input); border-radius: 3px; padding: 3px 8px; font-size: 11px; color: var(--text-secondary); }
+    .meas-chip span { color: var(--text-primary); font-weight: bold; }
+    .tpl-items { padding: 10px 16px; flex: 1; }
+    .tpl-items .item-row { display: flex; align-items: center; gap: 6px; padding: 3px 0;
+                            border-bottom: 1px solid var(--app-border); font-size: 12px; color: var(--text-secondary); }
+    .tpl-items .item-row:last-child { border-bottom: none; }
+    .formula-tag { background: var(--app-hover); color: #7bde9b; padding: 1px 5px; border-radius: 2px; font-size: 10px; white-space: nowrap; }
+    .more-items { color: var(--text-muted); font-size: 11px; padding-top: 5px; }
+    .tpl-footer { padding: 12px 16px; border-top: 1px solid var(--app-border); display: flex; align-items: center; justify-content: space-between; }
+    .tpl-cost { color: var(--accent-coral); font-weight: bold; font-size: 15px; }
+    .tpl-cost-label { color: var(--text-muted); font-size: 11px; }
+    .tpl-actions { display: flex; gap: 8px; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+    .modal-content { background: var(--app-card); margin: 8% auto; padding: 28px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid var(--app-border); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    .modal-header h2 { color: var(--accent-coral); font-size: 17px; }
+    .close { color: var(--text-secondary); font-size: 26px; cursor: pointer; line-height: 1; }
+    .close:hover { color: var(--text-primary); }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; margin-bottom: 5px; color: var(--text-secondary); font-size: 12px; font-weight: bold; }
+    input, select { width: 100%; padding: 9px; border: 1px solid var(--app-border); border-radius: 4px;
+                    background: var(--app-input); color: var(--text-primary); font-size: 14px; }
+    input:focus, select:focus { outline: none; border-color: var(--accent-coral); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-actions .btn { flex: 1; text-align: center; }
+    .selected-tpl-name { color: var(--text-primary); font-size: 13px; padding: 8px 12px; background: var(--app-input);
+                          border-radius: 4px; border-left: 3px solid var(--accent-coral); margin-bottom: 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
     <div class="breadcrumb">
         <a href="/">Home</a> &gt; Assembly Templates
     </div>
@@ -115,35 +111,36 @@
         </div>
     {% endif %}
 
-</div>
-
-<!-- Use Template Modal -->
-<div id="useModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Use Template</h2>
-            <span class="close" onclick="closeModal()">&times;</span>
-        </div>
-        <div id="modalTplName" class="selected-tpl-name"></div>
-        <div class="form-group">
-            <label>Target Project *</label>
-            <select id="modalProject">
-                <option value="">— Select a project —</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Assembly Label (in the project)</label>
-            <input type="text" id="modalLabel" placeholder="e.g., A1">
-        </div>
-        <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="doLoadDirect()">Load Directly</button>
-            <button class="btn" onclick="doOpenBuilder()">Customize in Builder</button>
+    <!-- Use Template Modal -->
+    <div id="useModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Use Template</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="modalTplName" class="selected-tpl-name"></div>
+            <div class="form-group">
+                <label>Target Project *</label>
+                <select id="modalProject">
+                    <option value="">— Select a project —</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Assembly Label (in the project)</label>
+                <input type="text" id="modalLabel" placeholder="e.g., A1">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="doLoadDirect()">Load Directly</button>
+                <button class="btn" onclick="doOpenBuilder()">Customize in Builder</button>
+            </div>
         </div>
     </div>
-</div>
 
-<script id="templatesRaw" type="application/json">{{ templates_data | tojson | safe }}</script>
-<script id="projectsRaw"  type="application/json">{{ projects_data | tojson | safe }}</script>
+    <script id="templatesRaw" type="application/json">{{ templates_data | tojson | safe }}</script>
+    <script id="projectsRaw"  type="application/json">{{ projects_data | tojson | safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 const allTemplates = JSON.parse(document.getElementById('templatesRaw').textContent);
 const allProjects  = JSON.parse(document.getElementById('projectsRaw').textContent);
@@ -292,6 +289,5 @@ function doOpenBuilder() {
 renderGrid();
 </script>
 
-    {% include 'agentx_panel.html' %}
-</body>
-</html>
+{% include 'agentx_panel.html' %}
+{% endblock %}

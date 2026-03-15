@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing - Zenbid{% endblock %}
+
+{% block extra_css %}
+<style>
+    .pricing-hero {
+        background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
+        padding: 4rem 0 3rem;
+        text-align: center;
+    }
+
+    .pricing-hero h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+        color: var(--text-dark);
+    }
+
+    .pricing-hero p {
+        font-size: 1.25rem;
+        color: var(--text-gray);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .pricing-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .toggle-label {
+        font-weight: 600;
+        color: var(--text-gray);
+    }
+
+    .toggle-label.active {
+        color: var(--primary-brand);
+    }
+
+    .pricing-grid {
+        max-width: 1200px;
+        margin: 3rem auto;
+        padding: 0 2rem;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2rem;
+    }
+
+    .pricing-card {
+        background: white;
+        border: 2px solid var(--border-light);
+        border-radius: 16px;
+        padding: 2.5rem;
+        transition: all 0.3s;
+        position: relative;
+    }
+
+    .pricing-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .pricing-card.featured {
+        border-color: var(--primary-brand);
+        box-shadow: 0 8px 24px rgba(45, 91, 255, 0.15);
+    }
+
+    .pricing-badge {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--primary-brand);
+        color: white;
+        padding: 0.375rem 1rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .pricing-tier {
+        font-size: 0.875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--primary-brand);
+        margin-bottom: 0.5rem;
+    }
+
+    .pricing-card h3 {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin-bottom: 0.75rem;
+        color: var(--text-dark);
+    }
+
+    .pricing-description {
+        color: var(--text-gray);
+        margin-bottom: 1.5rem;
+        font-size: 0.95rem;
+    }
+
+    .pricing-price {
+        margin-bottom: 1.5rem;
+    }
+
+    .price-amount {
+        font-size: 3rem;
+        font-weight: 800;
+        color: var(--text-dark);
+    }
+
+    .price-period {
+        font-size: 1rem;
+        color: var(--text-gray);
+        font-weight: 500;
+    }
+
+    .pricing-features {
+        list-style: none;
+        margin-bottom: 2rem;
+    }
+
+    .pricing-features li {
+        padding: 0.625rem 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        color: var(--text-gray);
+        font-size: 0.95rem;
+    }
+
+    .pricing-features li::before {
+        content: '✓';
+        color: var(--success);
+        font-weight: 700;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+    .pricing-features li.disabled {
+        opacity: 0.4;
+    }
+
+    .pricing-features li.disabled::before {
+        content: '—';
+        color: var(--text-light);
+    }
+
+    .pricing-card .btn {
+        width: 100%;
+        padding: 0.875rem;
+        font-size: 1rem;
+    }
+
+    .faq-section {
+        max-width: 800px;
+        margin: 4rem auto;
+        padding: 0 2rem;
+    }
+
+    .faq-section h2 {
+        font-size: 2rem;
+        font-weight: 800;
+        text-align: center;
+        margin-bottom: 2rem;
+        color: var(--text-dark);
+    }
+
+    .faq-item {
+        background: var(--marketing-section);
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .faq-item h3 {
+        font-size: 1.125rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        color: var(--text-dark);
+    }
+
+    .faq-item p {
+        color: var(--text-gray);
+        line-height: 1.6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Pricing Hero -->
+<section class="pricing-hero">
+    <div class="container">
+        <h1>Simple, transparent pricing</h1>
+        <p>Choose the plan that fits your workflow. Upgrade, downgrade, or cancel anytime.</p>
+    </div>
+</section>
+
+<!-- Pricing Grid -->
+<div class="pricing-grid">
+    <!-- Free Tier -->
+    <div class="pricing-card">
+        <div class="pricing-tier">Starter</div>
+        <h3>Free</h3>
+        <p class="pricing-description">Perfect for trying out Zenbid and small one-off projects.</p>
+        <div class="pricing-price">
+            <span class="price-amount">$0</span>
+            <span class="price-period">/month</span>
+        </div>
+        <ul class="pricing-features">
+            <li>1 active project</li>
+            <li>Up to 50 line items</li>
+            <li>CSI MasterFormat structure</li>
+            <li>Basic production rates</li>
+            <li>PDF export</li>
+            <li class="disabled">AI Assembly Builder</li>
+            <li class="disabled">Scope Gap Detection</li>
+            <li class="disabled">Live pricing research</li>
+        </ul>
+        <a href="/signup" class="btn btn-secondary">Get Started Free</a>
+    </div>
+
+    <!-- Pro Tier (Featured) -->
+    <div class="pricing-card featured">
+        <div class="pricing-badge">Most Popular</div>
+        <div class="pricing-tier">Pro</div>
+        <h3>Professional</h3>
+        <p class="pricing-description">Full power for solo estimators and small teams.</p>
+        <div class="pricing-price">
+            <span class="price-amount">$49</span>
+            <span class="price-period">/month</span>
+        </div>
+        <ul class="pricing-features">
+            <li>Unlimited projects</li>
+            <li>Unlimited line items</li>
+            <li>AI Assembly Builder</li>
+            <li>Scope Gap Detection</li>
+            <li>Production rate intelligence</li>
+            <li>Live pricing research</li>
+            <li>Multi-format exports</li>
+            <li>Email support</li>
+        </ul>
+        <a href="/signup?plan=pro" class="btn btn-primary">Start 14-Day Trial</a>
+    </div>
+
+    <!-- Team Tier -->
+    <div class="pricing-card">
+        <div class="pricing-tier">Team</div>
+        <h3>Coming Soon</h3>
+        <p class="pricing-description">For teams that need collaboration and shared libraries.</p>
+        <div class="pricing-price">
+            <span class="price-amount">$149</span>
+            <span class="price-period">/month</span>
+        </div>
+        <ul class="pricing-features">
+            <li>Everything in Pro</li>
+            <li>Up to 5 team members</li>
+            <li>Shared assembly libraries</li>
+            <li>Team cost database</li>
+            <li>Project templates</li>
+            <li>Advanced permissions</li>
+            <li>Priority support</li>
+            <li>Custom integrations</li>
+        </ul>
+        <a href="/contact" class="btn btn-secondary">Join Waitlist</a>
+    </div>
+</div>
+
+<!-- FAQ Section -->
+<section class="faq-section">
+    <h2>Frequently Asked Questions</h2>
+    
+    <div class="faq-item">
+        <h3>What's included in the free trial?</h3>
+        <p>Full access to all Pro features for 14 days. No credit card required. You can cancel anytime before the trial ends with no charge.</p>
+    </div>
+    
+    <div class="faq-item">
+        <h3>Can I change plans later?</h3>
+        <p>Absolutely. Upgrade or downgrade at any time. Changes take effect immediately, and we'll prorate your billing accordingly.</p>
+    </div>
+    
+    <div class="faq-item">
+        <h3>What payment methods do you accept?</h3>
+        <p>We accept all major credit cards (Visa, Mastercard, Amex, Discover) and ACH bank transfers for annual plans.</p>
+    </div>
+    
+    <div class="faq-item">
+        <h3>Is my data secure?</h3>
+        <p>Yes. All data is encrypted in transit and at rest. We use industry-standard security practices and never share your project data with third parties.</p>
+    </div>
+    
+    <div class="faq-item">
+        <h3>Do you offer annual billing?</h3>
+        <p>Yes! Pay annually and save 20%. Annual pricing: Pro $470/year (save $118), Team $1,430/year (save $358).</p>
+    </div>
+</section>
+{% endblock %}

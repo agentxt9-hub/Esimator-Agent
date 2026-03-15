@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    /* HERO SECTION */
+    .hero {
+        background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
+        padding: 5rem 0 4rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 50%;
+        height: 100%;
+        background: radial-gradient(circle at top right, rgba(45, 91, 255, 0.08), transparent 60%);
+        pointer-events: none;
+    }
+
+    .hero-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4rem;
+        align-items: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-content h1 {
+        font-size: 3.5rem;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-bottom: 1.5rem;
+        color: var(--text-dark);
+    }
+
+    .hero-content h1 .highlight {
+        color: var(--primary-brand);
+    }
+
+    .hero-content p {
+        font-size: 1.25rem;
+        color: var(--text-gray);
+        margin-bottom: 2rem;
+        line-height: 1.6;
+    }
+
+    .hero-cta {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .hero-cta .btn {
+        padding: 0.875rem 1.75rem;
+        font-size: 1rem;
+    }
+
+    .hero-visual {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+        border: 1px solid var(--border-light);
+    }
+
+    /* App Mockup */
+    .app-mockup {
+        background: #0F1419;
+        border-radius: 10px;
+        overflow: hidden;
+        font-size: 11px;
+        display: flex;
+        height: 320px;
+    }
+    .mock-sidebar {
+        width: 140px;
+        background: #16181D;
+        border-right: 1px solid #2D3748;
+        padding: 12px 0;
+        flex-shrink: 0;
+    }
+    .mock-brand {
+        padding: 0 12px 12px;
+        font-weight: 800;
+        font-size: 13px;
+        color: #2D5BFF;
+        border-bottom: 1px solid #2D3748;
+        margin-bottom: 10px;
+    }
+    .mock-brand span { color: #FF6B35; }
+    .mock-nav-label {
+        padding: 0 12px;
+        font-size: 8px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #6B7280;
+        margin: 8px 0 4px;
+    }
+    .mock-nav-item {
+        padding: 6px 12px;
+        color: #9CA3AF;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .mock-nav-item.active {
+        background: #1A1F26;
+        color: #2D5BFF;
+        border-left: 2px solid #2D5BFF;
+    }
+    .mock-main {
+        flex: 1;
+        padding: 14px;
+        overflow: hidden;
+    }
+    .mock-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .mock-topbar-title { font-weight: 700; color: #E8EAED; font-size: 13px; }
+    .mock-btn {
+        background: #2D5BFF;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+    }
+    .mock-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+    .mock-stat {
+        background: #1A1F26;
+        border: 1px solid #2D3748;
+        border-radius: 6px;
+        padding: 8px;
+    }
+    .mock-stat-label { color: #6B7280; font-size: 8px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+    .mock-stat-value { color: #E8EAED; font-weight: 800; font-size: 14px; }
+    .mock-stat-value.accent { color: #FF6B35; }
+    .mock-section-title { color: #9CA3AF; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .mock-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .mock-card {
+        background: #1A1F26;
+        border: 1px solid #2D3748;
+        border-radius: 6px;
+        padding: 8px;
+    }
+    .mock-card-num { color: #FF6B35; font-size: 8px; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+    .mock-card-name { color: #E8EAED; font-weight: 600; font-size: 10px; margin-bottom: 2px; }
+    .mock-card-loc { color: #6B7280; font-size: 9px; }
+    .mock-card-footer { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2D3748; }
+    .mock-card-meta { color: #9CA3AF; font-size: 8px; }
+
+    /* Social proof */
+    .social-proof {
+        background: var(--marketing-section);
+        padding: 4rem 0;
+        border-top: 1px solid var(--border-light);
+        border-bottom: 1px solid var(--border-light);
+    }
+    .social-proof-header {
+        text-align: center;
+        color: var(--text-gray);
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 2.5rem;
+    }
+    .testimonials-grid {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 0 2rem;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+    }
+    .testimonial-card {
+        background: white;
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 1.75rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .testimonial-stars {
+        color: #F59E0B;
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+        letter-spacing: 2px;
+    }
+    .testimonial-text {
+        color: var(--text-gray);
+        font-size: 0.95rem;
+        line-height: 1.65;
+        margin-bottom: 1.25rem;
+        font-style: italic;
+    }
+    .testimonial-author {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .testimonial-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: var(--primary-brand);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.875rem;
+        flex-shrink: 0;
+    }
+    .testimonial-name { font-weight: 700; font-size: 0.875rem; color: var(--text-dark); }
+    .testimonial-title { font-size: 0.8rem; color: var(--text-gray); }
+
+    /* STATS BAR */
+    .stats-bar {
+        background: white;
+        border-top: 1px solid var(--border-light);
+        border-bottom: 1px solid var(--border-light);
+        padding: 2rem 0;
+    }
+
+    .stats-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 3rem;
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--primary-brand);
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        color: var(--text-gray);
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    /* FEATURES SECTION */
+    .features {
+        padding: 5rem 0;
+        background: white;
+    }
+
+    .features-header {
+        text-align: center;
+        max-width: 700px;
+        margin: 0 auto 4rem;
+    }
+
+    .features-header h2 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+        color: var(--text-dark);
+    }
+
+    .features-header p {
+        font-size: 1.125rem;
+        color: var(--text-gray);
+    }
+
+    .features-grid {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2rem;
+    }
+
+    .feature-card {
+        background: var(--marketing-section);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 2rem;
+        transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+        border-color: var(--primary-brand);
+    }
+
+    .feature-icon {
+        width: 48px;
+        height: 48px;
+        background: var(--primary-brand);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.5rem;
+        font-size: 1.5rem;
+    }
+
+    .feature-card h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        color: var(--text-dark);
+    }
+
+    .feature-card p {
+        color: var(--text-gray);
+        line-height: 1.6;
+    }
+
+    /* CTA SECTION */
+    .cta-section {
+        background: linear-gradient(135deg, var(--primary-brand) 0%, #1E40E0 100%);
+        padding: 5rem 0;
+        color: white;
+        text-align: center;
+    }
+
+    .cta-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 2rem;
+    }
+
+    .cta-container h2 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+    }
+
+    .cta-container p {
+        font-size: 1.125rem;
+        opacity: 0.9;
+        margin-bottom: 2rem;
+    }
+
+    .cta-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .cta-buttons .btn {
+        padding: 0.875rem 1.75rem;
+        font-size: 1rem;
+    }
+
+    .btn-white {
+        background: white;
+        color: var(--primary-brand);
+    }
+
+    .btn-white:hover {
+        background: #F9FAFB;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-outline-white {
+        background: transparent;
+        color: white;
+        border: 2px solid white;
+    }
+
+    .btn-outline-white:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero">
+    <div class="hero-container">
+        <div class="hero-content">
+            <h1>Build <span class="highlight">Smarter</span> Estimates, <span class="highlight">Faster</span></h1>
+            <p>AI-powered construction estimating built for modern contractors. CSI structure, production rates, and intelligent assemblies—all in one platform.</p>
+            <div class="hero-cta">
+                <a href="/signup" class="btn btn-primary">Start Free Trial</a>
+                <a href="/features" class="btn btn-secondary">See How It Works</a>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="app-mockup">
+                <div class="mock-sidebar">
+                    <div class="mock-brand">zen<span>bid</span></div>
+                    <div class="mock-nav-label">Main</div>
+                    <div class="mock-nav-item active">📊 Dashboard</div>
+                    <div class="mock-nav-item">📁 Projects</div>
+                    <div class="mock-nav-label">Libraries</div>
+                    <div class="mock-nav-item">🧩 Item Library</div>
+                    <div class="mock-nav-item">⚡ Prod. Rates</div>
+                    <div class="mock-nav-item">📋 Templates</div>
+                    <div class="mock-nav-label">Tools</div>
+                    <div class="mock-nav-item">⚙️ Settings</div>
+                </div>
+                <div class="mock-main">
+                    <div class="mock-topbar">
+                        <span class="mock-topbar-title">Welcome back, Alex!</span>
+                        <span class="mock-btn">+ New Project</span>
+                    </div>
+                    <div class="mock-stats">
+                        <div class="mock-stat">
+                            <div class="mock-stat-label">Projects</div>
+                            <div class="mock-stat-value">12</div>
+                        </div>
+                        <div class="mock-stat">
+                            <div class="mock-stat-label">Est. Value</div>
+                            <div class="mock-stat-value accent">$2.4M</div>
+                        </div>
+                        <div class="mock-stat">
+                            <div class="mock-stat-label">AI Assists</div>
+                            <div class="mock-stat-value">47</div>
+                        </div>
+                    </div>
+                    <div class="mock-section-title">Recent Projects</div>
+                    <div class="mock-cards">
+                        <div class="mock-card">
+                            <div class="mock-card-num">2026.03-01</div>
+                            <div class="mock-card-name">Medical Office Bldg</div>
+                            <div class="mock-card-loc">📍 Chicago, IL</div>
+                            <div class="mock-card-footer">
+                                <span class="mock-card-meta">Created Mar 6</span>
+                                <span class="mock-card-meta" style="color:#10B981;">Active</span>
+                            </div>
+                        </div>
+                        <div class="mock-card">
+                            <div class="mock-card-num">2026.02-04</div>
+                            <div class="mock-card-name">Apartment Complex</div>
+                            <div class="mock-card-loc">📍 Denver, CO</div>
+                            <div class="mock-card-footer">
+                                <span class="mock-card-meta">Created Feb 28</span>
+                                <span class="mock-card-meta" style="color:#10B981;">Active</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Bar -->
+<section class="stats-bar">
+    <div class="stats-container">
+        <div>
+            <div class="stat-value">3x</div>
+            <div class="stat-label">Faster estimate creation</div>
+        </div>
+        <div>
+            <div class="stat-value">100%</div>
+            <div class="stat-label">CSI MasterFormat structured</div>
+        </div>
+        <div>
+            <div class="stat-value">AI</div>
+            <div class="stat-label">Powered assembly building</div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section class="features" id="features">
+    <div class="features-header">
+        <h2>Everything you need to estimate confidently</h2>
+        <p>Purpose-built for general contractors and specialty trades who need speed, accuracy, and professional output.</p>
+    </div>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">🧠</div>
+            <h3>AI Assembly Builder</h3>
+            <p>Describe your scope in plain English. Our AI generates complete assemblies with production rates and pricing—ready to refine.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📋</div>
+            <h3>CSI MasterFormat Native</h3>
+            <p>Structured by industry standard from day one. Generate division reports, assembly summaries, and bid proposals instantly.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Production Rate Intelligence</h3>
+            <p>Built-in production rate library with automatic labor hour calculations. Know your true costs, not just material prices.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>Scope Gap Detection</h3>
+            <p>AI reviews your estimate against project specs and flags missing items before you submit. Never leave money on the table.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">💰</div>
+            <h3>Live Pricing Research</h3>
+            <p>AI agent searches current local pricing for materials and equipment. No more outdated cost databases.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Multi-Format Outputs</h3>
+            <p>One estimate → multiple report views. Assembly detail, CSI divisions, labor rollups, bid proposals. All automatic.</p>
+        </div>
+    </div>
+</section>
+
+<!-- Social Proof -->
+<section class="social-proof">
+    <div class="social-proof-header">Trusted by estimators who move fast</div>
+    <div class="testimonials-grid">
+        <div class="testimonial-card">
+            <div class="testimonial-stars">★★★★★</div>
+            <p class="testimonial-text">"Cut my takeoff time in half. The AI assembly builder is genuinely impressive — I describe the scope and it builds a complete assembly with production rates I'd trust."</p>
+            <div class="testimonial-author">
+                <div class="testimonial-avatar" style="background:#2D5BFF;">M</div>
+                <div>
+                    <div class="testimonial-name">Marcus T.</div>
+                    <div class="testimonial-title">Senior Estimator, General Contractor</div>
+                </div>
+            </div>
+        </div>
+        <div class="testimonial-card">
+            <div class="testimonial-stars">★★★★★</div>
+            <p class="testimonial-text">"Finally an estimating tool that thinks in CSI divisions out of the box. The scope gap checker caught two missing specs before I submitted. That alone paid for itself."</p>
+            <div class="testimonial-author">
+                <div class="testimonial-avatar" style="background:#FF6B35;">R</div>
+                <div>
+                    <div class="testimonial-name">Rachel K.</div>
+                    <div class="testimonial-title">Preconstruction Manager, MEP Contractor</div>
+                </div>
+            </div>
+        </div>
+        <div class="testimonial-card">
+            <div class="testimonial-stars">★★★★★</div>
+            <p class="testimonial-text">"I run a small framing crew and needed something between a spreadsheet and a full ERP. Zenbid is exactly that — powerful when I need it, simple when I don't."</p>
+            <div class="testimonial-author">
+                <div class="testimonial-avatar" style="background:#10B981;">D</div>
+                <div>
+                    <div class="testimonial-name">Derek S.</div>
+                    <div class="testimonial-title">Owner, Specialty Trade Contractor</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta-section">
+    <div class="cta-container">
+        <h2>Ready to build better estimates?</h2>
+        <p>Start your free trial today. No credit card required. Full access to all features for 14 days.</p>
+        <div class="cta-buttons">
+            <a href="/signup" class="btn btn-white">Start Free Trial</a>
+            <a href="/pricing" class="btn btn-outline-white">View Pricing</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

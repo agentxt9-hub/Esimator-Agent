@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Zenbid - App{% endblock %}</title>
+    <style>
+        /* RESET & BASE */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Brand Colors (consistent with marketing) */
+            --primary-brand: #2D5BFF;
+            --primary-hover: #1E40E0;
+            --accent-coral: #FF6B35;
+            --accent-hover: #E85A2A;
+            
+            /* App Backgrounds (Dark Mode - Eye-Friendly) */
+            --app-bg: #0F1419;               /* Near-black background */
+            --app-card: #1A1F26;             /* Card/panel lift */
+            --app-input: #252B33;            /* Input fields */
+            --app-hover: #2A3139;            /* Hover states */
+            --app-border: #2D3748;           /* Subtle borders */
+            --app-sidebar: #16181D;          /* Sidebar darker */
+            
+            /* Text (optimized for dark mode) */
+            --text-primary: #E8EAED;         /* Soft white - easier than pure white */
+            --text-secondary: #9CA3AF;       /* Gray for labels/metadata */
+            --text-muted: #6B7280;           /* Very muted text */
+            
+            /* States */
+            --success: #10B981;              /* Green */
+            --success-bg: rgba(16, 185, 129, 0.1);
+            --warning: #F59E0B;              /* Amber */
+            --warning-bg: rgba(245, 158, 11, 0.1);
+            --error: #EF4444;                /* Red */
+            --error-bg: rgba(239, 68, 68, 0.1);
+            --info: #3B82F6;                 /* Blue */
+            --info-bg: rgba(59, 130, 246, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: var(--app-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* APP LAYOUT */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* SIDEBAR */
+        .app-sidebar {
+            width: 260px;
+            background: var(--app-sidebar);
+            border-right: 1px solid var(--app-border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--app-border);
+        }
+
+        .sidebar-brand {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary-brand);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-brand span {
+            color: var(--accent-coral);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 1.5rem 0;
+            overflow-y: auto;
+        }
+
+        .nav-section {
+            margin-bottom: 2rem;
+        }
+
+        .nav-section-title {
+            padding: 0 1.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: var(--app-hover);
+            color: var(--text-primary);
+        }
+
+        .nav-link.active {
+            background: var(--app-card);
+            color: var(--primary-brand);
+            border-left: 3px solid var(--primary-brand);
+        }
+
+        .nav-icon {
+            font-size: 1.125rem;
+        }
+
+        .sidebar-footer {
+            padding: 1.5rem;
+            border-top: 1px solid var(--app-border);
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .user-menu:hover {
+            background: var(--app-hover);
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary-brand);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .user-role {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* MAIN CONTENT AREA */
+        .app-main {
+            flex: 1;
+            margin-left: 260px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* TOP BAR */
+        .app-topbar {
+            background: var(--app-card);
+            border-bottom: 1px solid var(--app-border);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .topbar-search {
+            flex: 1;
+            max-width: 500px;
+        }
+
+        .topbar-search input {
+            width: 100%;
+            padding: 0.625rem 1rem;
+            background: var(--app-input);
+            border: 1px solid var(--app-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .topbar-search input:focus {
+            outline: none;
+            border-color: var(--primary-brand);
+        }
+
+        .topbar-search input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .topbar-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* CONTENT AREA */
+        .app-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        /* BUTTONS */
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 6px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-brand);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--app-input);
+            color: var(--text-primary);
+            border: 1px solid var(--app-border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--app-hover);
+        }
+
+        .btn-coral {
+            background: var(--accent-coral);
+            color: white;
+        }
+
+        .btn-coral:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        .btn-ghost:hover {
+            background: var(--app-hover);
+            color: var(--text-primary);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 0.875rem;
+            font-size: 0.8125rem;
+        }
+
+        /* CARDS */
+        .card {
+            background: var(--app-card);
+            border: 1px solid var(--app-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--app-border);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* TABLES */
+        .table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--app-border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: var(--app-input);
+        }
+
+        th {
+            padding: 0.875rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.8125rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        td {
+            padding: 0.875rem 1rem;
+            border-top: 1px solid var(--app-border);
+            color: var(--text-primary);
+        }
+
+        tbody tr:hover {
+            background: var(--app-hover);
+        }
+
+        /* FORMS */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--app-input);
+            border: 1px solid var(--app-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9375rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-brand);
+            box-shadow: 0 0 0 3px rgba(45, 91, 255, 0.1);
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* BADGES */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.625rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-success {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .badge-warning {
+            background: var(--warning-bg);
+            color: var(--warning);
+        }
+
+        .badge-error {
+            background: var(--error-bg);
+            color: var(--error);
+        }
+
+        .badge-info {
+            background: var(--info-bg);
+            color: var(--info);
+        }
+
+        /* UTILITY CLASSES */
+        .text-muted { color: var(--text-muted); }
+        .text-secondary { color: var(--text-secondary); }
+        .text-primary { color: var(--text-primary); }
+        .text-success { color: var(--success); }
+        .text-warning { color: var(--warning); }
+        .text-error { color: var(--error); }
+
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .mt-3 { margin-top: 1.5rem; }
+        .mt-4 { margin-top: 2rem; }
+
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mb-3 { margin-bottom: 1.5rem; }
+        .mb-4 { margin-bottom: 2rem; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="app-sidebar">
+            <div class="sidebar-header">
+                <a href="/app" class="sidebar-brand">
+                    zen<span>bid</span>
+                </a>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Main</div>
+                    <a href="/app/dashboard" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                        <span class="nav-icon">📊</span>
+                        Dashboard
+                    </a>
+                    <a href="/dashboard" class="nav-link {% if 'project' in (request.endpoint or '') %}active{% endif %}">
+                        <span class="nav-icon">📁</span>
+                        Projects
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Libraries</div>
+                    <a href="/library" class="nav-link">
+                        <span class="nav-icon">🧩</span>
+                        Item Library
+                    </a>
+                    <a href="/production-rates" class="nav-link">
+                        <span class="nav-icon">⚡</span>
+                        Production Rates
+                    </a>
+                    <a href="/templates" class="nav-link">
+                        <span class="nav-icon">📋</span>
+                        Templates
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a href="/settings" class="nav-link">
+                        <span class="nav-icon">⚙️</span>
+                        Settings
+                    </a>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-menu">
+                    <div class="user-avatar">{{ current_user.username[0].upper() if current_user and current_user.username else 'U' }}</div>
+                    <div class="user-info">
+                        <div class="user-name">{{ current_user.username if current_user else 'User' }}</div>
+                        <div class="user-role">{{ current_user.role if current_user else 'Admin' }}</div>
+                    </div>
+                    <a href="/logout" style="color: var(--text-muted); text-decoration: none;" title="Log out">↩</a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <!-- Top Bar -->
+            <div class="app-topbar">
+                <div class="topbar-search">
+                    <input type="text" placeholder="Search projects, assemblies, line items...">
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-ghost btn-sm">
+                        <span>🔔</span>
+                    </button>
+                    <a href="/project/new" class="btn btn-primary btn-sm">
+                        + New Project
+                    </a>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="app-content">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

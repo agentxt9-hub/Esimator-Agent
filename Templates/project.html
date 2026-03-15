@@ -1,247 +1,241 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ project.project_name }} - Construction Estimator</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; padding: 20px; color: #eee; }
-        .container { max-width: 1400px; margin: 0 auto; background: #16213e; padding: 30px; border-radius: 8px; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #0f3460; }
-        h1 { color: #e94560; margin-bottom: 5px; }
-        .project-meta { color: #888; font-size: 14px; }
-        .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
-        .btn:hover { background: #c73652; }
-        .btn-secondary { background: #0f3460; }
-        .btn-secondary:hover { background: #1a4a7a; }
-        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
-        .modal-content { background: #16213e; margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid #0f3460; max-height: 75vh; overflow-y: auto; }
-        .modal-content.modal-wide { max-width: 920px; }
-        /* ── Modal Tabs ───────────────────────────────────────────── */
-        .modal-tabs { display: flex; gap: 0; border-bottom: 1px solid #0f3460; margin: -10px -30px 24px; padding: 0 30px; }
-        .modal-tab { padding: 10px 20px; font-size: 13px; cursor: pointer; color: #888; background: none; border: none; border-bottom: 2px solid transparent; font-family: Arial, sans-serif; transition: color 0.15s; }
-        .modal-tab:hover { color: #eee; }
-        .modal-tab.active { color: #e94560; border-bottom-color: #e94560; font-weight: bold; }
-        .modal-pane { display: none; }
-        .modal-pane.active { display: block; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .modal-header h2 { color: #e94560; }
-        .close { color: #888; font-size: 28px; cursor: pointer; line-height: 1; }
-        .close:hover { color: #eee; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: bold; }
-        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 14px; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
-        .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-        .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 14px; }
-        .breadcrumb a { color: #e94560; text-decoration: none; }
-        .btn-danger { background: #3a0a12; color: #e94560; border: 1px solid #e94560; }
-        .btn-danger:hover { background: #e94560; color: white; }
-        .btn-sm { padding: 4px 10px; font-size: 12px; }
-        .totals-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
-        .total-card { background: #0f3460; padding: 15px; border-radius: 8px; text-align: center; }
-        .total-card h3 { color: #e94560; font-size: 20px; }
-        .total-card p { color: #888; font-size: 12px; margin-top: 5px; }
+{% extends "app_base.html" %}
+{% block title %}{{ project.project_name }} - Zenbid{% endblock %}
 
-        /* ── Estimate Table Toolbar ─────────────────────────────── */
-        .est-toolbar { display: flex; justify-content: space-between; align-items: center; background: #16213e; padding: 8px 0 10px; border-bottom: 1px solid #0f3460; gap: 10px; flex-wrap: wrap; }
-        .est-toolbar-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .est-toolbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-        .btn-toolbar { display: inline-block; padding: 5px 12px; background: #0f3460; color: #ccc; border: 1px solid #1a3a5c; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; white-space: nowrap; font-family: Arial, sans-serif; }
-        .btn-toolbar:hover { background: #1a4a7a; color: #eee; }
-        .btn-toolbar-accent { background: #3a0a12; color: #e94560; border-color: #e94560; }
-        .btn-toolbar-accent:hover { background: #e94560; color: white; }
-        .groupby-wrap { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #aaa; white-space: nowrap; }
-        .groupby-wrap select { width: auto; padding: 4px 8px; font-size: 12px; background: #0f3460; border: 1px solid #1a3a5c; color: #eee; border-radius: 4px; cursor: pointer; }
+{% block extra_css %}
+<style>
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--app-border); }
+    h1 { color: var(--accent-coral); margin-bottom: 5px; }
+    .project-meta { color: var(--text-secondary); font-size: 14px; }
+    .btn { display: inline-block; padding: 10px 20px; background: var(--primary-brand); color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--app-input); color: var(--text-primary); border: 1px solid var(--app-border); }
+    .btn-secondary:hover { background: var(--app-hover); }
+    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+    .modal-content { background: var(--app-card); margin: 3% auto; padding: 30px; border-radius: 8px; width: 90%; max-width: 650px; border: 1px solid var(--app-border); max-height: 75vh; overflow-y: auto; }
+    .modal-content.modal-wide { max-width: 920px; }
+    /* ── Modal Tabs ───────────────────────────────────────────── */
+    .modal-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--app-border); margin: -10px -30px 24px; padding: 0 30px; }
+    .modal-tab { padding: 10px 20px; font-size: 13px; cursor: pointer; color: var(--text-secondary); background: none; border: none; border-bottom: 2px solid transparent; transition: color 0.15s; }
+    .modal-tab:hover { color: var(--text-primary); }
+    .modal-tab.active { color: var(--accent-coral); border-bottom-color: var(--accent-coral); font-weight: bold; }
+    .modal-pane { display: none; }
+    .modal-pane.active { display: block; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h2 { color: var(--accent-coral); }
+    .close { color: var(--text-secondary); font-size: 28px; cursor: pointer; line-height: 1; }
+    .close:hover { color: var(--text-primary); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 13px; font-weight: bold; }
+    input, textarea, select { width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-input); color: var(--text-primary); font-size: 14px; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-coral); }
+    .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .form-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .breadcrumb { color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; }
+    .breadcrumb a { color: var(--accent-coral); text-decoration: none; }
+    .btn-danger { background: var(--error-bg); color: var(--error); border: 1px solid var(--error); }
+    .btn-danger:hover { background: var(--error); color: white; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .totals-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+    .total-card { background: var(--app-input); padding: 15px; border-radius: 8px; text-align: center; }
+    .total-card h3 { color: var(--accent-coral); font-size: 20px; }
+    .total-card p { color: var(--text-secondary); font-size: 12px; margin-top: 5px; }
 
-        /* ── Column Chooser ─────────────────────────────────────── */
-        .col-chooser-wrap { position: relative; }
-        .col-chooser-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 500; background: #16213e; border: 1px solid #0f3460; border-radius: 4px; padding: 8px; min-width: 190px; max-height: 420px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,0.6); }
-        .col-chooser-panel.open { display: block; }
-        .col-chooser-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; cursor: pointer; border-radius: 3px; font-size: 12px; color: #ccc; user-select: none; }
-        .col-chooser-item:hover { background: #0f3460; color: #eee; }
-        .col-chooser-item input[type=checkbox] { width: auto; padding: 0; margin: 0; cursor: pointer; accent-color: #e94560; flex-shrink: 0; }
-        .col-chooser-item.locked { opacity: 0.45; cursor: not-allowed; }
-        .col-chooser-divider { border-top: 1px solid #0f3460; margin: 5px 0; }
+    /* ── Estimate Table Toolbar ─────────────────────────────── */
+    .est-toolbar { display: flex; justify-content: space-between; align-items: center; background: var(--app-card); padding: 8px 0 10px; border-bottom: 1px solid var(--app-border); gap: 10px; flex-wrap: wrap; }
+    .est-toolbar-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .est-toolbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .btn-toolbar { display: inline-block; padding: 5px 12px; background: var(--app-input); color: var(--text-secondary); border: 1px solid var(--app-border); border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    .btn-toolbar:hover { background: var(--app-hover); color: var(--text-primary); }
+    .btn-toolbar-accent { background: var(--error-bg); color: var(--error); border-color: var(--error); }
+    .btn-toolbar-accent:hover { background: var(--error); color: white; }
+    .groupby-wrap { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+    .groupby-wrap select { width: auto; padding: 4px 8px; font-size: 12px; background: var(--app-input); border: 1px solid var(--app-border); color: var(--text-primary); border-radius: 4px; cursor: pointer; }
 
-        /* ── Estimate Table ─────────────────────────────────────── */
-        .est-table-wrap { overflow-x: auto; border: 1px solid #0f3460; border-top: none; border-radius: 0 0 6px 6px; }
-        .est-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-        .est-table thead th {
-            background: #0f3460; color: #eee; text-transform: uppercase; font-size: 11px;
-            letter-spacing: 0.5px; padding: 0; border-bottom: 2px solid #e94560;
-            position: sticky; top: 0; z-index: 10; white-space: nowrap;
-            user-select: none; overflow: hidden;
-        }
-        .est-table thead th.drag-over { background: #1a4a7a; outline: 2px solid #e94560; outline-offset: -2px; }
-        .th-inner { display: flex; align-items: center; padding: 9px 8px 9px 8px; cursor: grab; gap: 2px; }
-        .th-inner:active { cursor: grabbing; }
-        .th-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-        .resize-handle { width: 5px; min-width: 5px; height: 18px; cursor: col-resize; background: rgba(233,69,96,0.25); border-radius: 2px; flex-shrink: 0; }
-        .resize-handle:hover, .resize-handle.active { background: #e94560; }
+    /* ── Column Chooser ─────────────────────────────────────── */
+    .col-chooser-wrap { position: relative; }
+    .col-chooser-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 500; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 4px; padding: 8px; min-width: 190px; max-height: 420px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,0.6); }
+    .col-chooser-panel.open { display: block; }
+    .col-chooser-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; cursor: pointer; border-radius: 3px; font-size: 12px; color: var(--text-secondary); user-select: none; }
+    .col-chooser-item:hover { background: var(--app-input); color: var(--text-primary); }
+    .col-chooser-item input[type=checkbox] { width: auto; padding: 0; margin: 0; cursor: pointer; accent-color: var(--accent-coral); flex-shrink: 0; }
+    .col-chooser-item.locked { opacity: 0.45; cursor: not-allowed; }
+    .col-chooser-divider { border-top: 1px solid var(--app-border); margin: 5px 0; }
 
-        /* Assembly group rows */
-        .asm-row td { background: #0f3460; padding: 0; height: 40px; border-bottom: 1px solid #1a3a5c; }
-        .asm-inner { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 100%; }
-        .asm-row-label { background: #e94560; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
-        .asm-row-name { flex: 1; color: #fff; font-weight: bold; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .asm-row-subtotal { color: #e94560; font-size: 13px; font-weight: bold; white-space: nowrap; }
-        .asm-row-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    /* ── Estimate Table ─────────────────────────────────────── */
+    .est-table-wrap { overflow-x: auto; border: 1px solid var(--app-border); border-top: none; border-radius: 0 0 6px 6px; }
+    .est-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    .est-table thead th {
+        background: var(--app-input); color: var(--text-primary); text-transform: uppercase; font-size: 11px;
+        letter-spacing: 0.5px; padding: 0; border-bottom: 2px solid var(--accent-coral);
+        position: sticky; top: 0; z-index: 10; white-space: nowrap;
+        user-select: none; overflow: hidden;
+    }
+    .est-table thead th.drag-over { background: var(--app-hover); outline: 2px solid var(--accent-coral); outline-offset: -2px; }
+    .th-inner { display: flex; align-items: center; padding: 9px 8px 9px 8px; cursor: grab; gap: 2px; }
+    .th-inner:active { cursor: grabbing; }
+    .th-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .resize-handle { width: 5px; min-width: 5px; height: 18px; cursor: col-resize; background: rgba(255,107,53,0.25); border-radius: 2px; flex-shrink: 0; }
+    .resize-handle:hover, .resize-handle.active { background: var(--accent-coral); }
 
-        /* WBS group rows */
-        .wbs-group-row td { background: #16213e; padding: 7px 12px; border-top: 1px solid #0f3460; border-bottom: 1px solid #0f3460; }
-        .wbs-group-inner { display: flex; align-items: center; gap: 8px; }
-        .wbs-group-badge { background: #0f3460; color: #aaa; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: monospace; }
-        .wbs-group-name { color: #e94560; font-weight: bold; font-size: 12px; letter-spacing: 0.3px; flex: 1; }
-        .wbs-group-subtotal { color: #e94560; font-size: 12px; font-weight: bold; margin-left: auto; }
+    /* Assembly group rows */
+    .asm-row td { background: var(--app-input); padding: 0; height: 40px; border-bottom: 1px solid var(--app-border); }
+    .asm-inner { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 100%; }
+    .asm-row-label { background: var(--accent-coral); color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
+    .asm-row-name { flex: 1; color: #fff; font-weight: bold; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .asm-row-subtotal { color: var(--accent-coral); font-size: 13px; font-weight: bold; white-space: nowrap; }
+    .asm-row-actions { display: flex; gap: 5px; flex-shrink: 0; }
 
-        /* Line item rows */
-        .li-row td { padding: 6px 8px; height: 34px; border-bottom: 1px solid rgba(15,52,96,0.35); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .li-row:nth-child(odd)  td { background: #0d1b2a; }
-        .li-row:nth-child(even) td { background: #111d35; }
-        .li-row:hover td { background: #1a2a3a; cursor: default; }
-        .li-row .num { text-align: right; color: #ccc; }
-        .li-row .cost-red { text-align: right; color: #e94560; font-weight: bold; }
-        .li-row .muted { color: #666; font-size: 11px; }
+    /* WBS group rows */
+    .wbs-group-row td { background: var(--app-card); padding: 7px 12px; border-top: 1px solid var(--app-border); border-bottom: 1px solid var(--app-border); }
+    .wbs-group-inner { display: flex; align-items: center; gap: 8px; }
+    .wbs-group-badge { background: var(--app-input); color: var(--text-secondary); padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: monospace; }
+    .wbs-group-name { color: var(--accent-coral); font-weight: bold; font-size: 12px; letter-spacing: 0.3px; flex: 1; }
+    .wbs-group-subtotal { color: var(--accent-coral); font-size: 12px; font-weight: bold; margin-left: auto; }
 
-        /* Total row */
-        .total-row td { background: #16213e; border-top: 2px solid #e94560; padding: 9px 8px; font-weight: bold; }
-        .total-row .total-label { color: #e94560; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
-        .total-row .total-val { text-align: right; color: #e94560; font-weight: bold; }
+    /* Line item rows */
+    .li-row td { padding: 6px 8px; height: 34px; border-bottom: 1px solid var(--app-border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .li-row:nth-child(odd)  td { background: var(--app-input); }
+    .li-row:nth-child(even) td { background: var(--app-card); }
+    .li-row:hover td { background: var(--app-hover); cursor: default; }
+    .li-row .num { text-align: right; color: var(--text-secondary); }
+    .li-row .cost-red { text-align: right; color: var(--accent-coral); font-weight: bold; }
+    .li-row .muted { color: var(--text-muted); font-size: 11px; }
 
-        /* Empty / loading */
-        .est-loading { text-align: center; padding: 40px; color: #555; font-style: italic; font-size: 14px; background: #0d1b2a; border: 1px solid #0f3460; border-top: none; border-radius: 0 0 6px 6px; }
+    /* Total row */
+    .total-row td { background: var(--app-card); border-top: 2px solid var(--accent-coral); padding: 9px 8px; font-weight: bold; }
+    .total-row .total-label { color: var(--accent-coral); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+    .total-row .total-val { text-align: right; color: var(--accent-coral); font-weight: bold; }
 
-        /* Context menu */
-        .ctx-menu { position: fixed; z-index: 9999; background: #16213e; border: 1px solid #0f3460; border-radius: 4px; min-width: 185px; box-shadow: 0 6px 16px rgba(0,0,0,0.65); font-size: 13px; }
-        .ctx-item { padding: 8px 14px; cursor: pointer; color: #ccc; display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; }
-        .ctx-item:hover { background: #0f3460; color: #eee; }
-        .ctx-item-danger { color: #e94560; }
-        .ctx-sep { border-top: 1px solid #0f3460; margin: 3px 0; }
-        .ctx-sub { position: absolute; left: 100%; top: -1px; background: #16213e; border: 1px solid #0f3460; border-radius: 4px; min-width: 170px; box-shadow: 0 6px 16px rgba(0,0,0,0.65); display: none; z-index: 10000; }
-        .ctx-item:hover > .ctx-sub { display: block; }
-        .ctx-sub-item { padding: 7px 12px; cursor: pointer; color: #ccc; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-        .ctx-sub-item:hover { background: #0f3460; color: #eee; }
-        .ctx-sub-code { color: #666; font-family: monospace; font-size: 10px; }
+    /* Empty / loading */
+    .est-loading { text-align: center; padding: 40px; color: var(--text-muted); font-style: italic; font-size: 14px; background: var(--app-input); border: 1px solid var(--app-border); border-top: none; border-radius: 0 0 6px 6px; }
 
-        /* ── Inline cell editing ────────────────────────────────── */
-        .cell-inp { width: 100%; border: none; background: transparent; color: inherit; font-size: 13px; font-family: Arial, sans-serif; padding: 0; margin: 0; outline: none; min-width: 0; cursor: text; display: block; }
-        .cell-inp[type="number"] { text-align: right; }
-        .cell-inp:focus { background: #081422; border-radius: 2px; padding: 1px 3px; }
-        .li-row td:focus-within { background: #081422 !important; }
+    /* Context menu */
+    .ctx-menu { position: fixed; z-index: 9999; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 4px; min-width: 185px; box-shadow: 0 6px 16px rgba(0,0,0,0.65); font-size: 13px; }
+    .ctx-item { padding: 8px 14px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; }
+    .ctx-item:hover { background: var(--app-input); color: var(--text-primary); }
+    .ctx-item-danger { color: var(--error); }
+    .ctx-sep { border-top: 1px solid var(--app-border); margin: 3px 0; }
+    .ctx-sub { position: absolute; left: 100%; top: -1px; background: var(--app-card); border: 1px solid var(--app-border); border-radius: 4px; min-width: 170px; box-shadow: 0 6px 16px rgba(0,0,0,0.65); display: none; z-index: 10000; }
+    .ctx-item:hover > .ctx-sub { display: block; }
+    .ctx-sub-item { padding: 7px 12px; cursor: pointer; color: var(--text-secondary); font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    .ctx-sub-item:hover { background: var(--app-input); color: var(--text-primary); }
+    .ctx-sub-code { color: var(--text-muted); font-family: monospace; font-size: 10px; }
 
-        /* ── WBS / Estimate Properties ─────────────────────────── */
-        .wbs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-        .wbs-card { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; }
-        .wbs-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
-        .wbs-card-title { color: #fff; font-weight: bold; font-size: 14px; }
-        .wbs-badge-template { background: #e94560; color: #fff; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
-        .wbs-badge-custom { background: #0f3460; color: #e94560; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: 1px solid #e94560; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
-        .wbs-value-list { list-style: none; min-height: 4px; overflow-y: auto; max-height: 300px; scrollbar-width: thin; scrollbar-color: #e94560 #0d1b2a; }
-        .wbs-value-item { background: #0d1b2a; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; display: flex; align-items: center; font-size: 13px; color: #ccc; border: 1px solid transparent; }
-        .wbs-value-item:hover { background: #1a2a3a; }
-        .wbs-value-item.dragging { opacity: 0.35; }
-        .wbs-value-item.drag-over { border-top: 2px solid #e94560; }
-        .wbs-drag-handle { cursor: grab; color: #444; font-size: 15px; padding: 0 6px 0 0; user-select: none; flex-shrink: 0; line-height: 1; }
-        .wbs-drag-handle:hover { color: #888; }
-        .wbs-drag-handle:active { cursor: grabbing; }
-        .wbs-value-name { flex: 1; cursor: pointer; }
-        .wbs-value-name:hover { color: #fff; }
-        .wbs-value-code { color: #888; font-size: 11px; font-family: monospace; margin-left: 8px; background: #0f3460; padding: 1px 5px; border-radius: 3px; white-space: nowrap; cursor: pointer; }
-        .wbs-value-code:hover { background: #1a3a5c; color: #ccc; }
-        .wbs-value-code-empty { color: #444; background: transparent; font-size: 10px; font-family: monospace; margin-left: 8px; border: 1px dashed #333; padding: 1px 5px; border-radius: 3px; white-space: nowrap; cursor: pointer; font-style: italic; }
-        .wbs-value-code-empty:hover { border-color: #555; color: #666; }
-        .wbs-value-del { color: #e94560; background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 0 0 8px; opacity: 0.5; line-height: 1; flex-shrink: 0; }
-        .wbs-value-del:hover { opacity: 1; }
-        .wbs-inline-inp { background: #0f3460; border: 1px solid #e94560; color: #fff; font-size: 13px; border-radius: 3px; padding: 1px 5px; outline: none; min-width: 40px; width: 100%; }
-        .wbs-value-code .wbs-inline-inp, .wbs-value-code-empty .wbs-inline-inp { font-size: 11px; font-family: monospace; width: 70px; }
-        .wbs-empty-hint { color: #555; font-size: 12px; font-style: italic; padding: 6px 0 8px; }
-        .wbs-custom-placeholder { color: #555; font-size: 12px; font-style: italic; margin-bottom: 8px; flex-shrink: 0; }
-        .btn-wbs-add-bar { margin-top: 8px; flex-shrink: 0; }
-        .btn-wbs-add { flex-shrink: 0; }
-        .wbs-add-form { background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; padding: 10px; margin-top: 8px; display: none; flex-shrink: 0; }
-        .wbs-add-form.open { display: block; }
-        .wbs-add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-        .wbs-add-row input { background: #1a1a2e; border: 1px solid #0f3460; color: #eee; padding: 5px 8px; border-radius: 4px; font-size: 12px; min-width: 0; }
-        .wbs-add-row input:focus { outline: none; border-color: #e94560; }
-        .inp-name { flex: 2; }
-        .inp-code { flex: 1; }
-        .btn-wbs-add { background: #0f3460; color: #e94560; border: 1px solid #e94560; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
-        .btn-wbs-add:hover { background: #1a4a7a; }
-        .btn-wbs-cancel { background: #0f3460; color: #888; border: 1px solid #555; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-        .btn-wbs-cancel:hover { color: #eee; }
-        .wbs-name-input { background: transparent; border: none; border-bottom: 1px dashed #555; color: #fff; font-weight: bold; font-size: 14px; cursor: text; padding: 1px 2px; width: 100%; min-width: 0; }
-        .wbs-name-input:hover { border-bottom-color: #e94560; }
-        .wbs-name-input:focus { outline: none; border-bottom-color: #e94560; background: #0d1b2a; border-radius: 3px 3px 0 0; }
-        .wbs-name-input::placeholder { color: #555; font-weight: normal; font-style: italic; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        {% include 'nav.html' %}
-        <div class="breadcrumb"><a href="/">Home</a> &rsaquo; {{ project.project_name }}</div>
+    /* ── Inline cell editing ────────────────────────────────── */
+    .cell-inp { width: 100%; border: none; background: transparent; color: inherit; font-size: 13px; padding: 0; margin: 0; outline: none; min-width: 0; cursor: text; display: block; }
+    .cell-inp[type="number"] { text-align: right; }
+    .cell-inp:focus { background: var(--app-bg); border-radius: 2px; padding: 1px 3px; }
+    .li-row td:focus-within { background: var(--app-bg) !important; }
 
-        <div class="header">
-            <div>
-                <h1>{{ project.project_name }}</h1>
-                <p class="project-meta">
-                    #{{ project.project_number or 'N/A' }} &nbsp;|&nbsp;
-                    {% if project.city %}{{ project.city }}{% if project.state %}, {{ project.state }}{% endif %}{% if project.zip_code %} {{ project.zip_code }}{% endif %}{% else %}{{ project.location or 'No location' }}{% endif %}
-                    {% if project_type_name %}&nbsp;|&nbsp; {{ project_type_name }}{% endif %}
-                    {% if market_sector_name %}&nbsp;|&nbsp; {{ market_sector_name }}{% endif %}
-                </p>
-                <p class="project-meta" style="margin-top:4px">{{ project.description or '' }}</p>
-            </div>
-            <div class="btn-group">
-                <a href="/" class="btn btn-secondary">Back</a>
-                <button class="btn btn-secondary" onclick="openEditProjectModal()">Edit Project</button>
-                <a href="/library" class="btn btn-secondary">Library</a>
-                <a href="/templates" class="btn btn-secondary">Templates</a>
-                <a href="/project/{{ project.id }}/assembly/builder" class="btn">+ Assembly Builder</a>
-            </div>
+    /* ── WBS / Estimate Properties ─────────────────────────── */
+    .wbs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .wbs-card { background: var(--app-input); border: 1px solid var(--app-border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; }
+    .wbs-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
+    .wbs-card-title { color: #fff; font-weight: bold; font-size: 14px; }
+    .wbs-badge-template { background: var(--accent-coral); color: #fff; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+    .wbs-badge-custom { background: var(--app-input); color: var(--accent-coral); font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 3px; border: 1px solid var(--accent-coral); letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+    .wbs-value-list { list-style: none; min-height: 4px; overflow-y: auto; max-height: 300px; scrollbar-width: thin; scrollbar-color: var(--accent-coral) var(--app-input); }
+    .wbs-value-item { background: var(--app-input); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; display: flex; align-items: center; font-size: 13px; color: var(--text-secondary); border: 1px solid transparent; }
+    .wbs-value-item:hover { background: var(--app-hover); }
+    .wbs-value-item.dragging { opacity: 0.35; }
+    .wbs-value-item.drag-over { border-top: 2px solid var(--accent-coral); }
+    .wbs-drag-handle { cursor: grab; color: var(--text-muted); font-size: 15px; padding: 0 6px 0 0; user-select: none; flex-shrink: 0; line-height: 1; }
+    .wbs-drag-handle:hover { color: var(--text-secondary); }
+    .wbs-drag-handle:active { cursor: grabbing; }
+    .wbs-value-name { flex: 1; cursor: pointer; }
+    .wbs-value-name:hover { color: var(--text-primary); }
+    .wbs-value-code { color: var(--text-secondary); font-size: 11px; font-family: monospace; margin-left: 8px; background: var(--app-input); padding: 1px 5px; border-radius: 3px; white-space: nowrap; cursor: pointer; }
+    .wbs-value-code:hover { background: var(--app-hover); color: var(--text-secondary); }
+    .wbs-value-code-empty { color: var(--text-muted); background: transparent; font-size: 10px; font-family: monospace; margin-left: 8px; border: 1px dashed var(--app-border); padding: 1px 5px; border-radius: 3px; white-space: nowrap; cursor: pointer; font-style: italic; }
+    .wbs-value-code-empty:hover { border-color: var(--text-secondary); color: var(--text-muted); }
+    .wbs-value-del { color: var(--error); background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 0 0 8px; opacity: 0.5; line-height: 1; flex-shrink: 0; }
+    .wbs-value-del:hover { opacity: 1; }
+    .wbs-inline-inp { background: var(--app-input); border: 1px solid var(--accent-coral); color: var(--text-primary); font-size: 13px; border-radius: 3px; padding: 1px 5px; outline: none; min-width: 40px; width: 100%; }
+    .wbs-value-code .wbs-inline-inp, .wbs-value-code-empty .wbs-inline-inp { font-size: 11px; font-family: monospace; width: 70px; }
+    .wbs-empty-hint { color: var(--text-muted); font-size: 12px; font-style: italic; padding: 6px 0 8px; }
+    .wbs-custom-placeholder { color: var(--text-muted); font-size: 12px; font-style: italic; margin-bottom: 8px; flex-shrink: 0; }
+    .btn-wbs-add-bar { margin-top: 8px; flex-shrink: 0; }
+    .btn-wbs-add { flex-shrink: 0; }
+    .wbs-add-form { background: var(--app-input); border: 1px solid var(--app-border); border-radius: 4px; padding: 10px; margin-top: 8px; display: none; flex-shrink: 0; }
+    .wbs-add-form.open { display: block; }
+    .wbs-add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .wbs-add-row input { background: var(--app-bg); border: 1px solid var(--app-border); color: var(--text-primary); padding: 5px 8px; border-radius: 4px; font-size: 12px; min-width: 0; }
+    .wbs-add-row input:focus { outline: none; border-color: var(--accent-coral); }
+    .inp-name { flex: 2; }
+    .inp-code { flex: 1; }
+    .btn-wbs-add { background: var(--app-input); color: var(--accent-coral); border: 1px solid var(--accent-coral); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .btn-wbs-add:hover { background: var(--app-hover); }
+    .btn-wbs-cancel { background: var(--app-input); color: var(--text-secondary); border: 1px solid var(--app-border); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+    .btn-wbs-cancel:hover { color: var(--text-primary); }
+    .wbs-name-input { background: transparent; border: none; border-bottom: 1px dashed var(--text-secondary); color: var(--text-primary); font-weight: bold; font-size: 14px; cursor: text; padding: 1px 2px; width: 100%; min-width: 0; }
+    .wbs-name-input:hover { border-bottom-color: var(--accent-coral); }
+    .wbs-name-input:focus { outline: none; border-bottom-color: var(--accent-coral); background: var(--app-input); border-radius: 3px 3px 0 0; }
+    .wbs-name-input::placeholder { color: var(--text-muted); font-weight: normal; font-style: italic; }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="breadcrumb"><a href="/">Home</a> &rsaquo; {{ project.project_name }}</div>
+
+    <div class="header">
+        <div>
+            <h1>{{ project.project_name }}</h1>
+            <p class="project-meta">
+                #{{ project.project_number or 'N/A' }} &nbsp;|&nbsp;
+                {% if project.city %}{{ project.city }}{% if project.state %}, {{ project.state }}{% endif %}{% if project.zip_code %} {{ project.zip_code }}{% endif %}{% else %}{{ project.location or 'No location' }}{% endif %}
+                {% if project_type_name %}&nbsp;|&nbsp; {{ project_type_name }}{% endif %}
+                {% if market_sector_name %}&nbsp;|&nbsp; {{ market_sector_name }}{% endif %}
+            </p>
+            <p class="project-meta" style="margin-top:4px">{{ project.description or '' }}</p>
         </div>
-
-        <div class="totals-bar">
-            <div class="total-card"><h3 id="total-material">$0</h3><p>Material Cost</p></div>
-            <div class="total-card"><h3 id="total-labor">$0</h3><p>Labor Cost</p></div>
-            <div class="total-card"><h3 id="total-equipment">$0</h3><p>Equipment Cost</p></div>
-            <div class="total-card"><h3 id="total-cost">$0</h3><p>Total Cost</p></div>
+        <div class="btn-group">
+            <a href="/" class="btn btn-secondary">Back</a>
+            <button class="btn btn-secondary" onclick="openEditProjectModal()">Edit Project</button>
+            <a href="/library" class="btn btn-secondary">Library</a>
+            <a href="/templates" class="btn btn-secondary">Templates</a>
+            <a href="/project/{{ project.id }}/assembly/builder" class="btn">+ Assembly Builder</a>
         </div>
+    </div>
 
-        <!-- Estimate toolbar -->
-        <div class="est-toolbar">
-            <div class="est-toolbar-left">
-                <div class="groupby-wrap">
-                    <span>Group By:</span>
-                    <div class="col-chooser-wrap">
-                        <button class="btn-toolbar" id="groupby-btn" onclick="toggleGroupByPanel()">Assembly</button>
-                        <div id="groupby-panel" class="col-chooser-panel"></div>
-                    </div>
-                </div>
+    <div class="totals-bar">
+        <div class="total-card"><h3 id="total-material">$0</h3><p>Material Cost</p></div>
+        <div class="total-card"><h3 id="total-labor">$0</h3><p>Labor Cost</p></div>
+        <div class="total-card"><h3 id="total-equipment">$0</h3><p>Equipment Cost</p></div>
+        <div class="total-card"><h3 id="total-cost">$0</h3><p>Total Cost</p></div>
+    </div>
+
+    <!-- Estimate toolbar -->
+    <div class="est-toolbar">
+        <div class="est-toolbar-left">
+            <div class="groupby-wrap">
+                <span>Group By:</span>
                 <div class="col-chooser-wrap">
-                    <button class="btn-toolbar" id="col-chooser-btn" onclick="toggleColChooser()">⚙ Columns</button>
-                    <div id="col-chooser-panel" class="col-chooser-panel"></div>
+                    <button class="btn-toolbar" id="groupby-btn" onclick="toggleGroupByPanel()">Assembly</button>
+                    <div id="groupby-panel" class="col-chooser-panel"></div>
                 </div>
             </div>
-            <div class="est-toolbar-right">
-                <a href="/project/{{ project.id }}/report"      class="btn-toolbar">Summary</a>
-                <a href="/project/{{ project.id }}/report/csi"  class="btn-toolbar">CSI Report</a>
-                <a href="/project/{{ project.id }}/estimate/csv" class="btn-toolbar">Export CSV</a>
-                <button class="btn-toolbar btn-toolbar-accent" onclick="openLineItemModal(null)">+ Line Item</button>
+            <div class="col-chooser-wrap">
+                <button class="btn-toolbar" id="col-chooser-btn" onclick="toggleColChooser()">⚙ Columns</button>
+                <div id="col-chooser-panel" class="col-chooser-panel"></div>
             </div>
         </div>
-
-        <!-- Estimate table -->
-        <div class="est-table-wrap" id="est-table-wrap">
-            <div class="est-loading" id="est-loading">Loading estimate…</div>
-            <table class="est-table" id="est-table" style="display:none">
-                <colgroup id="est-colgroup"></colgroup>
-                <thead><tr id="est-header-row"></tr></thead>
-                <tbody id="est-tbody"></tbody>
-            </table>
+        <div class="est-toolbar-right">
+            <a href="/project/{{ project.id }}/report"      class="btn-toolbar">Summary</a>
+            <a href="/project/{{ project.id }}/report/csi"  class="btn-toolbar">CSI Report</a>
+            <a href="/project/{{ project.id }}/estimate/csv" class="btn-toolbar">Export CSV</a>
+            <button class="btn-toolbar btn-toolbar-accent" onclick="openLineItemModal(null)">+ Line Item</button>
         </div>
+    </div>
 
+    <!-- Estimate table -->
+    <div class="est-table-wrap" id="est-table-wrap">
+        <div class="est-loading" id="est-loading">Loading estimate…</div>
+        <table class="est-table" id="est-table" style="display:none">
+            <colgroup id="est-colgroup"></colgroup>
+            <thead><tr id="est-header-row"></tr></thead>
+            <tbody id="est-tbody"></tbody>
+        </table>
     </div>
 
     <!-- Context Menu -->
@@ -306,12 +300,12 @@
 
             <!-- Pane: Estimate Properties (WBS) -->
             <div class="modal-pane" id="ep-pane-properties">
-                <p style="color:#888;font-size:13px;margin-bottom:18px">
+                <p style="color:var(--text-secondary);font-size:13px;margin-bottom:18px">
                     Define WBS codes and other estimate properties for this project.
                     Values defined here can be assigned to line items to enable grouping and filtering.
                 </p>
                 <div id="wbs-grid" class="wbs-grid">
-                    <div style="color:#555;font-style:italic;font-size:13px;grid-column:span 3;">Loading…</div>
+                    <div style="color:var(--text-muted);font-style:italic;font-size:13px;grid-column:span 3;">Loading…</div>
                 </div>
             </div>
         </div>
@@ -443,7 +437,9 @@
         'market_sector_id': project.market_sector_id,
         'description': project.description or ''
     } | tojson }}</script>
+{% endblock %}
 
+{% block extra_js %}
     <script>
     // ─────────────────────────────────────────────────────────────────
     // GLOBALS & COLUMN DEFINITIONS
@@ -1414,5 +1410,4 @@
     }
     pageInit();
     </script>
-</body>
-</html>
+{% endblock %}

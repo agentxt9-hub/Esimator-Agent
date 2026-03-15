@@ -1,43 +1,40 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Settings — Construction Estimator</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
-        .page { max-width: 900px; margin: 0 auto; }
-        .inner { background: #16213e; border-radius: 8px; padding: 28px; }
-        .breadcrumb { color: #888; margin-bottom: 20px; font-size: 13px; }
-        .breadcrumb a { color: #e94560; text-decoration: none; }
-        h1 { color: #e94560; margin-bottom: 6px; font-size: 22px; }
-        .page-sub { color: #888; font-size: 13px; margin-bottom: 28px; }
-        h2 { color: #eee; font-size: 16px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #0f3460; }
-        .section { margin-bottom: 36px; }
-        .btn { display: inline-block; padding: 8px 18px; background: #e94560; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; }
-        .btn:hover { background: #c73652; }
-        .btn-secondary { background: #0f3460; }
-        .btn-secondary:hover { background: #1a4a7a; }
-        .btn-sm { padding: 4px 10px; font-size: 11px; }
-        .btn-danger { background: #3a0a12; color: #e94560; border: 1px solid #e94560; }
-        .btn-danger:hover { background: #e94560; color: white; }
-        .form-group { margin-bottom: 14px; }
-        label { display: block; margin-bottom: 5px; color: #aaa; font-size: 12px; font-weight: bold; }
-        input, textarea, select { width: 100%; padding: 9px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 13px; font-family: Arial, sans-serif; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
-        .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-        .logo-preview { width: 120px; height: 60px; object-fit: contain; background: #0d1b2a; border: 1px solid #0f3460; border-radius: 4px; margin-bottom: 10px; display: block; }
-        .prop-list { list-style: none; }
-        .prop-list li { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #0d1b2a; border: 1px solid #1a2a3a; border-radius: 4px; margin-bottom: 6px; }
-        .prop-name { color: #eee; font-size: 13px; }
-        .add-row { display: flex; gap: 8px; margin-top: 10px; }
-        .add-row input { flex: 1; padding: 8px; }
-        .save-msg { color: #7bde9b; font-size: 12px; margin-left: 10px; display: none; }
-    </style>
-</head>
-<body>
-<div class="page"><div class="inner">
-{% include 'nav.html' %}
+{% extends "app_base.html" %}
+{% block title %}Settings - Zenbid{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page { max-width: 900px; margin: 0 auto; }
+    .breadcrumb { color: var(--text-secondary); margin-bottom: 20px; font-size: 13px; }
+    .breadcrumb a { color: var(--accent-coral); text-decoration: none; }
+    h1 { color: var(--accent-coral); margin-bottom: 6px; font-size: 22px; }
+    .page-sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 28px; }
+    h2 { color: var(--text-primary); font-size: 16px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--app-border); }
+    .section { margin-bottom: 36px; }
+    .btn { display: inline-block; padding: 8px 18px; background: var(--primary-brand); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--app-input); color: var(--text-primary); border: 1px solid var(--app-border); }
+    .btn-secondary:hover { background: var(--app-hover); }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+    .btn-danger { background: var(--error-bg); color: var(--error); border: 1px solid var(--error); }
+    .btn-danger:hover { background: var(--error); color: white; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; margin-bottom: 5px; color: var(--text-secondary); font-size: 12px; font-weight: bold; }
+    input, textarea, select { width: 100%; padding: 9px; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-input); color: var(--text-primary); font-size: 13px; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-coral); }
+    .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .logo-preview { width: 120px; height: 60px; object-fit: contain; background: var(--app-input); border: 1px solid var(--app-border); border-radius: 4px; margin-bottom: 10px; display: block; }
+    .prop-list { list-style: none; }
+    .prop-list li { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--app-input); border: 1px solid var(--app-border); border-radius: 4px; margin-bottom: 6px; }
+    .prop-name { color: var(--text-primary); font-size: 13px; }
+    .add-row { display: flex; gap: 8px; margin-top: 10px; }
+    .add-row input { flex: 1; padding: 8px; }
+    .save-msg { color: var(--success); font-size: 12px; margin-left: 10px; display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
     <div class="breadcrumb"><a href="/">Home</a> &gt; Settings</div>
     <h1>Settings</h1>
     <p class="page-sub">Company profile and global property lists</p>
@@ -120,9 +117,11 @@
         </div>
     </div>
 
-</div></div>
+    <script id="propsData" type="application/json">{{ props_json | safe }}</script>
+</div>
+{% endblock %}
 
-<script id="propsData" type="application/json">{{ props_json | safe }}</script>
+{% block extra_js %}
 <script>
 let props = JSON.parse(document.getElementById('propsData').textContent);
 
@@ -193,6 +192,5 @@ function saveCompany() {
 renderLists();
 </script>
 
-    {% include 'agentx_panel.html' %}
-</body>
-</html>
+{% include 'agentx_panel.html' %}
+{% endblock %}

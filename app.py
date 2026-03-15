@@ -26,7 +26,10 @@ app = Flask(__name__)
 # CONFIG
 # ─────────────────────────────────────────
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Builder@localhost:5432/estimator_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL',
+    'postgresql://postgres:Builder@localhost:5432/estimator_db'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'logo')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
@@ -314,15 +317,54 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
+        email    = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
-        user = User.query.filter_by(username=username).first()
+        remember = bool(request.form.get('remember'))
+        # Look up by email first, fall back to username for legacy accounts
+        user = User.query.filter_by(email=email).first()
+        if user is None:
+            user = User.query.filter_by(username=email).first()
         if user and user.check_password(password):
-            login_user(user, remember=True)
+            login_user(user, remember=remember)
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
-        flash('Invalid username or password.', 'error')
+        return render_template('login.html', error='Invalid email or password', email=email)
     return render_template('login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    """Self-service account creation: creates a Company + User (role=admin) and logs in."""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        company_name = (request.form.get('company_name') or '').strip()
+        full_name    = (request.form.get('full_name') or '').strip()
+        email        = (request.form.get('email') or '').strip().lower()
+        password     = request.form.get('password') or ''
+        if not all([company_name, full_name, email, password]):
+            return render_template('signup.html', error='All fields are required')
+        if len(password) < 8:
+            return render_template('signup.html', error='Password must be at least 8 characters')
+        if User.query.filter_by(email=email).first():
+            return render_template('signup.html', error='Email already registered')
+        # Create company, then owner user
+        company = Company(company_name=company_name)
+        db.session.add(company)
+        db.session.flush()          # get company.id before commit
+        _seed_company_properties(company.id)
+        user = User(
+            company_id=company.id,
+            username=full_name,     # use full name as display username
+            email=email,
+            role='admin',
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        login_user(user, remember=True)
+        flash('Account created! Welcome to Zenbid.', 'success')
+        return redirect(url_for('index'))
+    return render_template('signup.html')
 
 @app.route('/logout')
 @login_required
@@ -433,6 +475,64 @@ def profile():
     return render_template('profile.html', user=current_user, error=error, success=success)
 
 # ─────────────────────────────────────────
+# MARKETING / PUBLIC ROUTES
+# ─────────────────────────────────────────
+
+@app.route('/pricing')
+def pricing():
+    return render_template('pricing.html')
+
+@app.route('/features')
+def features():
+    return redirect('/#features')
+
+@app.route('/forgot-password')
+def forgot_password():
+    flash('Password reset coming soon. Contact your admin for help.', 'info')
+    return redirect(url_for('login'))
+
+# /app and /app/dashboard → redirect to main dashboard
+@app.route('/app')
+@app.route('/app/dashboard')
+@login_required
+def app_dashboard():
+    return redirect(url_for('index'))
+
+@app.route('/app/projects')
+@login_required
+def app_projects():
+    return redirect(url_for('index'))
+
+# Placeholder footer/nav links
+@app.route('/about')
+def about():
+    return "About page — coming soon", 200
+
+@app.route('/blog')
+def blog():
+    return "Blog — coming soon", 200
+
+@app.route('/careers')
+def careers():
+    return "Careers — coming soon", 200
+
+@app.route('/contact')
+def contact():
+    return "Contact — coming soon", 200
+
+@app.route('/privacy')
+def privacy():
+    return "Privacy Policy — coming soon", 200
+
+@app.route('/terms')
+def terms():
+    return "Terms of Service — coming soon", 200
+
+@app.route('/security')
+def security():
+    return "Security — coming soon", 200
+
+# ─────────────────────────────────────────
 # STATIC FILES
 # ─────────────────────────────────────────
 
@@ -518,28 +618,31 @@ def get_global_properties():
 # ─────────────────────────────────────────
 
 @app.route('/')
+def landing():
+    """Public landing page. Redirect authenticated users straight to the dashboard."""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    return render_template('landing.html')
+
+@app.route('/dashboard')
 @login_required
 def index():
     cid = current_user.company_id
-    projects = Project.query.filter_by(company_id=cid).all()
+    projects = Project.query.filter_by(company_id=cid).order_by(Project.updated_at.desc()).all()
     total_value = (db.session.query(db.func.sum(LineItem.total_cost))
                    .join(Assembly, LineItem.assembly_id == Assembly.id)
                    .join(Project, Assembly.project_id == Project.id)
                    .filter(Project.company_id == cid)
                    .scalar() or 0)
-    # Add direct line items (no assembly)
     direct_value = (db.session.query(db.func.sum(LineItem.total_cost))
                     .join(Project, LineItem.project_id == Project.id)
                     .filter(Project.company_id == cid, LineItem.assembly_id == None)
                     .scalar() or 0)
     total_value = float(total_value) + float(direct_value)
-    active_count = (db.session.query(Project.id)
-                    .filter_by(company_id=cid)
-                    .join(Assembly, Assembly.project_id == Project.id)
-                    .join(LineItem, LineItem.assembly_id == Assembly.id)
-                    .distinct().count())
-    return render_template('index.html', projects=projects,
-                           total_value=total_value, active_count=active_count)
+    return render_template('app_dashboard.html',
+                           projects=projects,
+                           project_count=len(projects),
+                           total_value=total_value)
 
 # ─────────────────────────────────────────
 # PROJECT ROUTES

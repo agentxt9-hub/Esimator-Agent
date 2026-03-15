@@ -1,191 +1,184 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Estimate — {{ project.project_name }}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; }
+{% extends "app_base.html" %}
+{% block title %}Estimate — {{ project.project_name }} - Zenbid{% endblock %}
 
-        .page  { padding: 20px; }
-        .inner { background: #16213e; border-radius: 8px; padding: 24px; }
+{% block extra_css %}
+<style>
+    .breadcrumb     { color: var(--text-secondary); margin-bottom: 16px; font-size: 13px; }
+    .breadcrumb a   { color: var(--accent-coral); text-decoration: none; }
 
-        .breadcrumb     { color: #888; margin-bottom: 16px; font-size: 13px; }
-        .breadcrumb a   { color: #e94560; text-decoration: none; }
+    .header         { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--app-border); }
+    h1              { color: var(--accent-coral); margin-bottom: 4px; font-size: 22px; }
+    .project-meta   { color: var(--text-secondary); font-size: 13px; }
 
-        .header         { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #0f3460; }
-        h1              { color: #e94560; margin-bottom: 4px; font-size: 22px; }
-        .project-meta   { color: #888; font-size: 13px; }
+    .btn            { display: inline-block; padding: 8px 16px; background: var(--primary-brand); color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+    .btn:hover      { background: var(--primary-hover); }
+    .btn-sm         { padding: 5px 10px; font-size: 11px; }
+    .btn-secondary  { background: var(--app-input); color: var(--text-primary); border: 1px solid var(--app-border); }
+    .btn-secondary:hover { background: var(--app-hover); }
+    .btn-row        { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
-        .btn            { display: inline-block; padding: 8px 16px; background: #e94560; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; }
-        .btn:hover      { background: #c73652; }
-        .btn-sm         { padding: 5px 10px; font-size: 11px; }
-        .btn-secondary  { background: #0f3460; }
-        .btn-secondary:hover { background: #1a4a7a; }
-        .btn-row        { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .grp-toggle     { display: flex; }
+    .grp-toggle .btn { border-radius: 0; border-right: 1px solid rgba(255,255,255,0.1); }
+    .grp-toggle .btn:first-child { border-radius: 4px 0 0 4px; }
+    .grp-toggle .btn:last-child  { border-radius: 0 4px 4px 0; border-right: none; }
+    .grp-toggle .btn.active      { background: var(--primary-brand); }
+    .grp-toggle .btn:not(.active){ background: var(--app-input); }
 
-        .grp-toggle     { display: flex; }
-        .grp-toggle .btn { border-radius: 0; border-right: 1px solid rgba(255,255,255,0.1); }
-        .grp-toggle .btn:first-child { border-radius: 4px 0 0 4px; }
-        .grp-toggle .btn:last-child  { border-radius: 0 4px 4px 0; border-right: none; }
-        .grp-toggle .btn.active      { background: #e94560; }
-        .grp-toggle .btn:not(.active){ background: #0f3460; }
+    /* Totals bar */
+    .totals-bar    { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .total-card    { background: var(--app-input); padding: 14px 16px; border-radius: 8px; text-align: center; }
+    .total-card h3 { color: var(--accent-coral); font-size: 18px; margin-bottom: 4px; }
+    .total-card p  { color: var(--text-secondary); font-size: 11px; }
 
-        /* Totals bar */
-        .totals-bar    { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-        .total-card    { background: #0f3460; padding: 14px 16px; border-radius: 8px; text-align: center; }
-        .total-card h3 { color: #e94560; font-size: 18px; margin-bottom: 4px; }
-        .total-card p  { color: #888; font-size: 11px; }
+    /* Toolbar */
+    .toolbar       { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+    .toolbar-left  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .toolbar-label { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
 
-        /* Toolbar */
-        .toolbar       { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
-        .toolbar-left  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .toolbar-label { color: #888; font-size: 12px; white-space: nowrap; }
+    /* Table */
+    .table-wrapper { overflow-x: auto; border-radius: 6px; border: 1px solid var(--app-border); max-height: 70vh; overflow-y: auto; }
+    table          { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1640px; }
 
-        /* Table */
-        .table-wrapper { overflow-x: auto; border-radius: 6px; border: 1px solid #0f3460; max-height: 70vh; overflow-y: auto; }
-        table          { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1640px; }
+    thead th {
+        background: var(--app-input); color: var(--text-secondary); padding: 9px 8px;
+        text-align: left; white-space: nowrap;
+        position: sticky; top: 0; z-index: 2;
+        cursor: pointer; user-select: none;
+        border-right: 1px solid var(--app-border);
+    }
+    thead th:hover { background: var(--app-hover); color: var(--text-primary); }
+    .sort-icon     { color: var(--accent-coral); margin-left: 3px; font-size: 10px; }
 
-        thead th {
-            background: #0f3460; color: #aaa; padding: 9px 8px;
-            text-align: left; white-space: nowrap;
-            position: sticky; top: 0; z-index: 2;
-            cursor: pointer; user-select: none;
-            border-right: 1px solid #1a2a3a;
-        }
-        thead th:hover { background: #1a3a5a; color: #eee; }
-        .sort-icon     { color: #e94560; margin-left: 3px; font-size: 10px; }
+    tbody tr       { border-bottom: 1px solid var(--app-border); }
+    tbody tr:hover td { background: var(--app-hover); }
 
-        tbody tr       { border-bottom: 1px solid #1a2a3a; }
-        tbody tr:hover td { background: #1a2a3a; }
+    td {
+        padding: 7px 8px; color: var(--text-secondary);
+        vertical-align: middle; border-right: 1px solid var(--app-border);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
-        td {
-            padding: 7px 8px; color: #ccc;
-            vertical-align: middle; border-right: 1px solid #162030;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
+    /* Column widths */
+    .c-desc  { min-width: 200px; max-width: 240px; }
+    .c-asm   { min-width: 130px; max-width: 160px; }
+    .c-csi1  { width: 90px; }
+    .c-csi2  { width: 130px; }
+    .c-qty   { width: 72px;  text-align: right; }
+    .c-unit  { width: 62px; }
+    .c-pr    { width: 82px;  text-align: right; }
+    .c-lh    { width: 82px;  text-align: right; }
+    .c-mpu   { width: 92px;  text-align: right; }
+    .c-mat   { width: 105px; text-align: right; }
+    .c-lph   { width: 92px;  text-align: right; }
+    .c-lab   { width: 105px; text-align: right; }
+    .c-eph   { width: 92px;  text-align: right; }
+    .c-equ   { width: 105px; text-align: right; }
+    .c-tot   { width: 115px; text-align: right; }
+    .c-trade { width: 120px; display: none; }
 
-        /* Column widths */
-        .c-desc  { min-width: 200px; max-width: 240px; }
-        .c-asm   { min-width: 130px; max-width: 160px; }
-        .c-csi1  { width: 90px; }
-        .c-csi2  { width: 130px; }
-        .c-qty   { width: 72px;  text-align: right; }
-        .c-unit  { width: 62px; }
-        .c-pr    { width: 82px;  text-align: right; }
-        .c-lh    { width: 82px;  text-align: right; }
-        .c-mpu   { width: 92px;  text-align: right; }
-        .c-mat   { width: 105px; text-align: right; }
-        .c-lph   { width: 92px;  text-align: right; }
-        .c-lab   { width: 105px; text-align: right; }
-        .c-eph   { width: 92px;  text-align: right; }
-        .c-equ   { width: 105px; text-align: right; }
-        .c-tot   { width: 115px; text-align: right; }
-        .c-trade { width: 120px; display: none; }
+    /* Show trade column when in trade view */
+    .show-trade th.c-trade,
+    .show-trade td.c-trade { display: table-cell; }
 
-        /* Show trade column when in trade view */
-        .show-trade th.c-trade,
-        .show-trade td.c-trade { display: table-cell; }
+    /* Editable cells */
+    td.editable         { cursor: pointer; }
+    td.editable:hover   { background: var(--app-hover) !important; }
+    td.editing          { padding: 0 !important; }
+    td.editing input    { width: 100%; height: 100%; padding: 7px 8px; background: var(--app-input); border: 2px solid var(--accent-coral); color: var(--text-primary); font-size: 13px; outline: none; }
 
-        /* Editable cells */
-        td.editable         { cursor: pointer; }
-        td.editable:hover   { background: #1f3050 !important; }
-        td.editing          { padding: 0 !important; }
-        td.editing input    { width: 100%; height: 100%; padding: 7px 8px; background: #0d1b2a; border: 2px solid #e94560; color: #eee; font-size: 13px; font-family: Arial, sans-serif; outline: none; }
+    /* Calculated cells */
+    td.calc { color: var(--text-muted); }
+    td.cost { color: var(--text-primary); }
+    td.grand{ color: var(--accent-coral); font-weight: bold; }
 
-        /* Calculated cells */
-        td.calc { color: #999; }
-        td.cost { color: #ddd; }
-        td.grand{ color: #e94560; font-weight: bold; }
+    /* Group header */
+    tr.grp-hdr td    { background: var(--app-input); color: var(--text-primary); font-weight: bold; padding: 8px 10px; border-top: 2px solid var(--app-border); cursor: pointer; }
+    tr.grp-hdr:hover td { background: var(--app-hover) !important; }
+    .grp-badge       { background: var(--accent-coral); color: white; padding: 2px 7px; border-radius: 3px; font-size: 10px; margin-right: 5px; }
+    .grp-count       { color: var(--text-secondary); font-size: 11px; font-weight: normal; margin-left: 8px; }
+    .collapse-icon   { color: var(--text-secondary); margin-right: 5px; font-size: 10px; display: inline-block; width: 10px; }
+    tr.grp-hdr td.cost  { color: var(--text-primary); }
+    tr.grp-hdr td.grand { color: var(--accent-coral); }
 
-        /* Group header */
-        tr.grp-hdr td    { background: #0d1b2a; color: #eee; font-weight: bold; padding: 8px 10px; border-top: 2px solid #0f3460; cursor: pointer; }
-        tr.grp-hdr:hover td { background: #111f2e !important; }
-        .grp-badge       { background: #e94560; color: white; padding: 2px 7px; border-radius: 3px; font-size: 10px; margin-right: 5px; }
-        .grp-count       { color: #888; font-size: 11px; font-weight: normal; margin-left: 8px; }
-        .collapse-icon   { color: #888; margin-right: 5px; font-size: 10px; display: inline-block; width: 10px; }
-        tr.grp-hdr td.cost  { color: #ddd; }
-        tr.grp-hdr td.grand { color: #e94560; }
+    /* Project total row */
+    tr.proj-total td      { background: var(--app-input); color: var(--text-primary); font-weight: bold; padding: 9px 8px; border-top: 2px solid var(--accent-coral); }
+    tr.proj-total td.grand{ color: var(--accent-coral); font-size: 15px; }
 
-        /* Project total row */
-        tr.proj-total td      { background: #0f3460; color: #eee; font-weight: bold; padding: 9px 8px; border-top: 2px solid #e94560; }
-        tr.proj-total td.grand{ color: #e94560; font-size: 15px; }
+    .empty-msg { text-align: center; color: var(--text-muted); padding: 50px; font-size: 15px; }
 
-        .empty-msg { text-align: center; color: #555; padding: 50px; font-size: 15px; }
+    /* Modals */
+    .modal         { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+    .modal-content { background: var(--app-card); margin: 4% auto; padding: 28px; border-radius: 8px; width: 90%; max-width: 640px; border: 1px solid var(--app-border); }
+    .modal-header  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    .modal-header h2 { color: var(--accent-coral); }
+    .close         { color: var(--text-secondary); font-size: 26px; cursor: pointer; line-height: 1; }
+    .close:hover   { color: var(--text-primary); }
+    .form-group    { margin-bottom: 14px; }
+    label          { display: block; margin-bottom: 5px; color: var(--text-secondary); font-size: 12px; font-weight: bold; }
+    input, textarea, select { width: 100%; padding: 9px; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-input); color: var(--text-primary); font-size: 13px; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-coral); }
+    .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
-        /* Modals */
-        .modal         { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
-        .modal-content { background: #16213e; margin: 4% auto; padding: 28px; border-radius: 8px; width: 90%; max-width: 640px; border: 1px solid #0f3460; }
-        .modal-header  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-        .modal-header h2 { color: #e94560; }
-        .close         { color: #888; font-size: 26px; cursor: pointer; line-height: 1; }
-        .close:hover   { color: #eee; }
-        .form-group    { margin-bottom: 14px; }
-        label          { display: block; margin-bottom: 5px; color: #aaa; font-size: 12px; font-weight: bold; }
-        input, textarea, select { width: 100%; padding: 9px; border: 1px solid #0f3460; border-radius: 4px; background: #0d1b2a; color: #eee; font-size: 13px; font-family: Arial, sans-serif; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
-        .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    /* Delete button column */
+    .c-del { width: 32px; text-align: center; padding: 2px !important; }
+    .del-btn { padding: 2px 7px; font-size: 11px; }
 
-        /* Delete button column */
-        .c-del { width: 32px; text-align: center; padding: 2px !important; }
-        .del-btn { padding: 2px 7px; font-size: 11px; }
+    /* Library search cards */
+    .lib-results { max-height: 200px; overflow-y: auto; border: 1px solid var(--app-border); border-radius: 4px; margin-top: 6px; background: var(--app-input); }
+    .lib-card { padding: 9px 12px; border-bottom: 1px solid var(--app-border); cursor: pointer; }
+    .lib-card:hover { background: var(--app-hover); }
+    .lib-card:last-child { border-bottom: none; }
+    .lib-card-desc { color: var(--text-primary); font-size: 13px; }
+    .lib-card-meta { color: var(--text-secondary); font-size: 11px; margin-top: 2px; }
+    .lib-no-results { color: var(--text-muted); font-size: 13px; padding: 16px; text-align: center; }
 
-        /* Library search cards */
-        .lib-results { max-height: 200px; overflow-y: auto; border: 1px solid #0f3460; border-radius: 4px; margin-top: 6px; background: #0d1b2a; }
-        .lib-card { padding: 9px 12px; border-bottom: 1px solid #1a2a3a; cursor: pointer; }
-        .lib-card:hover { background: #1a2a3a; }
-        .lib-card:last-child { border-bottom: none; }
-        .lib-card-desc { color: #eee; font-size: 13px; }
-        .lib-card-meta { color: #888; font-size: 11px; margin-top: 2px; }
-        .lib-no-results { color: #555; font-size: 13px; padding: 16px; text-align: center; }
+    /* Item type toggle */
+    .type-toggle { display: flex; margin-bottom: 16px; border-radius: 4px; overflow: hidden; border: 1px solid var(--app-border); }
+    .type-toggle button { flex: 1; padding: 8px; background: var(--app-input); color: var(--text-secondary); border: none; cursor: pointer; font-size: 13px; transition: background 0.15s; }
+    .type-toggle button.active { background: var(--primary-brand); color: white; }
 
-        /* Item type toggle */
-        .type-toggle { display: flex; margin-bottom: 16px; border-radius: 4px; overflow: hidden; border: 1px solid #0f3460; }
-        .type-toggle button { flex: 1; padding: 8px; background: #0d1b2a; color: #aaa; border: none; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; transition: background 0.15s; }
-        .type-toggle button.active { background: #e94560; color: white; }
+    /* Prod base row */
+    .prod-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 12px; background: var(--app-input); border-radius: 4px; border: 1px solid var(--app-border); }
+    .prod-row label { margin: 0; color: var(--text-secondary); font-size: 12px; font-weight: bold; cursor: pointer; user-select: none; }
+    .prod-row input[type=checkbox] { width: auto; margin: 0; cursor: pointer; accent-color: var(--accent-coral); }
 
-        /* Prod base row */
-        .prod-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 12px; background: #0d1b2a; border-radius: 4px; border: 1px solid #0f3460; }
-        .prod-row label { margin: 0; color: #aaa; font-size: 12px; font-weight: bold; cursor: pointer; user-select: none; }
-        .prod-row input[type=checkbox] { width: auto; margin: 0; cursor: pointer; accent-color: #e94560; }
+    /* Step back link */
+    .step-back { background: none; border: none; color: var(--accent-coral); cursor: pointer; font-size: 12px; padding: 0; margin-bottom: 14px; display: inline-block; }
+    .step-back:hover { color: #fff; }
+    .selected-lib-card { background: var(--app-input); border: 1px solid var(--accent-coral); border-radius: 4px; padding: 10px 12px; margin-bottom: 14px; }
+    .selected-lib-card .lib-card-desc { font-weight: bold; }
+    .add-new-inline { margin-top: 6px; display: none; }
+    .add-new-inline input { background: var(--app-input); border-color: var(--accent-coral); }
 
-        /* Step back link */
-        .step-back { background: none; border: none; color: #e94560; cursor: pointer; font-size: 12px; padding: 0; margin-bottom: 14px; display: inline-block; }
-        .step-back:hover { color: #fff; }
-        .selected-lib-card { background: #0d1b2a; border: 1px solid #e94560; border-radius: 4px; padding: 10px 12px; margin-bottom: 14px; }
-        .selected-lib-card .lib-card-desc { font-weight: bold; }
-        .add-new-inline { margin-top: 6px; display: none; }
-        .add-new-inline input { background: #0d1b2a; border-color: #e94560; }
+    @media print {
+        .app-sidebar, .app-topbar { display: none !important; }
+        .app-main { margin-left: 0 !important; }
+        .app-content { padding: 0 !important; }
+        .breadcrumb, .btn-row, .toolbar, .modal { display: none !important; }
+        .totals-bar { display: grid; margin-bottom: 12px; }
+        .total-card { background: #f0f0f0; border: 1px solid #ccc; }
+        .total-card h3 { color: #c00; font-size: 15px; }
+        .total-card p { color: #555; }
+        h1 { color: #c00; }
+        .table-wrapper { overflow: visible; max-height: none; border: 1px solid #ccc; }
+        table { font-size: 10px; min-width: unset; }
+        thead th { background: #eee; color: #333; position: static; }
+        tbody tr:hover td { background: transparent; }
+        td, th { color: #333; border-color: #ddd; }
+        td.grand { color: #c00; }
+        td.cost { color: #444; }
+        td.calc { color: #666; }
+        tr.grp-hdr td { background: #f0f0f0; color: #000; border-top: 2px solid #999; }
+        tr.proj-total td { background: #e0e0e0; color: #000; }
+        .grp-badge { background: #c00; }
+        .c-del { display: none !important; }
+        .c-trade { display: table-cell !important; }
+    }
+</style>
+{% endblock %}
 
-        @media print {
-            body { background: white; color: #000; }
-            .page { padding: 0; }
-            .inner { background: white; padding: 12px; border-radius: 0; }
-            .breadcrumb, .btn-row, .toolbar, .modal { display: none !important; }
-            .totals-bar { display: grid; margin-bottom: 12px; }
-            .total-card { background: #f0f0f0; border: 1px solid #ccc; }
-            .total-card h3 { color: #c00; font-size: 15px; }
-            .total-card p { color: #555; }
-            h1 { color: #c00; }
-            .table-wrapper { overflow: visible; max-height: none; border: 1px solid #ccc; }
-            table { font-size: 10px; min-width: unset; }
-            thead th { background: #eee; color: #333; position: static; }
-            tbody tr:hover td { background: transparent; }
-            td, th { color: #333; border-color: #ddd; }
-            td.grand { color: #c00; }
-            td.cost { color: #444; }
-            td.calc { color: #666; }
-            tr.grp-hdr td { background: #f0f0f0; color: #000; border-top: 2px solid #999; }
-            tr.proj-total td { background: #e0e0e0; color: #000; }
-            .grp-badge { background: #c00; }
-            .c-del { display: none !important; }
-            .c-trade { display: table-cell !important; }
-        }
-    </style>
-</head>
-<body>
-<div class="page"><div class="inner">
-{% include 'nav.html' %}
+{% block content %}
     <div class="breadcrumb">
         <a href="/">Home</a> &gt;
         <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &gt;
@@ -227,7 +220,7 @@
                 <button class="btn"        id="gb-none"     onclick="setGroup('none')">Flat</button>
             </div>
         </div>
-        <span style="color:#888; font-size:12px;">Click any cell to edit &nbsp;·&nbsp; Click column header to sort</span>
+        <span style="color:var(--text-secondary); font-size:12px;">Click any cell to edit &nbsp;·&nbsp; Click column header to sort</span>
     </div>
 
     <!-- Table -->
@@ -258,149 +251,149 @@
         </table>
     </div>
 
-</div></div>
+    <!-- Embedded data -->
+    <script id="itemsData"      type="application/json">{{ items_json | safe }}</script>
+    <script id="assembliesData" type="application/json">{{ assemblies_json | safe }}</script>
+    <script id="csi1Data"       type="application/json">{{ csi1_json | safe }}</script>
+    <script id="csi2Data"       type="application/json">{{ csi2_json | safe }}</script>
+    <script id="libraryData"    type="application/json">{{ library_json | safe }}</script>
+    <script id="propsData"      type="application/json">{{ props_json | safe }}</script>
+    <script id="projectMeta"    type="application/json">{"location": {{ (project.location or '') | tojson }}, "id": {{ project.id }} }</script>
 
-<!-- Embedded data -->
-<script id="itemsData"      type="application/json">{{ items_json | safe }}</script>
-<script id="assembliesData" type="application/json">{{ assemblies_json | safe }}</script>
-<script id="csi1Data"       type="application/json">{{ csi1_json | safe }}</script>
-<script id="csi2Data"       type="application/json">{{ csi2_json | safe }}</script>
-<script id="libraryData"    type="application/json">{{ library_json | safe }}</script>
-<script id="propsData"      type="application/json">{{ props_json | safe }}</script>
-<script id="projectMeta"    type="application/json">{"location": {{ (project.location or '') | tojson }}, "id": {{ project.id }} }</script>
-
-<!-- Line Item Modal (2-step: library search → item form) -->
-<div id="lineItemModal" class="modal">
-    <div class="modal-content" style="max-width: 580px;">
-        <div class="modal-header">
-            <h2 id="liModalTitle">Add Line Item</h2>
-            <span class="close" onclick="closeModal('lineItemModal')">&times;</span>
-        </div>
-
-        <!-- Step 1: Library Search -->
-        <div id="liStep1">
-            <div class="form-group">
-                <label>Search Library</label>
-                <input type="text" id="liLibSearch" placeholder="Type to search by description or CSI code…" oninput="filterLibrary()" autocomplete="off">
-            </div>
-            <div class="lib-results" id="liLibResults">
-                <div class="lib-no-results">Start typing to search the library…</div>
-            </div>
-            <div style="margin-top: 12px; text-align: center; color: #888; font-size: 12px;">— or —</div>
-            <button type="button" class="btn btn-secondary" style="width:100%; margin-top:10px;" onclick="selectLibItem(null)">➕ Create New Library Item</button>
-        </div>
-
-        <!-- Step 2: Item Form -->
-        <div id="liStep2" style="display:none;">
-            <button type="button" class="step-back" onclick="goToStep1()">← Back to library search</button>
-            <div id="liSelectedCard" class="selected-lib-card" style="display:none;"></div>
-
-            <!-- Item type toggle -->
-            <div class="type-toggle">
-                <button type="button" id="liTypeLabMat" class="active" onclick="setItemType('labor_material')">Labor &amp; Materials</button>
-                <button type="button" id="liTypeEquip"  onclick="setItemType('equipment')">Equipment</button>
+    <!-- Line Item Modal (2-step: library search → item form) -->
+    <div id="lineItemModal" class="modal">
+        <div class="modal-content" style="max-width: 580px;">
+            <div class="modal-header">
+                <h2 id="liModalTitle">Add Line Item</h2>
+                <span class="close" onclick="closeModal('lineItemModal')">&times;</span>
             </div>
 
-            <div class="fg2">
+            <!-- Step 1: Library Search -->
+            <div id="liStep1">
                 <div class="form-group">
-                    <label>Description *</label>
-                    <input type="text" id="liDesc" placeholder="e.g., Concrete footing pour" required>
+                    <label>Search Library</label>
+                    <input type="text" id="liLibSearch" placeholder="Type to search by description or CSI code…" oninput="filterLibrary()" autocomplete="off">
                 </div>
-                <div class="form-group">
-                    <label>Trade</label>
-                    <select id="liTradeSel" onchange="handleTradeAddNew()">
-                        <option value="">— None —</option>
-                    </select>
-                    <div class="add-new-inline" id="liTradeNewWrap">
-                        <input type="text" id="liTradeNewVal" placeholder="Trade name…"
-                               onkeydown="if(event.key==='Enter'){event.preventDefault();commitNewTrade()}">
-                    </div>
+                <div class="lib-results" id="liLibResults">
+                    <div class="lib-no-results">Start typing to search the library…</div>
                 </div>
-            </div>
-            <div class="fg2">
-                <div class="form-group">
-                    <label>Quantity *</label>
-                    <input type="number" id="liQty" step="0.01" placeholder="0" required>
-                </div>
-                <div class="form-group">
-                    <label>Unit *</label>
-                    <input type="text" id="liUnit" placeholder="e.g., CY, SF, EA" required>
-                </div>
+                <div style="margin-top: 12px; text-align: center; color: var(--text-secondary); font-size: 12px;">— or —</div>
+                <button type="button" class="btn btn-secondary" style="width:100%; margin-top:10px;" onclick="selectLibItem(null)">➕ Create New Library Item</button>
             </div>
 
-            <!-- CSI Classification -->
-            <div class="fg2">
-                <div class="form-group">
-                    <label>CSI Division</label>
-                    <select id="liCsi1" onchange="filterLiCsi2()">
-                        <option value="">— None —</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>CSI Section</label>
-                    <select id="liCsi2">
-                        <option value="">— Select Division first —</option>
-                    </select>
-                </div>
-            </div>
+            <!-- Step 2: Item Form -->
+            <div id="liStep2" style="display:none;">
+                <button type="button" class="step-back" onclick="goToStep1()">← Back to library search</button>
+                <div id="liSelectedCard" class="selected-lib-card" style="display:none;"></div>
 
-            <!-- Labor & Materials fields -->
-            <div id="liLaborFields">
-                <div class="form-group">
-                    <label>Material Cost / Unit ($)</label>
-                    <input type="number" id="liMatCpu" step="0.01" placeholder="0.00">
+                <!-- Item type toggle -->
+                <div class="type-toggle">
+                    <button type="button" id="liTypeLabMat" class="active" onclick="setItemType('labor_material')">Labor &amp; Materials</button>
+                    <button type="button" id="liTypeEquip"  onclick="setItemType('equipment')">Equipment</button>
                 </div>
 
-                <!-- Prod Base toggle -->
-                <div class="prod-row">
-                    <input type="checkbox" id="liProdBase" checked onchange="updateProdBaseFields()">
-                    <label for="liProdBase">Production Base (qty ÷ rate → labor hours)</label>
-                </div>
-
-                <!-- Prod Base ON fields -->
-                <div id="liProdBaseOn" class="fg2">
+                <div class="fg2">
                     <div class="form-group">
-                        <label>Production Rate (units/hr)</label>
-                        <input type="number" id="liProdRate" step="0.01" placeholder="0">
+                        <label>Description *</label>
+                        <input type="text" id="liDesc" placeholder="e.g., Concrete footing pour" required>
                     </div>
                     <div class="form-group">
-                        <label>Labor Cost / Hr ($)</label>
-                        <input type="number" id="liLaborCph" step="0.01" placeholder="0.00">
+                        <label>Trade</label>
+                        <select id="liTradeSel" onchange="handleTradeAddNew()">
+                            <option value="">— None —</option>
+                        </select>
+                        <div class="add-new-inline" id="liTradeNewWrap">
+                            <input type="text" id="liTradeNewVal" placeholder="Trade name…"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();commitNewTrade()}">
+                        </div>
                     </div>
                 </div>
-
-                <!-- Prod Base OFF fields -->
-                <div id="liProdBaseOff" style="display:none;">
+                <div class="fg2">
                     <div class="form-group">
-                        <label>Labor Cost / Unit ($)</label>
-                        <input type="number" id="liLaborCpu" step="0.01" placeholder="0.00">
+                        <label>Quantity *</label>
+                        <input type="number" id="liQty" step="0.01" placeholder="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Unit *</label>
+                        <input type="text" id="liUnit" placeholder="e.g., CY, SF, EA" required>
                     </div>
                 </div>
-            </div>
 
-            <!-- Equipment fields -->
-            <div id="liEquipFields" style="display:none;">
-                <div class="form-group">
-                    <label>Equipment Cost / Unit ($)</label>
-                    <input type="number" id="liEquipCpu" step="0.01" placeholder="0.00">
+                <!-- CSI Classification -->
+                <div class="fg2">
+                    <div class="form-group">
+                        <label>CSI Division</label>
+                        <select id="liCsi1" onchange="filterLiCsi2()">
+                            <option value="">— None —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>CSI Section</label>
+                        <select id="liCsi2">
+                            <option value="">— Select Division first —</option>
+                        </select>
+                    </div>
                 </div>
+
+                <!-- Labor & Materials fields -->
+                <div id="liLaborFields">
+                    <div class="form-group">
+                        <label>Material Cost / Unit ($)</label>
+                        <input type="number" id="liMatCpu" step="0.01" placeholder="0.00">
+                    </div>
+
+                    <!-- Prod Base toggle -->
+                    <div class="prod-row">
+                        <input type="checkbox" id="liProdBase" checked onchange="updateProdBaseFields()">
+                        <label for="liProdBase">Production Base (qty ÷ rate → labor hours)</label>
+                    </div>
+
+                    <!-- Prod Base ON fields -->
+                    <div id="liProdBaseOn" class="fg2">
+                        <div class="form-group">
+                            <label>Production Rate (units/hr)</label>
+                            <input type="number" id="liProdRate" step="0.01" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Labor Cost / Hr ($)</label>
+                            <input type="number" id="liLaborCph" step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <!-- Prod Base OFF fields -->
+                    <div id="liProdBaseOff" style="display:none;">
+                        <div class="form-group">
+                            <label>Labor Cost / Unit ($)</label>
+                            <input type="number" id="liLaborCpu" step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Equipment fields -->
+                <div id="liEquipFields" style="display:none;">
+                    <div class="form-group">
+                        <label>Equipment Cost / Unit ($)</label>
+                        <input type="number" id="liEquipCpu" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top:4px;">
+                    <label>Notes</label>
+                    <textarea id="liNotes" rows="2" placeholder="Optional…"></textarea>
+                </div>
+
+                <!-- Hidden: library item id, item_type, prod_base -->
+                <input type="hidden" id="liLibItemId">
+                <input type="hidden" id="liItemType" value="labor_material">
+                <input type="hidden" id="liProdBaseHidden" value="1">
+
+                <button type="button" class="btn" style="width:100%; margin-top:12px;" onclick="submitLineItem()">Add Line Item</button>
             </div>
-
-            <div class="form-group" style="margin-top:4px;">
-                <label>Notes</label>
-                <textarea id="liNotes" rows="2" placeholder="Optional…"></textarea>
-            </div>
-
-            <!-- Hidden: library item id, item_type, prod_base -->
-            <input type="hidden" id="liLibItemId">
-            <input type="hidden" id="liItemType" value="labor_material">
-            <input type="hidden" id="liProdBaseHidden" value="1">
-
-            <button type="button" class="btn" style="width:100%; margin-top:12px;" onclick="submitLineItem()">Add Line Item</button>
         </div>
     </div>
-</div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
 // ── Data ─────────────────────────────────────────────────────────────────────
 let items = JSON.parse(document.getElementById('itemsData').textContent);
@@ -1038,6 +1031,5 @@ document.getElementById('tbody').addEventListener('click', function(e) {
 render();
 </script>
 
-    {% include 'agentx_panel.html' %}
-</body>
-</html>
+{% include 'agentx_panel.html' %}
+{% endblock %}

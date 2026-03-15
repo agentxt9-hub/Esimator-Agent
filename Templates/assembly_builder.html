@@ -1,125 +1,122 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Assembly Builder — {{ project.project_name }}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; }
+{% extends "app_base.html" %}
+{% block title %}Assembly Builder — {{ project.project_name }} - Zenbid{% endblock %}
 
-        /* Layout */
-        .top-bar { background: #16213e; border-bottom: 1px solid #0f3460; padding: 12px 24px;
-                   display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50; }
-        .top-bar h1 { color: #e94560; font-size: 18px; }
-        .top-bar .breadcrumb { color: #888; font-size: 13px; }
-        .top-bar .breadcrumb a { color: #e94560; text-decoration: none; }
-        .top-bar-actions { display: flex; gap: 10px; align-items: center; }
+{% block extra_css %}
+<style>
+    /* Layout */
+    .top-bar { background: var(--app-card); border-bottom: 1px solid var(--app-border); padding: 12px 24px;
+               display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50; }
+    .top-bar h1 { color: var(--accent-coral); font-size: 18px; }
+    .top-bar .breadcrumb { color: var(--text-secondary); font-size: 13px; }
+    .top-bar .breadcrumb a { color: var(--accent-coral); text-decoration: none; }
+    .top-bar-actions { display: flex; gap: 10px; align-items: center; }
 
-        .page { display: grid; grid-template-columns: 1fr; gap: 0; }
-        .main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+    .page { display: grid; grid-template-columns: 1fr; gap: 0; }
+    .main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
 
-        /* Cards / Sections */
-        .section { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-        .section-title { color: #e94560; font-size: 13px; font-weight: bold; text-transform: uppercase;
-                         letter-spacing: 1px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #0f3460; }
+    /* Cards / Sections */
+    .section { background: var(--app-card); border: 1px solid var(--app-border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .section-title { color: var(--accent-coral); font-size: 13px; font-weight: bold; text-transform: uppercase;
+                     letter-spacing: 1px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--app-border); }
 
-        /* Forms */
-        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-        .form-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-        .form-group { display: flex; flex-direction: column; gap: 5px; }
-        label { color: #aaa; font-size: 12px; font-weight: bold; }
-        input[type="text"], input[type="number"], textarea, select {
-            padding: 9px 11px; background: #0d1b2a; border: 1px solid #0f3460;
-            border-radius: 4px; color: #eee; font-size: 14px; width: 100%; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: #e94560; }
-        .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-        .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: #e94560; cursor: pointer; }
-        .checkbox-row label { color: #ccc; font-size: 14px; font-weight: normal; cursor: pointer; }
+    /* Forms */
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .form-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    label { color: var(--text-secondary); font-size: 12px; font-weight: bold; }
+    input[type="text"], input[type="number"], textarea, select {
+        padding: 9px 11px; background: var(--app-input); border: 1px solid var(--app-border);
+        border-radius: 4px; color: var(--text-primary); font-size: 14px; width: 100%; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-coral); }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-coral); cursor: pointer; }
+    .checkbox-row label { color: var(--text-secondary); font-size: 14px; font-weight: normal; cursor: pointer; }
 
-        /* Measurements derived display */
-        .derived { background: #0d1b2a; border-radius: 4px; padding: 10px 14px; margin-top: 10px;
-                   color: #888; font-size: 13px; display: flex; gap: 20px; flex-wrap: wrap; }
-        .derived span { color: #eee; font-weight: bold; }
+    /* Measurements derived display */
+    .derived { background: var(--app-input); border-radius: 4px; padding: 10px 14px; margin-top: 10px;
+               color: var(--text-secondary); font-size: 13px; display: flex; gap: 20px; flex-wrap: wrap; }
+    .derived span { color: var(--text-primary); font-weight: bold; }
 
-        /* Two-panel builder */
-        .builder-panels { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+    /* Two-panel builder */
+    .builder-panels { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
 
-        /* Library panel */
-        .library-panel { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; overflow: hidden; }
-        .library-panel .panel-header { background: #0f3460; padding: 12px 16px; font-size: 13px;
-                                       font-weight: bold; color: #aaa; display: flex; justify-content: space-between; }
-        .lib-search { padding: 12px; border-bottom: 1px solid #0f3460; }
-        .lib-search input { padding: 8px 11px; background: #0d1b2a; border: 1px solid #0f3460;
-                            border-radius: 4px; color: #eee; font-size: 13px; width: 100%; }
-        .lib-search input:focus { outline: none; border-color: #e94560; }
-        .lib-items { max-height: 460px; overflow-y: auto; }
-        .lib-item { padding: 10px 14px; border-bottom: 1px solid #0d1b2a; cursor: pointer; transition: background 0.1s; }
-        .lib-item:hover { background: #1a2a3a; }
-        .lib-item .lib-desc { color: #eee; font-size: 13px; font-weight: bold; }
-        .lib-item .lib-meta { color: #666; font-size: 11px; margin-top: 3px; }
-        .lib-item .csi-tag { display: inline-block; background: #0f3460; color: #888; padding: 1px 6px;
-                              border-radius: 3px; font-size: 10px; margin-right: 4px; }
-        .lib-empty { padding: 30px; text-align: center; color: #555; font-size: 13px; }
-        .add-custom-btn { display: block; width: 100%; padding: 10px; background: none; border: none;
-                          border-top: 1px solid #0f3460; color: #888; cursor: pointer; font-size: 12px; }
-        .add-custom-btn:hover { background: #0d1b2a; color: #e94560; }
-        /* New library item mini-modal */
-        .mini-modal { display: none; position: fixed; z-index: 100; inset: 0; background: rgba(0,0,0,0.7); }
-        .mini-modal-content { background: #16213e; margin: 8% auto; padding: 24px; border-radius: 8px;
-                               width: 90%; max-width: 520px; border: 1px solid #0f3460; }
-        .mini-modal h3 { color: #e94560; margin-bottom: 16px; }
-        .mini-form-group { margin-bottom: 12px; }
-        .mini-form-group label { display: block; color: #aaa; font-size: 12px; font-weight: bold; margin-bottom: 4px; }
-        .mini-fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    /* Library panel */
+    .library-panel { background: var(--app-card); border: 1px solid var(--app-border); border-radius: 8px; overflow: hidden; }
+    .library-panel .panel-header { background: var(--app-input); padding: 12px 16px; font-size: 13px;
+                                   font-weight: bold; color: var(--text-secondary); display: flex; justify-content: space-between; }
+    .lib-search { padding: 12px; border-bottom: 1px solid var(--app-border); }
+    .lib-search input { padding: 8px 11px; background: var(--app-input); border: 1px solid var(--app-border);
+                        border-radius: 4px; color: var(--text-primary); font-size: 13px; width: 100%; }
+    .lib-search input:focus { outline: none; border-color: var(--accent-coral); }
+    .lib-items { max-height: 460px; overflow-y: auto; }
+    .lib-item { padding: 10px 14px; border-bottom: 1px solid var(--app-border); cursor: pointer; transition: background 0.1s; }
+    .lib-item:hover { background: var(--app-hover); }
+    .lib-item .lib-desc { color: var(--text-primary); font-size: 13px; font-weight: bold; }
+    .lib-item .lib-meta { color: var(--text-muted); font-size: 11px; margin-top: 3px; }
+    .lib-item .csi-tag { display: inline-block; background: var(--app-input); color: var(--text-secondary); padding: 1px 6px;
+                          border-radius: 3px; font-size: 10px; margin-right: 4px; }
+    .lib-empty { padding: 30px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .add-custom-btn { display: block; width: 100%; padding: 10px; background: none; border: none;
+                      border-top: 1px solid var(--app-border); color: var(--text-secondary); cursor: pointer; font-size: 12px; }
+    .add-custom-btn:hover { background: var(--app-input); color: var(--accent-coral); }
+    /* New library item mini-modal */
+    .mini-modal { display: none; position: fixed; z-index: 100; inset: 0; background: rgba(0,0,0,0.7); }
+    .mini-modal-content { background: var(--app-card); margin: 8% auto; padding: 24px; border-radius: 8px;
+                           width: 90%; max-width: 520px; border: 1px solid var(--app-border); }
+    .mini-modal h3 { color: var(--accent-coral); margin-bottom: 16px; }
+    .mini-form-group { margin-bottom: 12px; }
+    .mini-form-group label { display: block; color: var(--text-secondary); font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+    .mini-fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-        /* Composition panel */
-        .comp-panel { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; overflow: hidden; }
-        .comp-panel .panel-header { background: #0f3460; padding: 12px 16px; font-size: 13px;
-                                    font-weight: bold; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
-        .comp-empty { padding: 40px; text-align: center; color: #555; font-size: 14px; }
+    /* Composition panel */
+    .comp-panel { background: var(--app-card); border: 1px solid var(--app-border); border-radius: 8px; overflow: hidden; }
+    .comp-panel .panel-header { background: var(--app-input); padding: 12px 16px; font-size: 13px;
+                                font-weight: bold; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; }
+    .comp-empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
 
-        /* Composition table */
-        .comp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .comp-table th { background: #0d1b2a; padding: 9px 10px; text-align: left; color: #888;
-                         font-weight: bold; white-space: nowrap; border-bottom: 1px solid #0f3460; }
-        .comp-table td { padding: 8px 10px; border-bottom: 1px solid #0d1b2a; vertical-align: middle; }
-        .comp-table tr:last-child td { border-bottom: none; }
-        .comp-table input { padding: 5px 8px; font-size: 12px; }
-        .comp-table select { padding: 5px 6px; font-size: 12px; }
-        .qty-display { color: #e94560; font-weight: bold; font-size: 13px; white-space: nowrap; }
-        .remove-btn { background: none; border: none; color: #e94560; cursor: pointer; font-size: 16px;
-                      padding: 2px 6px; border-radius: 3px; }
-        .remove-btn:hover { background: #3a0a12; }
+    /* Composition table */
+    .comp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .comp-table th { background: var(--app-input); padding: 9px 10px; text-align: left; color: var(--text-secondary);
+                     font-weight: bold; white-space: nowrap; border-bottom: 1px solid var(--app-border); }
+    .comp-table td { padding: 8px 10px; border-bottom: 1px solid var(--app-border); vertical-align: middle; }
+    .comp-table tr:last-child td { border-bottom: none; }
+    .comp-table input { padding: 5px 8px; font-size: 12px; }
+    .comp-table select { padding: 5px 6px; font-size: 12px; }
+    .qty-display { color: var(--accent-coral); font-weight: bold; font-size: 13px; white-space: nowrap; }
+    .remove-btn { background: none; border: none; color: var(--error); cursor: pointer; font-size: 16px;
+                  padding: 2px 6px; border-radius: 3px; }
+    .remove-btn:hover { background: var(--error-bg); }
 
-        /* Preview totals */
-        .totals-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-        .total-box { background: #0d1b2a; border-radius: 6px; padding: 14px; text-align: center; }
-        .total-box h3 { color: #e94560; font-size: 20px; }
-        .total-box p { color: #888; font-size: 11px; margin-top: 4px; }
+    /* Preview totals */
+    .totals-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .total-box { background: var(--app-input); border-radius: 6px; padding: 14px; text-align: center; }
+    .total-box h3 { color: var(--accent-coral); font-size: 20px; }
+    .total-box p { color: var(--text-secondary); font-size: 11px; margin-top: 4px; }
 
-        /* Buttons */
-        .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: white;
-               text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
-        .btn:hover { background: #c73652; }
-        .btn-secondary { background: #0f3460; color: #eee; }
-        .btn-secondary:hover { background: #1a4a7a; }
-        .btn-lg { padding: 13px 32px; font-size: 15px; }
-        .actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; padding-top: 8px; }
-        .hint { color: #666; font-size: 12px; }
+    /* Buttons */
+    .btn { display: inline-block; padding: 10px 20px; background: var(--primary-brand); color: white;
+           text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--app-input); color: var(--text-primary); border: 1px solid var(--app-border); }
+    .btn-secondary:hover { background: var(--app-hover); }
+    .btn-lg { padding: 13px 32px; font-size: 15px; }
+    .actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; padding-top: 8px; }
+    .hint { color: var(--text-muted); font-size: 12px; }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #0d1b2a; }
-        ::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--app-input); }
+    ::-webkit-scrollbar-thumb { background: var(--app-border); border-radius: 3px; }
 
-        /* Divisor / manual qty inline inputs */
-        .formula-extra { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-        .formula-extra label { color: #888; font-size: 11px; white-space: nowrap; }
-        .formula-extra input { width: 70px; }
-    </style>
-</head>
-<body>
-{% include 'nav.html' %}
+    /* Divisor / manual qty inline inputs */
+    .formula-extra { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .formula-extra label { color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+    .formula-extra input { width: 70px; }
+</style>
+{% endblock %}
+
+{% block content %}
 <!-- Sticky top bar -->
 <div class="top-bar">
     <div>
@@ -191,7 +188,7 @@
         <div class="library-panel">
             <div class="panel-header">
                 <span>Line Item Library</span>
-                <span id="libCount" style="color:#888; font-weight:normal;"></span>
+                <span id="libCount" style="color:var(--text-secondary); font-weight:normal;"></span>
             </div>
             <div class="lib-search">
                 <input type="text" id="libSearch" placeholder="Search description, CSI, unit..." oninput="filterLibrary()">
@@ -204,7 +201,7 @@
         <div class="comp-panel">
             <div class="panel-header">
                 <span>Composition</span>
-                <span id="compCount" style="color:#888; font-weight:normal;">0 items</span>
+                <span id="compCount" style="color:var(--text-secondary); font-weight:normal;">0 items</span>
             </div>
             <div id="compBody">
                 <div class="comp-empty" id="compEmpty">
@@ -251,26 +248,26 @@
         <h3>New Library Item</h3>
         <div class="mini-form-group">
             <label>Description *</label>
-            <input type="text" id="nlDesc" placeholder="e.g., Concrete footing pour" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+            <input type="text" id="nlDesc" placeholder="e.g., Concrete footing pour" style="padding:9px;background:var(--app-input);border:1px solid var(--app-border);border-radius:4px;color:var(--text-primary);font-size:13px;width:100%;">
         </div>
         <div class="mini-fg2">
             <div class="mini-form-group">
                 <label>Unit *</label>
-                <input type="text" id="nlUnit" placeholder="CY, SF, EA…" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+                <input type="text" id="nlUnit" placeholder="CY, SF, EA…" style="padding:9px;background:var(--app-input);border:1px solid var(--app-border);border-radius:4px;color:var(--text-primary);font-size:13px;width:100%;">
             </div>
             <div class="mini-form-group">
                 <label>Production Rate (units/hr)</label>
-                <input type="number" id="nlProdRate" step="0.01" placeholder="0" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+                <input type="number" id="nlProdRate" step="0.01" placeholder="0" style="padding:9px;background:var(--app-input);border:1px solid var(--app-border);border-radius:4px;color:var(--text-primary);font-size:13px;width:100%;">
             </div>
         </div>
         <div class="mini-fg2">
             <div class="mini-form-group">
                 <label>Mat Cost / Unit ($)</label>
-                <input type="number" id="nlMatCpu" step="0.01" placeholder="0.00" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+                <input type="number" id="nlMatCpu" step="0.01" placeholder="0.00" style="padding:9px;background:var(--app-input);border:1px solid var(--app-border);border-radius:4px;color:var(--text-primary);font-size:13px;width:100%;">
             </div>
             <div class="mini-form-group">
                 <label>Labor Cost / Hr ($)</label>
-                <input type="number" id="nlLaborCph" step="0.01" placeholder="0.00" style="padding:9px;background:#0d1b2a;border:1px solid #0f3460;border-radius:4px;color:#eee;font-size:13px;width:100%;">
+                <input type="number" id="nlLaborCph" step="0.01" placeholder="0.00" style="padding:9px;background:var(--app-input);border:1px solid var(--app-border);border-radius:4px;color:var(--text-primary);font-size:13px;width:100%;">
             </div>
         </div>
         <div style="display:flex; gap:10px; margin-top:14px;">
@@ -282,6 +279,9 @@
 
 <script id="libraryData"  type="application/json">{{ library_json | safe }}</script>
 <script id="templateData" type="application/json">{{ template_json | safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 const PROJECT_ID = {{ project.id }};
 const allLibraryItems = JSON.parse(document.getElementById('libraryData').textContent);
@@ -595,6 +595,5 @@ if (templatePreload) {
 }
 </script>
 
-    {% include 'agentx_panel.html' %}
-</body>
-</html>
+{% include 'agentx_panel.html' %}
+{% endblock %}
