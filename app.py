@@ -698,7 +698,7 @@ def landing():
     """Public landing page. Redirect authenticated users straight to the dashboard."""
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-    return redirect(url_for('signup'))
+    return render_template('landing.html')
 
 @app.route('/dashboard')
 @login_required
