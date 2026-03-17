@@ -535,8 +535,8 @@ def forgot_password():
                     )
                 )
                 mail.send(msg)
-            except Exception:
-                pass  # Don't leak mail errors; token is saved so admin can retrieve it
+            except Exception as e:
+                app.logger.error(f'Mail send failed: {e}')
         return render_template('forgot_password.html', sent=True)
     return render_template('forgot_password.html', sent=False)
 
