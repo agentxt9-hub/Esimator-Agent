@@ -6,15 +6,20 @@ from flask import (Flask, render_template, request, jsonify, Response,
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (LoginManager, UserMixin, login_user, logout_user,
                          login_required, current_user)
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_mail import Mail, Message
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 import os
 import json
 import io
 import csv
 import re
+import secrets
 import anthropic
 from dotenv import load_dotenv
 
@@ -33,13 +38,26 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'logo')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
+app.config['WTF_CSRF_TIME_LIMIT'] = 3600  # 1 hour
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Mail config (SendGrid SMTP or any SMTP provider)
+app.config['MAIL_SERVER']   = os.environ.get('MAIL_SERVER', 'smtp.sendgrid.net')
+app.config['MAIL_PORT']     = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS']  = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'apikey')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@zenbid.io')
 
 db = SQLAlchemy(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Please log in to access this page.'
+
+csrf    = CSRFProtect(app)
+limiter = Limiter(key_func=get_remote_address, app=app, default_limits=[], storage_uri='memory://')
+mail    = Mail(app)
 
 # ─────────────────────────────────────────
 # DATABASE MODELS
@@ -59,8 +77,10 @@ class User(UserMixin, db.Model):
     username      = db.Column(db.String(100), unique=True, nullable=False)
     email         = db.Column(db.String(255))
     password_hash = db.Column(db.String(255), nullable=False)
-    role          = db.Column(db.String(20), default='estimator')  # admin | estimator | viewer
-    created_at    = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    role                = db.Column(db.String(20), default='estimator')  # admin | estimator | viewer
+    reset_token         = db.Column(db.String(100))
+    reset_token_expires = db.Column(db.DateTime)
+    created_at          = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -313,6 +333,7 @@ def get_library_item_or_403(item_id):
 # ─────────────────────────────────────────
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
@@ -486,10 +507,65 @@ def pricing():
 def features():
     return redirect('/#features')
 
-@app.route('/forgot-password')
+@app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    flash('Password reset coming soon. Contact your admin for help.', 'info')
-    return redirect(url_for('login'))
+    if request.method == 'POST':
+        email = (request.form.get('email') or '').strip().lower()
+        user  = User.query.filter_by(email=email).first()
+        # Always show success to avoid email enumeration
+        if user:
+            token   = secrets.token_urlsafe(32)
+            expires = datetime.now(timezone.utc) + timedelta(hours=2)
+            user.reset_token         = token
+            user.reset_token_expires = expires
+            db.session.commit()
+            reset_url = url_for('reset_password', token=token, _external=True)
+            try:
+                msg = Message(
+                    subject='Reset your Zenbid password',
+                    recipients=[user.email],
+                    body=(
+                        f'Hi {user.username},\n\n'
+                        f'Click the link below to reset your password. '
+                        f'This link expires in 2 hours.\n\n'
+                        f'{reset_url}\n\n'
+                        f'If you did not request this, ignore this email.\n\n'
+                        f'— The Zenbid Team'
+                    )
+                )
+                mail.send(msg)
+            except Exception:
+                pass  # Don't leak mail errors; token is saved so admin can retrieve it
+        return render_template('forgot_password.html', sent=True)
+    return render_template('forgot_password.html', sent=False)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = User.query.filter_by(reset_token=token).first()
+    now  = datetime.now(timezone.utc)
+    # Normalise expires to UTC-aware for comparison
+    expires = user.reset_token_expires if user else None
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not user or not expires or now > expires:
+        return render_template('reset_password.html', invalid=True)
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm_password', '')
+        if len(password) < 8:
+            return render_template('reset_password.html', invalid=False,
+                                   error='Password must be at least 8 characters.')
+        if password != confirm:
+            return render_template('reset_password.html', invalid=False,
+                                   error='Passwords do not match.')
+        user.set_password(password)
+        user.reset_token         = None
+        user.reset_token_expires = None
+        db.session.commit()
+        flash('Password updated. Please log in.', 'success')
+        return redirect(url_for('login'))
+    return render_template('reset_password.html', invalid=False)
 
 # /app and /app/dashboard → redirect to main dashboard
 @app.route('/app')
@@ -622,7 +698,7 @@ def landing():
     """Public landing page. Redirect authenticated users straight to the dashboard."""
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-    return render_template('landing.html')
+    return redirect(url_for('signup'))
 
 @app.route('/dashboard')
 @login_required
@@ -2132,6 +2208,7 @@ def wbs_summary(project_id):
 
 @app.route('/ai/chat', methods=['POST'])
 @login_required
+@limiter.limit('20 per minute')
 def ai_chat():
     data       = request.get_json()
     message    = data.get('message', '').strip()
@@ -2500,6 +2577,7 @@ def ai_apply():
 
 
 @app.route('/ai/build-assembly', methods=['POST'])
+@limiter.limit('20 per minute')
 @login_required
 def ai_build_assembly():
     data        = request.get_json()
@@ -2720,6 +2798,7 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
 
 
 @app.route('/ai/scope-gap', methods=['POST'])
+@limiter.limit('10 per minute')
 @login_required
 def ai_scope_gap():
     data       = request.get_json()
@@ -2947,6 +3026,7 @@ def _build_rates_text(standards):
 
 
 @app.route('/ai/production-rate', methods=['POST'])
+@limiter.limit('20 per minute')
 @login_required
 def ai_production_rate():
     api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
@@ -3076,6 +3156,7 @@ REQUIRED JSON FORMAT:
 
 
 @app.route('/ai/validate-rate', methods=['POST'])
+@limiter.limit('20 per minute')
 @login_required
 def ai_validate_rate():
     api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
@@ -3318,6 +3399,9 @@ def run_migrations():
             "ALTER TABLE library_items ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
             "ALTER TABLE global_properties ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
             "ALTER TABLE company_profile ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
+            # Password reset columns
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP",
             # WBS tables (created by db.create_all; these are safety guards)
             """CREATE TABLE IF NOT EXISTS wbs_properties (
                 id SERIAL PRIMARY KEY,
@@ -3392,4 +3476,4 @@ if __name__ == '__main__':
         db.create_all()
     run_migrations()
     seed_production_rates()
-    app.run(debug=True)
+    app.run(debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true')

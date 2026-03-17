@@ -1,78 +1,147 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
-## Running the App
+**Last updated:** 2026-03-17 — Session 13 (zenbid.io back online)
+
+> Full reference: see `Agent_MD.md` for complete architecture, routes, session history, and roadmap.
+
+---
+
+## Running the App (Local Dev)
 
 ```bash
-# Install dependencies
-pip install flask psycopg2-binary sqlalchemy flask-sqlalchemy
-
-# Start the Flask dev server
+pip install -r requirements.txt
 python app.py
+# → http://localhost:5000
 ```
 
-App runs at `http://localhost:5000`. Requires PostgreSQL at `localhost:5432/estimator_db` (user: `postgres`, password: `Builder`).
+Requires PostgreSQL at `localhost:5432/estimator_db` (user: `postgres`, password: `Builder`).
 
-**Do not run `seed_csi.py`** — CSI data is already seeded in the database.
+**Do not run `seed_csi.py`** — CSI data is already seeded.
+
+Local `.env` (gitignored):
+```
+SECRET_KEY=anything-for-dev
+DATABASE_URL=postgresql://postgres:Builder@localhost:5432/estimator_db
+ANTHROPIC_API_KEY=sk-ant-...
+FLASK_DEBUG=true
+MAIL_PASSWORD=                  # leave blank locally unless testing email
+MAIL_DEFAULT_SENDER=noreply@zenbid.io
+```
+
+---
+
+## Production Deployment (DigitalOcean)
+
+Live at: **zenbid.io** — ✅ back online (2026-03-17)
+
+- Gunicorn via `Procfile` + `gunicorn.conf.py`; systemd service `zenbid`
+- Nginx reverse-proxies port 80 → Gunicorn port 8000
+- Migrations + seeding run automatically in `gunicorn.conf.py → on_starting()`
+- `FLASK_DEBUG` must be `false` in production `.env`
+
+```bash
+# Deploy an update (on the droplet):
+bash /var/www/zenbid/deploy/update.sh
+```
+
+### Server `.env` required vars
+```
+SECRET_KEY=<strong-random>
+DATABASE_URL=postgresql://...
+ANTHROPIC_API_KEY=sk-ant-...
+FLASK_DEBUG=false
+MAIL_SERVER=smtp.sendgrid.net
+MAIL_PORT=587
+MAIL_USERNAME=apikey
+MAIL_PASSWORD=<sendgrid-api-key>
+MAIL_DEFAULT_SENDER=noreply@zenbid.io
+```
+
+---
 
 ## Architecture
 
-Single-file Flask app (`app.py`) with Jinja2 templates in `Templates/`. No frontend framework — vanilla JS + `fetch()` throughout. No test suite.
+Single-file Flask app (`app.py`, ~3450 lines) + Jinja2 templates in `Templates/`. Vanilla JS + `fetch()`. No frontend framework. No test suite.
 
-**Data flow:**
-```
-Assembly measurements (user input)
-    → qty_formula per composition item → derived quantities
-    → production_rate → labor/equipment hours
-    → cost rates → line item costs
-    → grouped/summed → project totals
-```
+**Two template bases:**
+- `Templates/base.html` — marketing site (light theme, public)
+- `Templates/app_base.html` — app interface (dark sidebar, login-required)
 
 **Key models** (all in `app.py`):
+- `Company` / `User` — multi-tenant auth (Flask-Login); User has `reset_token` + `reset_token_expires`
 - `CSILevel1` / `CSILevel2` — read-only CSI hierarchy (seeded, never alter)
 - `Project` → `Assembly` → `LineItem` — core estimating hierarchy
-- `Assembly` also holds `AssemblyComposition` rows (FK → `LibraryItem`) when built via the Assembly Builder
-- `LibraryItem` — global reusable item definitions, independent of any project
-- `Assembly.is_template = True` marks assemblies as global templates (no separate template table)
+- `AssemblyComposition` — FK→assembly + library_item; formula-driven quantities
+- `LibraryItem` — company-scoped reusable item definitions
+- `Assembly.is_template = True` — marks assemblies as global templates
+- `WBSProperty` / `WBSValue` / `LineItemWBS` — project-scoped work breakdown structure
+- `ProductionRateStandard` — global (no company_id) reference rates; seeded at startup
 
-**Schema migrations:** Always extend `run_migrations()` in `app.py` using `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Never drop/recreate tables. Never run `db.create_all()` on existing tables.
+**Schema migrations:** Always extend `run_migrations()` with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Never drop/recreate tables.
+
+---
+
+## Authentication & Multi-Tenancy
+
+- Flask-Login; `@login_required` on all app routes
+- Public exceptions: `/`, `/login`, `/logout`, `/signup`, `/forgot-password`, `/reset-password/<token>`, marketing pages, `/uploads/logo/<f>`
+- Login accepts **email** (username fallback for legacy accounts)
+- Isolation helpers: `get_project_or_403()`, `get_assembly_or_403()`, `get_lineitem_or_403()`, `get_library_item_or_403()`
+- Roles: `admin` | `estimator` | `viewer` — only `/admin` routes enforce role check
+
+---
 
 ## Critical Patterns
 
-**`/project/<id>/summary` must return JSON** — `project.html` fetches it on load for the live totals bar. Do not change its response type.
+**`/project/<id>/summary` must return JSON** — `project.html` fetches it on load. Do not change its response type.
 
-**CSI dropdowns:** Level 1 rendered by Jinja; Level 2 populated by JS filtering a JSON blob embedded in the page. No API round-trip needed.
+**CSRF:**
+- `CSRFProtect(app)` is active — all POST requests require a CSRF token
+- HTML forms: add `<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">`
+- `fetch()` POST calls: covered automatically by monkey-patch in `app_base.html <head>` — do not remove it
+- Both base templates have `<meta name="csrf-token" content="{{ csrf_token() }}">`
 
-**JSON data embedding in templates:**
+**JSON data embedding:**
 ```html
 <script id="my-data" type="application/json">{{ data | tojson | safe }}</script>
 ```
-Parsed in JS with `JSON.parse(document.getElementById('my-data').textContent)`. Use this pattern — it's XSS-safe.
+Parsed in JS: `JSON.parse(document.getElementById('my-data').textContent)` — XSS-safe.
 
-**Cascade delete:** Handled in Python (delete children before parent). No `ON DELETE CASCADE` in the DB.
+**CSI dropdowns:** Level 1 from Jinja; Level 2 from embedded JSON blob filtered in JS.
 
-**Template pre-load:** `assembly_builder.html` accepts `?from_template=<id>`. When no template, pass `json.dumps(None)` from the route → JS reads `null` → skips pre-fill.
+**Cascade delete:** Python only — no `ON DELETE CASCADE` in DB.
+
+**`CSI_COLORS` dict:** defined in `app.py` module level AND duplicated in `estimate.html` JS — keep both in sync.
+
+**No Jinja tags in `agentx_panel.html`** — pure HTML/JS partial.
+
+**Datetime:** `datetime.now(timezone.utc)` — never `datetime.utcnow()`.
+
+---
 
 ## UI Rules
 
-Dark theme — no exceptions:
-- Page bg: `#1a1a2e` | Card bg: `#16213e` | Panel/input: `#0f3460` | Accent: `#e94560`
-- Danger buttons: `#3a0a12` bg, `#e94560` text/border; hover → full red bg
-- CSS classes: `.btn`, `.btn-secondary`, `.btn-danger`, `.btn-sm`
-- `CSI_COLORS` dict is defined at module level in `app.py` **and** duplicated in `estimate.html` JS — keep both in sync when editing.
+### App (dark theme) — CSS vars in `app_base.html`
+- `--app-bg: #0F1419` | `--app-card: #1A1F26` | `--app-sidebar: #16181D` | `--app-input: #252B33`
+- `--primary-brand: #2D5BFF` | `--accent-coral: #FF6B35`
+- `--error-bg: #3a0a12` | `--error: #EF4444`
+- **Do NOT hardcode** `#1a1a2e`, `#16213e`, `#0f3460`, `#e94560` — use CSS variables
 
-## Design Philosophy (from NORTHSTAR.md)
+### Marketing (light theme) — CSS vars in `base.html`
+- `--primary-brand: #2D5BFF` | `--accent-coral: #FF6B35` | `--marketing-bg: #FFFFFF`
 
-**Core test for every feature:** *Could a rigid (Excel-minded) estimator use this comfortably? Could a flexible (AI-native) estimator use this expressively?* If either answer is "no," reconsider.
+---
 
-- AI (`/agent/suggest` → Ollama llama3.2) is always opt-in, never required
-- Traditional line-by-line entry is a supported first-class workflow — never remove it
-- Offline-first: data never leaves the machine
+## Known Gaps (Active — pre-beta)
 
-## Known Gaps
-
-- No edit UI for Project fields after creation
-- No delete buttons in `estimate.html` (use project detail page)
-- `equipment_hours` always equals `labor_hours` (hardcoded assumption)
-- No authentication
+| Gap | Priority |
+|-----|----------|
+| Privacy Policy & Terms — placeholder routes | CRITICAL |
+| ANTHROPIC_API_KEY needs server verification | CRITICAL |
+| Proposal route not using `get_project_or_403()` | High |
+| Viewer role not enforced on write routes | Medium |
+| Edit project fields UI (city/state/zip/type/sector) | High |
+| 7 marketing placeholder routes return plain text | Medium |
+| WBS/rate features not live-tested post-deploy | Medium |
