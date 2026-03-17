@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
-**Last updated:** 2026-03-17 — Session 13 (zenbid.io back online)
+**Last updated:** 2026-03-17 — Session 13 (production deployment + SendGrid email)
 
 > Full reference: see `Agent_MD.md` for complete architecture, routes, session history, and roadmap.
 
@@ -53,11 +53,16 @@ DATABASE_URL=postgresql://...
 ANTHROPIC_API_KEY=sk-ant-...
 FLASK_DEBUG=false
 MAIL_SERVER=smtp.sendgrid.net
-MAIL_PORT=587
+MAIL_PORT=2525
 MAIL_USERNAME=apikey
 MAIL_PASSWORD=<sendgrid-api-key>
-MAIL_DEFAULT_SENDER=noreply@zenbid.io
+MAIL_DEFAULT_SENDER=thomas@zenbid.io
 ```
+
+**SendGrid notes:**
+- `MAIL_USERNAME` must be the literal string `apikey` — not the API key itself
+- `MAIL_PORT=2525` — port 587 is blocked by DigitalOcean; 2525 works
+- Verified sender: `thomas@zenbid.io` (Single Sender Verification in SendGrid)
 
 ---
 
@@ -143,5 +148,7 @@ Parsed in JS: `JSON.parse(document.getElementById('my-data').textContent)` — X
 | Proposal route not using `get_project_or_403()` | High |
 | Viewer role not enforced on write routes | Medium |
 | Edit project fields UI (city/state/zip/type/sector) | High |
+| Welcome email on signup | High |
 | 7 marketing placeholder routes return plain text | Medium |
 | WBS/rate features not live-tested post-deploy | Medium |
+| AgentX AI panel not live-tested post-deploy | Medium |
