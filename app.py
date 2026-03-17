@@ -36,6 +36,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
     'postgresql://postgres:Builder@localhost:5432/estimator_db'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'logo')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
 app.config['WTF_CSRF_TIME_LIMIT'] = 3600  # 1 hour
