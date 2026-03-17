@@ -71,6 +71,7 @@
             {% endif %}
 
             <form method="POST" action="/profile">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label>Current Password</label>
                     <input type="password" name="current_password" required autocomplete="current-password">
