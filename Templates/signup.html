@@ -35,8 +35,12 @@
     .auth-logo {
         font-size: 2rem;
         font-weight: 800;
-        color: var(--primary-brand);
+        color: var(--text-dark);
         margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
     }
 
     .auth-logo span {
@@ -222,7 +226,17 @@
     <div class="auth-container">
         <div class="auth-card">
             <div class="auth-header">
-                <div class="auth-logo">zen<span>bid</span></div>
+                <div class="auth-logo">
+                    <svg width="28" height="22" viewBox="0 0 90 72" fill="none" aria-hidden="true">
+                        <rect x="0" y="0"  width="80" height="11" rx="3.5" fill="#1F2937"/>
+                        <rect x="0" y="15" width="62" height="8"  rx="2.5" fill="rgba(31,41,55,0.35)"/>
+                        <rect x="0" y="27" width="44" height="8"  rx="2.5" fill="rgba(31,41,55,0.2)"/>
+                        <rect x="0" y="39" width="26" height="8"  rx="2.5" fill="rgba(31,41,55,0.1)"/>
+                        <rect x="0" y="55" width="80" height="11" rx="3.5" fill="#FF6B35"/>
+                        <circle cx="86" cy="60.5" r="5" fill="#FF6B35"/>
+                    </svg>
+                    zen<span>bid</span>
+                </div>
                 <h1>Create your account</h1>
                 <p>Start building smarter estimates in under 60 seconds</p>
             </div>

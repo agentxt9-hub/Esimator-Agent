@@ -71,11 +71,11 @@
         .navbar-brand {
             font-size: 1.5rem;
             font-weight: 700;
-            color: var(--primary-brand);
+            color: var(--text-dark);
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 10px;
         }
 
         .navbar-brand span {
@@ -165,8 +165,11 @@
         .footer-brand {
             font-size: 1.25rem;
             font-weight: 700;
-            color: var(--primary-brand);
+            color: var(--text-dark);
             margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .footer-brand span {
@@ -244,6 +247,14 @@
     <nav class="navbar">
         <div class="navbar-container">
             <a href="/" class="navbar-brand">
+                <svg width="26" height="21" viewBox="0 0 90 72" fill="none" aria-hidden="true">
+                    <rect x="0" y="0"  width="80" height="11" rx="3.5" fill="#1F2937"/>
+                    <rect x="0" y="15" width="62" height="8"  rx="2.5" fill="rgba(31,41,55,0.35)"/>
+                    <rect x="0" y="27" width="44" height="8"  rx="2.5" fill="rgba(31,41,55,0.2)"/>
+                    <rect x="0" y="39" width="26" height="8"  rx="2.5" fill="rgba(31,41,55,0.1)"/>
+                    <rect x="0" y="55" width="80" height="11" rx="3.5" fill="#FF6B35"/>
+                    <circle cx="86" cy="60.5" r="5" fill="#FF6B35"/>
+                </svg>
                 zen<span>bid</span>
             </a>
             <div class="navbar-links">
@@ -268,7 +279,17 @@
     <footer class="footer">
         <div class="footer-container">
             <div>
-                <div class="footer-brand">zen<span>bid</span></div>
+                <div class="footer-brand">
+                    <svg width="22" height="18" viewBox="0 0 90 72" fill="none" aria-hidden="true">
+                        <rect x="0" y="0"  width="80" height="11" rx="3.5" fill="#1F2937"/>
+                        <rect x="0" y="15" width="62" height="8"  rx="2.5" fill="rgba(31,41,55,0.35)"/>
+                        <rect x="0" y="27" width="44" height="8"  rx="2.5" fill="rgba(31,41,55,0.2)"/>
+                        <rect x="0" y="39" width="26" height="8"  rx="2.5" fill="rgba(31,41,55,0.1)"/>
+                        <rect x="0" y="55" width="80" height="11" rx="3.5" fill="#FF6B35"/>
+                        <circle cx="86" cy="60.5" r="5" fill="#FF6B35"/>
+                    </svg>
+                    zen<span>bid</span>
+                </div>
                 <p class="footer-tagline">Build Smarter Estimates, Faster</p>
                 <p style="color: #9CA3AF; font-size: 0.875rem;">AI-powered construction estimating for modern contractors.</p>
             </div>
