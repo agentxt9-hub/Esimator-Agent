@@ -534,7 +534,7 @@ python app.py
 | 11b | 2026-03-14 | WBS value inline editing + drag-to-reorder, AI rate lookup panel, validate-rate, requirements.txt |
 | 11c | 2026-03-14 | Marketing site + dark theme re-skin (CSS vars), production deployment to zenbid.io (Gunicorn+Nginx+systemd), login via email, /signup route |
 | 12 | 2026-03-15 | **CSRF** (flask-wtf, meta tag, fetch monkey-patch, hidden fields on 3 forms) + **rate limiting** (flask-limiter on login + 5 AI routes) + **password reset** (flask-mail, /forgot-password, /reset-password/<token>, 2 new templates) |
-| 13 | 2026-03-17 | **Production deployment**: zenbid.io back online after DO outage. Fixed landing route (was redirecting to signup), templates case-sensitivity on Linux (Templates/ → templates/), pool_pre_ping for stale DB connections, SendGrid SMTP setup (port 2525, verified sender thomas@zenbid.io). Full smoke test passed: landing, login, forgot-password, password reset all working. |
+| 13 | 2026-03-17 | **Production deployment**: zenbid.io back online after DO outage. Fixed landing route (was redirecting to signup), templates case-sensitivity on Linux (Templates/ → templates/ in git), pool_pre_ping for stale DB connections, SendGrid SMTP setup (port 2525, verified sender thomas@zenbid.io). Full smoke test passed. **Concept C logo**: SVG mark + zen/bid wordmark applied across all templates (sidebar, marketing nav, footer, all auth pages). |
 
 ---
 

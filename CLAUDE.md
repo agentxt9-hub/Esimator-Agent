@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
-**Last updated:** 2026-03-17 — Session 13 (production deployment + SendGrid email)
+**Last updated:** 2026-03-17 — Session 13 (production deployment + SendGrid email + Concept C logo)
 
 > Full reference: see `Agent_MD.md` for complete architecture, routes, session history, and roadmap.
 
@@ -68,11 +68,17 @@ MAIL_DEFAULT_SENDER=thomas@zenbid.io
 
 ## Architecture
 
-Single-file Flask app (`app.py`, ~3450 lines) + Jinja2 templates in `Templates/`. Vanilla JS + `fetch()`. No frontend framework. No test suite.
+Single-file Flask app (`app.py`, ~3450 lines) + Jinja2 templates in `templates/` (lowercase — required for Linux case-sensitivity). Vanilla JS + `fetch()`. No frontend framework. No test suite.
 
 **Two template bases:**
-- `Templates/base.html` — marketing site (light theme, public)
-- `Templates/app_base.html` — app interface (dark sidebar, login-required)
+- `templates/base.html` — marketing site (light theme, public)
+- `templates/app_base.html` — app interface (dark sidebar, login-required)
+
+**Logo (Concept C — applied Session 13):**
+- SVG mark: stacked estimate bars fading down, coral TOTAL row + coral circle
+- App dark (sidebar): mark with light bars + `zen` white (`--text-primary`) + `bid` coral
+- Marketing light (nav): mark with dark bars + `zen` dark (`--text-dark`) + `bid` coral
+- Footer (dark bg): mark with light bars + `zen` white + `bid` coral
 
 **Key models** (all in `app.py`):
 - `Company` / `User` — multi-tenant auth (Flask-Login); User has `reset_token` + `reset_token_expires`
