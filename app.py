@@ -249,6 +249,20 @@ class ProductionRateStandard(db.Model):
     source_notes   = db.Column(db.Text)
     created_at     = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+class WaitlistEntry(db.Model):
+    __tablename__ = 'waitlist_entries'
+    id         = db.Column(db.Integer, primary_key=True)
+    email      = db.Column(db.String(255), nullable=False, unique=True)
+    name       = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+class WaitlistSurvey(db.Model):
+    __tablename__ = 'waitlist_surveys'
+    id                = db.Column(db.Integer, primary_key=True)
+    waitlist_entry_id = db.Column(db.Integer, db.ForeignKey('waitlist_entries.id'), nullable=False)
+    responses         = db.Column(db.Text)   # comma-separated selected option keys
+    created_at        = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
 class WBSProperty(db.Model):
     __tablename__ = 'wbs_properties'
     id            = db.Column(db.Integer, primary_key=True)
@@ -608,6 +622,45 @@ def terms():
 @app.route('/security')
 def security():
     return "Security — coming soon", 200
+
+@app.route('/waitlist', methods=['GET', 'POST'])
+def waitlist():
+    success = False
+    entry_id = None
+    error = None
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        name  = request.form.get('name', '').strip()
+        if not name:
+            error = 'Please enter your first name.'
+        elif not email or '@' not in email:
+            error = 'Please enter a valid email address.'
+        else:
+            existing = WaitlistEntry.query.filter_by(email=email).first()
+            if existing:
+                error = "You're already on the waitlist — we'll be in touch!"
+            else:
+                entry = WaitlistEntry(email=email, name=name)
+                db.session.add(entry)
+                db.session.commit()
+                success = True
+                entry_id = entry.id
+    return render_template('waitlist.html', success=success, entry_id=entry_id, error=error)
+
+@app.route('/waitlist/survey', methods=['POST'])
+def waitlist_survey():
+    data = request.get_json(silent=True) or {}
+    entry_id  = data.get('entry_id')
+    responses = data.get('responses', [])
+    if not entry_id or not WaitlistEntry.query.get(entry_id):
+        return jsonify({'ok': False}), 400
+    survey = WaitlistSurvey(
+        waitlist_entry_id=entry_id,
+        responses=','.join(responses)
+    )
+    db.session.add(survey)
+    db.session.commit()
+    return jsonify({'ok': True})
 
 # ─────────────────────────────────────────
 # STATIC FILES
@@ -3403,6 +3456,19 @@ def run_migrations():
             # Password reset columns
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP",
+            # Waitlist tables
+            """CREATE TABLE IF NOT EXISTS waitlist_entries (
+                id SERIAL PRIMARY KEY,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                name VARCHAR(200),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS waitlist_surveys (
+                id SERIAL PRIMARY KEY,
+                waitlist_entry_id INTEGER NOT NULL REFERENCES waitlist_entries(id),
+                responses TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
             # WBS tables (created by db.create_all; these are safety guards)
             """CREATE TABLE IF NOT EXISTS wbs_properties (
                 id SERIAL PRIMARY KEY,
