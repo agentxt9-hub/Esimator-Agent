@@ -244,6 +244,26 @@
         .mb-3 { margin-bottom: 1.5rem; }
         .mb-4 { margin-bottom: 2rem; }
 
+        /* HAMBURGER MENU */
+        .nav-hamburger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 4px;
+        }
+
+        .nav-hamburger span {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--text-dark);
+            border-radius: 2px;
+            transition: all 0.25s;
+        }
+
         /* WAITLIST BANNER */
         .waitlist-banner {
             background: #1a2236;
@@ -286,6 +306,75 @@
         .waitlist-banner-dismiss:hover {
             color: #E8EAED;
         }
+
+        /* MOBILE */
+        @media (max-width: 768px) {
+            .navbar-container {
+                padding: 0 1rem;
+            }
+
+            .nav-hamburger {
+                display: flex;
+            }
+
+            .navbar-links {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: rgba(255,255,255,0.98);
+                border-bottom: 1px solid var(--border-light);
+                flex-direction: column;
+                gap: 0;
+                padding: 0.5rem 0;
+                z-index: 999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            }
+
+            .navbar-links.open {
+                display: flex;
+            }
+
+            .navbar-links a {
+                padding: 0.75rem 1.5rem;
+                width: 100%;
+                border-bottom: 1px solid var(--border-light);
+            }
+
+            .navbar-links a:last-child {
+                border-bottom: none;
+            }
+
+            .navbar-links a.btn {
+                margin: 0.75rem 1.5rem;
+                width: calc(100% - 3rem);
+                text-align: center;
+                border-radius: 6px;
+            }
+
+            .navbar {
+                position: sticky;
+                top: 0;
+            }
+
+            .waitlist-banner {
+                font-size: 0.8rem;
+                padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+                text-align: left;
+                flex-wrap: wrap;
+                gap: 0.25rem;
+            }
+
+            .footer-container {
+                grid-template-columns: 1fr 1fr;
+                gap: 1.5rem;
+            }
+
+            .footer-container > div:first-child {
+                grid-column: 1 / -1;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -320,7 +409,10 @@
                 </svg>
                 <span>ZEN<span class="bid-accent">BID</span></span>
             </a>
-            <div class="navbar-links">
+            <button class="nav-hamburger" onclick="toggleNav()" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="navbar-links" id="navbar-links">
                 <a href="/features">Features</a>
                 <a href="/pricing">Pricing</a>
                 {% if current_user.is_authenticated %}
@@ -388,6 +480,17 @@
         </div>
     </footer>
 
+    <script>
+        function toggleNav() {
+            document.getElementById('navbar-links').classList.toggle('open');
+        }
+        // Close menu when a link is clicked
+        document.querySelectorAll('#navbar-links a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                document.getElementById('navbar-links').classList.remove('open');
+            });
+        });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

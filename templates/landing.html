@@ -390,6 +390,67 @@
     .btn-outline-white:hover {
         background: rgba(255, 255, 255, 0.1);
     }
+
+    @media (max-width: 768px) {
+        .hero-container {
+            grid-template-columns: 1fr;
+            padding: 2.5rem 1.25rem;
+            gap: 2rem;
+        }
+
+        .hero-content h1 {
+            font-size: 2.25rem;
+        }
+
+        .hero-visual {
+            display: none;
+        }
+
+        .hero-cta {
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .hero-cta .btn {
+            width: 100%;
+            text-align: center;
+        }
+
+        .features-grid,
+        .testimonials-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .section-header h2 {
+            font-size: 1.6rem;
+        }
+
+        section {
+            padding: 3rem 1.25rem;
+        }
+
+        /* Pricing — stack on mobile */
+        .pricing-grid {
+            grid-template-columns: 1fr !important;
+            gap: 1.25rem;
+        }
+
+        .cta-container {
+            padding: 3rem 1.25rem;
+        }
+
+        .cta-buttons {
+            flex-direction: column;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .cta-buttons .btn {
+            width: 100%;
+            max-width: 280px;
+            text-align: center;
+        }
+    }
 </style>
 {% endblock %}
 
