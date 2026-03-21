@@ -499,6 +499,45 @@ Time-limited tokens (1 hour) sent via email, stored in User model.
 
 ---
 
+## ADR-013: Separate Growth Hub Server from Zenbid App Server
+
+**Date:** 2026-03-19 (Session 17)
+**Status:** Accepted
+
+### Context
+Need agentic growth marketing infrastructure (n8n workflows, Flowise AI agents, monitoring). Decision: run on the same droplet as Zenbid, or a dedicated server?
+
+### Decision
+Provision a second DigitalOcean droplet (45.55.33.136) exclusively for growth/agentic tooling. All services run via Docker Compose in `/opt/agentx-hub/`.
+
+### Rationale
+- Keeps agentic workflows completely isolated from customer-facing app
+- Growth Hub can be restarted, updated, or broken without any risk to zenbid.io
+- Independent scaling — Hub can be resized without touching the app server
+- Docker Compose on Hub vs systemd on App — different deployment patterns, cleaner separation
+- Easier to reason about each server's purpose
+
+### Consequences
+**Positive:**
+- Zero blast radius from Hub failures on customer-facing app
+- Can experiment freely with n8n/Flowise workflows without production risk
+- Clear separation of concerns: app server = revenue, hub = growth
+- Independent cost control (can spin down Hub if unused)
+
+**Negative:**
+- Two servers to maintain instead of one
+- Slightly higher monthly cost (~$12-18/month extra)
+- Cross-server communication via HTTP webhooks (not in-process)
+
+**Neutral:**
+- Webhook pattern (app → Hub) is loosely coupled and easy to extend
+
+**Services on Hub:** n8n (flows.zenbid.io), Flowise (agents.zenbid.io), Dashy (hub.zenbid.io), Portainer (docker.zenbid.io), Uptime Kuma (status.zenbid.io), Nginx Proxy Manager (proxy.zenbid.io)
+
+**Related Files:** `/opt/agentx-hub/docker-compose.yml` (on Growth Hub droplet)
+
+---
+
 ## 📝 ADR Template
 
 Use this template for new decisions:

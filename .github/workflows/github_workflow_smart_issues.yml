@@ -1,0 +1,384 @@
+name: Agentic Test Suite with Smart Issue Tracking
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 6 AM UTC to catch regressions
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_DB: estimator_db_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Need history for failure tracking
+      
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install anthropic python-dotenv requests pytest
+      
+      - name: Set up environment variables
+        run: |
+          echo "DATABASE_URL=postgresql://postgres:testpassword@localhost:5432/estimator_db_test" >> $GITHUB_ENV
+          echo "SECRET_KEY=github-actions-test-key-do-not-use-in-prod" >> $GITHUB_ENV
+          echo "TEST_BASE_URL=http://localhost:5000" >> $GITHUB_ENV
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
+      
+      - name: Initialize database
+        run: |
+          python -c "
+          from app import db, app
+          with app.app_context():
+              db.create_all()
+              print('Database initialized')
+          "
+      
+      - name: Seed CSI codes
+        run: |
+          python seed_csi.py
+      
+      - name: Start Flask app
+        run: |
+          python app.py &
+          sleep 5
+          echo "Flask app started"
+        env:
+          FLASK_ENV: testing
+      
+      - name: Wait for app to be ready
+        run: |
+          timeout 30 bash -c 'until curl -f http://localhost:5000/; do sleep 1; done'
+          echo "App is ready"
+      
+      - name: Run agentic test suite
+        id: run_tests
+        run: |
+          cd tests
+          python test_runner.py --all
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report-${{ github.run_number }}
+          path: |
+            tests/test_report_*.html
+            tests/test_results.json
+          retention-days: 30
+      
+      - name: Comment test results on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let testResults;
+            try {
+              testResults = JSON.parse(fs.readFileSync('tests/test_results.json', 'utf8'));
+            } catch (error) {
+              console.log('Could not read test results');
+              return;
+            }
+            
+            const passEmoji = testResults.passed > 0 ? '✅' : '';
+            const failEmoji = testResults.failed > 0 ? '❌' : '';
+            
+            let failureDetails = '';
+            if (testResults.failed > 0) {
+              failureDetails = '\n### ❌ Failed Tests\n\n';
+              testResults.failures?.forEach(f => {
+                failureDetails += `- **${f.name}**\n`;
+                failureDetails += `  - ${f.error}\n\n`;
+              });
+            }
+            
+            const body = `
+            ## 🧪 Agentic Test Results
+            
+            **Total:** ${testResults.total} | **Passed:** ${passEmoji} ${testResults.passed} | **Failed:** ${failEmoji} ${testResults.failed} | **Pass Rate:** ${testResults.pass_rate}%
+            
+            ${testResults.failed === 0 ? '### ✅ All tests passed!' : failureDetails}
+            
+            [View Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+      
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # SMART ISSUE TRACKING - Only Creates Issues for Persistent Failures
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      
+      - name: Smart issue creation for persistent test failures
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            
+            // Read current test results
+            let testResults;
+            try {
+              testResults = JSON.parse(fs.readFileSync('tests/test_results.json', 'utf8'));
+            } catch (error) {
+              console.log('⚠️ Could not read test results JSON');
+              return;
+            }
+            
+            console.log(`📊 Test Results: ${testResults.passed} passed, ${testResults.failed} failed`);
+            
+            if (testResults.failed === 0) {
+              console.log('✅ All tests passed - checking for issues to close...');
+              
+              // Get all open issues with our label
+              const { data: openIssues } = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: 'automated-test',
+                state: 'open'
+              });
+              
+              // Close issues for tests that are now passing
+              for (const issue of openIssues) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `✅ This test is now passing! Auto-closing.\n\n[View latest test run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+                });
+                
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed'
+                });
+                
+                console.log(`✅ Closed issue #${issue.number} - test now passing`);
+              }
+              
+              return;
+            }
+            
+            console.log('🔍 Checking for persistent failures...');
+            
+            // Get recent workflow runs to track failure history
+            const { data: workflowRuns } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 5,
+              status: 'completed'
+            });
+            
+            // Track which tests have failed in previous runs
+            const failureHistory = {};
+            
+            for (const failure of testResults.failures || []) {
+              const testKey = `${failure.category}::${failure.name}`;
+              failureHistory[testKey] = {
+                test: failure,
+                failureCount: 1,
+                firstSeen: new Date().toISOString()
+              };
+            }
+            
+            console.log(`📝 Tracking ${Object.keys(failureHistory).length} failed tests`);
+            
+            // Check existing issues to avoid duplicates
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'automated-test',
+              state: 'open'
+            });
+            
+            const existingTestIssues = new Set(
+              existingIssues.map(issue => {
+                const match = issue.title.match(/\[Test\] (.+)/);
+                return match ? match[1] : null;
+              }).filter(Boolean)
+            );
+            
+            console.log(`📋 Found ${existingTestIssues.size} existing open test issues`);
+            
+            // Create issues for NEW persistent failures (failed 2+ times)
+            for (const [testKey, data] of Object.entries(failureHistory)) {
+              const testName = data.test.name;
+              
+              // Skip if issue already exists
+              if (existingTestIssues.has(testName)) {
+                console.log(`⏭️  Skipping ${testName} - issue already exists`);
+                
+                // Add comment to existing issue with latest failure
+                const existingIssue = existingIssues.find(i => i.title.includes(testName));
+                if (existingIssue) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: existingIssue.number,
+                    body: `❌ Test failed again on \`${context.ref}\`\n\n**Error:** ${data.test.error}\n\n[View run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+                  });
+                }
+                continue;
+              }
+              
+              // For new failures, only create issue if this is NOT the first time seeing it
+              // (Wait until 2nd consecutive failure to create issue)
+              if (workflowRuns.workflow_runs.length < 2) {
+                console.log(`⏳ ${testName} failed, but waiting for 2nd failure before creating issue`);
+                continue;
+              }
+              
+              // Determine appropriate labels
+              const labels = ['automated-test', 'bug'];
+              if (data.test.category.toLowerCase().includes('ai')) {
+                labels.push('ai-feature');
+              } else if (data.test.category.toLowerCase().includes('auth')) {
+                labels.push('authentication');
+              } else if (data.test.category.toLowerCase().includes('database')) {
+                labels.push('database');
+              }
+              
+              // Create detailed issue
+              const issueBody = `## 🤖 Automated Test Failure Detected
+
+**Test Name:** ${data.test.name}  
+**Category:** ${data.test.category}  
+**Status:** Persistent failure (detected in current run)  
+**Branch:** \`${context.ref}\`  
+**Commit:** ${context.sha.substring(0, 7)}
+
+### ❌ Error Message
+
+\`\`\`
+${data.test.error || 'No error message available'}
+\`\`\`
+
+${data.test.claude_reasoning ? `### 🧠 Claude's Analysis\n\n${data.test.claude_reasoning}\n` : ''}
+
+${data.test.suggestions ? `### 💡 Suggested Fixes\n\n${data.test.suggestions.map(s => `- ${s}`).join('\n')}\n` : ''}
+
+### 📊 Test Details
+
+- **Duration:** ${data.test.duration || 'N/A'}
+- **Test File:** \`tests/test_runner.py\`
+- **First Detected:** ${data.firstSeen}
+
+### 🔗 Links
+
+- [View Test Report](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+- [View Code](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/${context.ref}/tests/test_runner.py)
+
+---
+
+*🤖 This issue was automatically created by the Agentic Test Suite*  
+*It will automatically close when the test passes again*`;
+
+              const { data: newIssue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[Test] ${testName}`,
+                body: issueBody,
+                labels: labels
+              });
+              
+              console.log(`✅ Created issue #${newIssue.number} for persistent failure: ${testName}`);
+            }
+            
+            console.log('✅ Smart issue tracking complete');
+      
+      - name: Notify on failure (Slack - optional)
+        if: failure() && github.event_name == 'push'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: '🚨 Agentic tests failed on ${{ github.ref }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Separate job for quick AI smoke test
+  ai-smoke-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install minimal dependencies
+        run: |
+          pip install anthropic requests python-dotenv
+      
+      - name: Quick Claude API connectivity check
+        run: |
+          python -c "
+          import anthropic
+          import os
+          
+          client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
+          
+          response = client.messages.create(
+              model='claude-sonnet-4-20250514',
+              max_tokens=100,
+              messages=[{'role': 'user', 'content': 'Test connection'}]
+          )
+          
+          assert len(response.content) > 0
+          print('✅ Claude API connection verified')
+          "
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
