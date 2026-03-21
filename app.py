@@ -643,6 +643,11 @@ def waitlist():
                 entry = WaitlistEntry(email=email, name=name)
                 db.session.add(entry)
                 db.session.commit()
+                try:
+                    import requests as req
+                    req.post("https://flows.zenbid.io/webhook/waitlist", json={"name": name, "email": email}, timeout=5)
+                except Exception:
+                    pass
                 success = True
                 entry_id = entry.id
     return render_template('waitlist.html', success=success, entry_id=entry_id, error=error)
