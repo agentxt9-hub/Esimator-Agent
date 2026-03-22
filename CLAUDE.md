@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
-**Last updated:** 2026-03-18 — Session 16 (mobile responsive, ZENBID spacing fix, waitlist push, CTA cleanup)
+**Last updated:** 2026-03-21
 
 > Full reference: see `Agent_MD.md` for complete architecture, routes, session history, and roadmap.
 
@@ -29,6 +29,27 @@ FLASK_DEBUG=true
 MAIL_PASSWORD=                  # leave blank locally unless testing email
 MAIL_DEFAULT_SENDER=noreply@zenbid.io
 ```
+
+---
+
+## Security Framework
+
+**MANDATORY:** Before building any new feature, consult `SECURITY.md` for security requirements.
+
+### Pre-Build Security Checklist (Always Run)
+- Multi-tenant isolation: Does this feature access tenant data? Use `get_project_or_403()` helpers
+- Input validation: Does this feature accept user input? Server-side validation required
+- CSRF protection: New HTML forms need `{{ csrf_token() }}` hidden field
+- Rate limiting: AI routes need `@limiter.limit()` decorator
+- Viewer role: Write routes need `@viewer_readonly` decorator (HIGH priority gap)
+- AI prompt injection: User input in prompts needs sanitization (HIGH priority gap)
+
+### Security Gap Backlog
+See `SECURITY.md` Part 11 for prioritized remediation list:
+- **CRITICAL:** SSL certificate, Privacy Policy, Terms of Service, API key validation
+- **HIGH:** Proposal route isolation, viewer role enforcement, Nginx headers, prompt injection hardening
+
+**Full framework:** `SECURITY.md` (authentication, authorization, input validation, rate limiting, data protection, infrastructure hardening, logging, legal compliance, agentic workflow security)
 
 ---
 
@@ -67,8 +88,8 @@ MAIL_DEFAULT_SENDER=thomas@zenbid.io
 
 ---
 
-### Droplet 2 — Growth Hub (45.55.33.136)
-Agentic Growth Marketer infrastructure. All services run via Docker Compose in `/opt/agentx-hub/`.
+### Droplet 2 — Zenhub (45.55.33.136)
+Zenhub — Internal growth and automation infrastructure. All services run via Docker Compose in `/opt/agentx-hub/`. **Separate repo:** `github.com/agentxt9-hub/zenhub` (pending creation)
 
 | Service | URL |
 |---------|-----|
@@ -78,6 +99,8 @@ Agentic Growth Marketer infrastructure. All services run via Docker Compose in `
 | Portainer (Docker management) | docker.zenbid.io |
 | Uptime Kuma (monitoring) | status.zenbid.io |
 | Nginx Proxy Manager | proxy.zenbid.io |
+
+**Naming Note:** Server infrastructure uses `/opt/agentx-hub/` and `agentx-hub_` volume prefixes. In all product branding, documentation, and UI references, this is called "Zenhub."
 
 **n8n Workflow — "Lead Magnet — Waitlist Welcome":**
 - Fires on every waitlist signup via webhook: `https://flows.zenbid.io/webhook/waitlist`
