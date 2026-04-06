@@ -206,8 +206,11 @@
 
         <!-- CENTER CANVAS -->
         <div id="tk-canvas-wrap">
-            <canvas id="pdf-canvas"></canvas>
-            <canvas id="overlay-canvas"></canvas>
+            <!-- canvas-inner is the CSS transform target; both canvases move together -->
+            <div id="canvas-inner">
+                <canvas id="pdf-canvas"></canvas>
+                <canvas id="overlay-canvas"></canvas>
+            </div>
 
             <!-- Empty state shown when no plans are uploaded -->
             <div id="tk-empty-state" style="display:none">

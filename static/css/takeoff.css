@@ -317,6 +317,17 @@
     overflow: hidden;
     background: var(--app-bg);
     min-width: 0;
+    cursor: grab;
+}
+#tk-canvas-wrap.panning { cursor: grabbing; }
+
+/* CSS transform target — both canvases move as one unit */
+#canvas-inner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    will-change: transform;
 }
 
 #pdf-canvas,

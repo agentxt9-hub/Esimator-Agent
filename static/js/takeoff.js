@@ -1,7 +1,10 @@
 /**
  * takeoff.js — ZenBid Takeoff Module
- * Session 18 — Foundation: PDF viewer, pan/zoom, page nav, item CRUD
- * Drawing tools (Session 19) will extend this state object.
+ * Session 18 — Foundation: PDF viewer, page nav, item CRUD
+ * Session 18d — Pan/zoom rewrite: GPU-accelerated CSS transforms.
+ *   PDF.js renders once at 1.5x base resolution; all pan/zoom uses
+ *   CSS transform on #canvas-inner. Quality re-render fires on zoom
+ *   end (debounced 300 ms). Drawing tools extend this in Session 19.
  */
 'use strict';
 
@@ -10,26 +13,46 @@ const TK = (() => {
     // ── State ────────────────────────────────────────────────────────────────
     const state = {
         projectId: null,
-        plans: [],          // parsed from embedded JSON
+        plans: [],
         currentPlanId: null,
         currentPageId: null,
         currentPageNum: 1,
         pdfDoc: null,
-        renderTask: null,   // in-flight PDF render task (to cancel on page change)
+        renderTask: null,       // in-flight PDF render task (cancel on page change)
+
+        // Logical zoom — user-facing "100%" = 1.0
         zoom: 1.0,
-        panX: 0,
-        panY: 0,
+
+        // CSS transform state — resets to 1.0 after each quality re-render
+        cssScale: 1.0,
+        cssX: 0,
+        cssY: 0,
+
+        // PDF decoded at zoom * baseRenderScale for crisp output
+        baseRenderScale: 1.5,
+        // Zoom value at the last completed PDF decode
+        _lastRenderZoom: 1.0,
+
+        // Debounce timer for quality re-render on zoom end
+        renderDebounceTimer: null,
+
+        // Space-bar pan mode
+        spaceDown: false,
         isPanning: false,
-        lastMouseX: 0,
-        lastMouseY: 0,
+        lastX: 0,
+        lastY: 0,
+
         activeTool: 'select',
         items: [],
         leftCollapsed: false,
         rightCollapsed: false,
+
+        // Touch tracking (pinch zoom)
+        _touches: {},
     };
 
     // ── DOM refs (set on init) ────────────────────────────────────────────────
-    let pdfCanvas, overlayCanvas, pdfCtx, overlayCtx, canvasWrap;
+    let pdfCanvas, overlayCanvas, pdfCtx, overlayCtx, canvasWrap, canvasInner;
 
     // ── Init ─────────────────────────────────────────────────────────────────
     function init() {
@@ -40,11 +63,12 @@ const TK = (() => {
             document.getElementById('tk-plans-data').textContent
         ) || [];
 
-        pdfCanvas    = document.getElementById('pdf-canvas');
+        pdfCanvas     = document.getElementById('pdf-canvas');
         overlayCanvas = document.getElementById('overlay-canvas');
-        pdfCtx       = pdfCanvas.getContext('2d');
-        overlayCtx   = overlayCanvas.getContext('2d');
-        canvasWrap   = document.getElementById('tk-canvas-wrap');
+        pdfCtx        = pdfCanvas.getContext('2d');
+        overlayCtx    = overlayCanvas.getContext('2d');
+        canvasWrap    = document.getElementById('tk-canvas-wrap');
+        canvasInner   = document.getElementById('canvas-inner');
 
         _bindEvents();
         _renderPageList();
@@ -63,19 +87,25 @@ const TK = (() => {
 
     // ── Event binding ─────────────────────────────────────────────────────────
     function _bindEvents() {
-        // Mouse wheel zoom on canvas wrap
+        // Mouse wheel zoom — smooth, cursor-centered
         canvasWrap.addEventListener('wheel', _onWheel, { passive: false });
 
-        // Middle-mouse pan + left-drag pan (space bar hold for pan mode TBD in S19)
-        overlayCanvas.addEventListener('mousedown', _onMouseDown);
+        // Pan: middle button OR space + left button
+        canvasWrap.addEventListener('mousedown', _onMouseDown);
         window.addEventListener('mousemove', _onMouseMove);
-        window.addEventListener('mouseup',   _onMouseUp);
+        window.addEventListener('mouseup', _onMouseUp);
 
-        // Mousemove → update status bar coordinates
-        overlayCanvas.addEventListener('mousemove', _updateCoordsDisplay);
+        // Coordinate readout (wrap space, not canvas space)
+        canvasWrap.addEventListener('mousemove', _updateCoordsDisplay);
 
-        // Keyboard shortcuts
+        // Space-bar + general keyboard shortcuts
         window.addEventListener('keydown', _onKeyDown);
+        window.addEventListener('keyup', _onKeyUp);
+
+        // Touch: single-finger pan + pinch zoom
+        canvasWrap.addEventListener('touchstart', _onTouchStart, { passive: true });
+        canvasWrap.addEventListener('touchmove', _onTouchMove, { passive: false });
+        canvasWrap.addEventListener('touchend', _onTouchEnd, { passive: true });
 
         // Color swatches in new-item modal
         document.querySelectorAll('.color-swatch').forEach(el => {
@@ -91,7 +121,7 @@ const TK = (() => {
             btn.addEventListener('click', () => {
                 if (btn.dataset.tool === 'scale') { openScaleModal(); return; }
                 if (btn.dataset.tool === 'fit')   { zoomToFit(); return; }
-                if (btn.dataset.tool === 'print') { return; }  // handled inline
+                if (btn.dataset.tool === 'print') { return; }
                 setActiveTool(btn.dataset.tool);
             });
         });
@@ -103,7 +133,15 @@ const TK = (() => {
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tool === tool);
         });
-        overlayCanvas.style.cursor = tool === 'select' ? 'default' : 'crosshair';
+        if (!state.spaceDown) {
+            canvasWrap.style.cursor = tool === 'select' ? 'grab' : 'crosshair';
+        }
+    }
+
+    // ── CSS Transform ─────────────────────────────────────────────────────────
+    function applyTransform() {
+        canvasInner.style.transform =
+            `translate(${state.cssX}px, ${state.cssY}px) scale(${state.cssScale})`;
     }
 
     // ── PDF loading ───────────────────────────────────────────────────────────
@@ -116,7 +154,28 @@ const TK = (() => {
         try {
             const doc = await pdfjsLib.getDocument(url).promise;
             state.pdfDoc = doc;
+
+            // Pre-calculate zoom-to-fit before first render so initial render is correct
+            const firstPage = await doc.getPage(pageNum);
+            const naturalVp = firstPage.getViewport({ scale: 1.0 });
+            const wrapW = canvasWrap.clientWidth;
+            const wrapH = canvasWrap.clientHeight;
+            const fitZoom = Math.min(
+                (wrapW / naturalVp.width)  * 0.95,
+                (wrapH / naturalVp.height) * 0.95
+            );
+            state.zoom          = Math.max(0.1, Math.min(10, fitZoom));
+            state._lastRenderZoom = state.zoom;
+
+            // Center the canvas in the wrap
+            const canvasW = state.baseRenderScale * state.zoom * naturalVp.width;
+            const canvasH = state.baseRenderScale * state.zoom * naturalVp.height;
+            state.cssX     = Math.max(0, (wrapW - canvasW) / 2);
+            state.cssY     = Math.max(0, (wrapH - canvasH) / 2);
+            state.cssScale = 1.0;
+
             renderPage(pageNum);
+
             // Generate thumbnails for all pages in this plan
             const plan = state.plans.find(p => p.id === planId);
             if (plan) generateThumbnails(planId, plan.pages);
@@ -129,70 +188,90 @@ const TK = (() => {
     async function generateThumbnails(planId, pages) {
         if (!state.pdfDoc) return;
         for (const pageData of pages) {
-            const pageId = pageData.id;
-            const pageNum = pageData.page_number;
-
             const thumbImg = document.querySelector(
-                `[data-page-id="${pageId}"] .page-thumb-img`
+                `[data-page-id="${pageData.id}"] .page-thumb-img`
             );
             if (!thumbImg) continue;
-
             try {
-                const pdfPage = await state.pdfDoc.getPage(pageNum);
+                const pdfPage = await state.pdfDoc.getPage(pageData.page_number);
                 const viewport = pdfPage.getViewport({ scale: 0.15 });
-
                 const canvas = document.createElement('canvas');
                 canvas.width  = viewport.width;
                 canvas.height = viewport.height;
-                const ctx = canvas.getContext('2d');
-
-                await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+                await pdfPage.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
                 thumbImg.src = canvas.toDataURL('image/jpeg', 0.7);
             } catch (err) {
-                console.error(`Thumbnail error page ${pageNum}:`, err);
+                console.error(`Thumbnail error page ${pageData.page_number}:`, err);
             }
         }
     }
 
+    // ── Render page at current zoom ───────────────────────────────────────────
     function renderPage(pageNum) {
         if (!state.pdfDoc) return;
 
-        // Cancel any in-flight render
-        if (state.renderTask) {
-            state.renderTask.cancel();
-            state.renderTask = null;
-        }
+        if (state.renderTask) { state.renderTask.cancel(); state.renderTask = null; }
+        clearTimeout(state.renderDebounceTimer);
 
         state.pdfDoc.getPage(pageNum).then(page => {
-            const viewport = page.getViewport({ scale: state.zoom });
+            const renderScale = state.baseRenderScale * state.zoom;
+            const viewport    = page.getViewport({ scale: renderScale });
 
-            pdfCanvas.width     = viewport.width;
-            pdfCanvas.height    = viewport.height;
+            pdfCanvas.width      = viewport.width;
+            pdfCanvas.height     = viewport.height;
             overlayCanvas.width  = viewport.width;
             overlayCanvas.height = viewport.height;
 
-            // Apply pan via CSS transform on the canvases
-            _applyTransform();
+            // Canvas is now sized for current zoom — CSS scale resets to 1
+            state.cssScale = 1.0;
+            applyTransform();
 
             const task = page.render({ canvasContext: pdfCtx, viewport });
             state.renderTask = task;
-
             task.promise.then(() => {
                 state.renderTask = null;
+                state._lastRenderZoom = state.zoom;
                 renderOverlays();
                 _updateStatusBar();
             }).catch(err => {
-                if (err.name !== 'RenderingCancelledException') {
-                    console.error('Render error:', err);
-                }
+                if (err.name !== 'RenderingCancelledException') console.error('Render error:', err);
             });
         });
     }
 
-    function _applyTransform() {
-        const transform = `translate(${state.panX}px, ${state.panY}px)`;
-        pdfCanvas.style.transform     = transform;
-        overlayCanvas.style.transform = transform;
+    // ── Quality re-render (called on zoom end, debounced 300 ms) ─────────────
+    function rerenderAtCurrentZoom() {
+        if (!state.pdfDoc) return;
+        if (state.renderTask) { state.renderTask.cancel(); state.renderTask = null; }
+
+        const targetZoom = state.zoom;
+        state.pdfDoc.getPage(state.currentPageNum).then(page => {
+            const renderScale = state.baseRenderScale * targetZoom;
+            const viewport    = page.getViewport({ scale: renderScale });
+
+            pdfCanvas.width      = viewport.width;
+            pdfCanvas.height     = viewport.height;
+            overlayCanvas.width  = viewport.width;
+            overlayCanvas.height = viewport.height;
+
+            const task = page.render({ canvasContext: pdfCtx, viewport });
+            state.renderTask = task;
+            task.promise.then(() => {
+                state.renderTask       = null;
+                state._lastRenderZoom  = targetZoom;
+                state.cssScale         = 1.0;
+                applyTransform();
+                renderOverlays();
+                _updateStatusBar();
+            }).catch(err => {
+                if (err.name !== 'RenderingCancelledException') console.error('Rerender error:', err);
+            });
+        });
+    }
+
+    function _scheduleRerender() {
+        clearTimeout(state.renderDebounceTimer);
+        state.renderDebounceTimer = setTimeout(rerenderAtCurrentZoom, 300);
     }
 
     // ── Overlays (placeholder — drawing tools in Session 19) ─────────────────
@@ -203,76 +282,174 @@ const TK = (() => {
     }
 
     // ── Pan / Zoom ────────────────────────────────────────────────────────────
+
+    // Mouse wheel — zoom centered on cursor
     function _onWheel(e) {
         e.preventDefault();
-        const delta = e.deltaY < 0 ? 0.1 : -0.1;
-        zoom(delta);
+        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        const rect   = canvasWrap.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        state.cssX    = mouseX - (mouseX - state.cssX) * factor;
+        state.cssY    = mouseY - (mouseY - state.cssY) * factor;
+        state.zoom    = Math.max(0.1, Math.min(10, state.zoom * factor));
+        state.cssScale = state.zoom / state._lastRenderZoom;
+        applyTransform();
+        _updateZoomDisplay();
+        _scheduleRerender();
     }
 
+    // Public zoom buttons — centered on wrap center
     function zoom(delta) {
-        state.zoom = Math.max(0.1, Math.min(8.0, state.zoom + delta));
-        if (state.pdfDoc) renderPage(state.currentPageNum);
+        const factor = 1 + delta;
+        const cx = canvasWrap.clientWidth  / 2;
+        const cy = canvasWrap.clientHeight / 2;
+        state.cssX    = cx - (cx - state.cssX) * factor;
+        state.cssY    = cy - (cy - state.cssY) * factor;
+        state.zoom    = Math.max(0.1, Math.min(10, state.zoom * factor));
+        state.cssScale = state.zoom / state._lastRenderZoom;
+        applyTransform();
         _updateZoomDisplay();
+        _scheduleRerender();
     }
 
+    // Zoom to fit — animate CSS then quality re-render
     function zoomToFit() {
-        if (!pdfCanvas.width) return;
-        const wrapW = canvasWrap.clientWidth;
-        const wrapH = canvasWrap.clientHeight;
-        const scaleX = wrapW / (pdfCanvas.width  / state.zoom);
-        const scaleY = wrapH / (pdfCanvas.height / state.zoom);
-        state.zoom = Math.min(scaleX, scaleY) * 0.95;
-        state.panX = 0;
-        state.panY = 0;
-        if (state.pdfDoc) renderPage(state.currentPageNum);
+        if (!state.pdfDoc || !pdfCanvas.width) return;
+
+        const naturalW = pdfCanvas.width  / (state.baseRenderScale * state._lastRenderZoom);
+        const naturalH = pdfCanvas.height / (state.baseRenderScale * state._lastRenderZoom);
+        const wrapW    = canvasWrap.clientWidth;
+        const wrapH    = canvasWrap.clientHeight;
+
+        const fitZoom = Math.min((wrapW / naturalW) * 0.95, (wrapH / naturalH) * 0.95);
+        state.zoom = Math.max(0.1, Math.min(10, fitZoom));
+
+        // During CSS animation use current canvas + target scale
+        const cssTarget = state.zoom / state._lastRenderZoom;
+        const visualW   = pdfCanvas.width  * cssTarget;
+        const visualH   = pdfCanvas.height * cssTarget;
+        state.cssScale  = cssTarget;
+        state.cssX      = Math.max(0, (wrapW - visualW) / 2);
+        state.cssY      = Math.max(0, (wrapH - visualH) / 2);
+
+        canvasInner.style.transition = 'transform 0.2s ease';
+        applyTransform();
         _updateZoomDisplay();
+
+        // After animation: quality re-render resets cssScale=1, position preserved
+        setTimeout(() => {
+            canvasInner.style.transition = '';
+            rerenderAtCurrentZoom();
+        }, 200);
     }
 
+    // Pan start
     function _onMouseDown(e) {
-        if (e.button === 1 || e.button === 0) {   // middle or left
+        if (e.button === 1 || (e.button === 0 && state.spaceDown)) {
+            if (e.button === 1) e.preventDefault();
             state.isPanning = true;
-            state.lastMouseX = e.clientX;
-            state.lastMouseY = e.clientY;
-            overlayCanvas.style.cursor = 'grabbing';
+            state.lastX = e.clientX;
+            state.lastY = e.clientY;
+            canvasWrap.style.cursor = 'grabbing';
         }
     }
 
+    // Pan move
     function _onMouseMove(e) {
         if (!state.isPanning) return;
-        state.panX += e.clientX - state.lastMouseX;
-        state.panY += e.clientY - state.lastMouseY;
-        state.lastMouseX = e.clientX;
-        state.lastMouseY = e.clientY;
-        _applyTransform();
+        state.cssX += e.clientX - state.lastX;
+        state.cssY += e.clientY - state.lastY;
+        state.lastX = e.clientX;
+        state.lastY = e.clientY;
+        applyTransform();
     }
 
+    // Pan end
     function _onMouseUp() {
+        if (!state.isPanning) return;
         state.isPanning = false;
-        overlayCanvas.style.cursor = state.activeTool === 'select' ? 'default' : 'crosshair';
+        canvasWrap.style.cursor = (state.spaceDown || state.activeTool === 'select')
+            ? 'grab' : 'crosshair';
+    }
+
+    // ── Touch: single-finger pan + pinch zoom ─────────────────────────────────
+    function _onTouchStart(e) {
+        for (const t of e.changedTouches) {
+            state._touches[t.identifier] = { x: t.clientX, y: t.clientY };
+        }
+    }
+
+    function _onTouchMove(e) {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            const t    = e.touches[0];
+            const prev = state._touches[t.identifier];
+            if (prev) {
+                state.cssX += t.clientX - prev.x;
+                state.cssY += t.clientY - prev.y;
+                applyTransform();
+            }
+            state._touches[t.identifier] = { x: t.clientX, y: t.clientY };
+        } else if (e.touches.length === 2) {
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            const p1 = state._touches[t1.identifier];
+            const p2 = state._touches[t2.identifier];
+            if (p1 && p2) {
+                const prevDist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                const currDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                if (prevDist > 0) {
+                    const factor = currDist / prevDist;
+                    const rect   = canvasWrap.getBoundingClientRect();
+                    const midX   = (t1.clientX + t2.clientX) / 2 - rect.left;
+                    const midY   = (t1.clientY + t2.clientY) / 2 - rect.top;
+                    state.cssX    = midX - (midX - state.cssX) * factor;
+                    state.cssY    = midY - (midY - state.cssY) * factor;
+                    state.zoom    = Math.max(0.1, Math.min(10, state.zoom * factor));
+                    state.cssScale = state.zoom / state._lastRenderZoom;
+                    applyTransform();
+                    _updateZoomDisplay();
+                    _scheduleRerender();
+                }
+            }
+            for (const t of e.touches) {
+                state._touches[t.identifier] = { x: t.clientX, y: t.clientY };
+            }
+        }
+    }
+
+    function _onTouchEnd(e) {
+        for (const t of e.changedTouches) delete state._touches[t.identifier];
     }
 
     // ── Keyboard shortcuts ────────────────────────────────────────────────────
     function _onKeyDown(e) {
-        // Ignore when typing in an input
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+        if (e.code === 'Space' && !state.spaceDown) {
+            e.preventDefault();
+            state.spaceDown = true;
+            canvasWrap.style.cursor = 'grab';
+            return;
+        }
+
         switch (e.key) {
-            case 'f':
-            case 'F':
-                zoomToFit();
-                break;
-            case 'ArrowRight':
-                _nextPage();
-                break;
-            case 'ArrowLeft':
-                _prevPage();
-                break;
-            case 'Escape':
-                setActiveTool('select');
-                break;
-            case 'Delete':
-                // Session 19: delete selected measurement
-                break;
+            case 'f': case 'F': zoomToFit(); break;
+            case 'ArrowRight':  _nextPage(); break;
+            case 'ArrowLeft':   _prevPage(); break;
+            case 'Escape':      setActiveTool('select'); break;
+            case 'Delete':      break; // Session 19: delete selected measurement
+        }
+    }
+
+    function _onKeyUp(e) {
+        if (e.code === 'Space') {
+            state.spaceDown = false;
+            if (!state.isPanning) {
+                canvasWrap.style.cursor = state.activeTool === 'select' ? 'grab' : 'crosshair';
+            }
         }
     }
 
@@ -300,8 +477,8 @@ const TK = (() => {
     function loadPage(pageId, pageNum) {
         state.currentPageId  = pageId;
         state.currentPageNum = pageNum;
-        state.panX = 0;
-        state.panY = 0;
+        state.cssX = 0;
+        state.cssY = 0;
         renderPage(pageNum);
         _highlightActivePage();
         _updateStatusBar();
@@ -319,7 +496,6 @@ const TK = (() => {
             );
             if (pages.length === 0) return;
 
-            // Plan header
             const header = document.createElement('div');
             header.className = 'plan-header';
             header.textContent = plan.original_filename;
@@ -330,8 +506,6 @@ const TK = (() => {
                 item.className = 'page-thumb-item';
                 item.dataset.pageId     = page.id;
                 item.dataset.pageNumber = page.page_number;
-
-                // Always render img; src="" triggers pulse animation until JS fills it
                 item.innerHTML = `
                     <div class="thumb-wrapper">
                         <img class="page-thumb-img"
@@ -377,7 +551,6 @@ const TK = (() => {
         const list = document.getElementById('tk-item-list');
         list.innerHTML = '';
         const q = filterText.toLowerCase();
-
         const filtered = state.items.filter(i =>
             !q || i.name.toLowerCase().includes(q)
         );
@@ -391,12 +564,10 @@ const TK = (() => {
             const row = document.createElement('div');
             row.className = 'takeoff-item-row';
             row.dataset.itemId = item.id;
-
-            const unit = _unitForType(item.measurement_type);
+            const unit   = _unitForType(item.measurement_type);
             const valStr = item.total > 0
                 ? `${item.total.toLocaleString(undefined, {maximumFractionDigits:2})} ${unit}`
                 : '—';
-
             row.innerHTML = `
                 <span class="ti-icon">${_iconForType(item.measurement_type)}</span>
                 <span class="ti-name">${_escHtml(item.name)}</span>
@@ -406,40 +577,30 @@ const TK = (() => {
                     <button class="ti-del-btn" title="Delete" data-id="${item.id}">&times;</button>
                 </span>
             `;
-
             row.querySelector('.ti-del-btn').addEventListener('click', e => {
                 e.stopPropagation();
                 if (confirm(`Delete "${item.name}"? This also deletes all measurements.`)) {
                     deleteItem(item.id);
                 }
             });
-
             list.appendChild(row);
         });
     }
 
-    function filterItems(text) {
-        _renderItemList(text);
-    }
+    function filterItems(text) { _renderItemList(text); }
 
     // ── Floating data table ───────────────────────────────────────────────────
     function _updateDataTable() {
-        // Show items that have measurements on the current page
         const tableEl = document.getElementById('tk-data-table');
         const rowsEl  = document.getElementById('tk-dt-rows');
-
         const pageItems = state.items.filter(i => i.measurement_count > 0);
-        if (pageItems.length === 0) {
-            tableEl.style.display = 'none';
-            return;
-        }
+        if (pageItems.length === 0) { tableEl.style.display = 'none'; return; }
 
         tableEl.style.display = 'block';
         rowsEl.innerHTML = '';
-
         pageItems.forEach(item => {
             const unit = _unitForType(item.measurement_type);
-            const row = document.createElement('div');
+            const row  = document.createElement('div');
             row.className = 'tk-dt-row';
             row.innerHTML = `
                 <span class="tk-dt-dot" style="background:${item.color}"></span>
@@ -463,13 +624,12 @@ const TK = (() => {
         if (page && page.scale_set) {
             scaleEl.textContent = 'Scale: set';
             badgeEl.textContent = 'Scale: set';
-            badgeEl.className = 'scale-badge scale-set';
+            badgeEl.className   = 'scale-badge scale-set';
         } else {
             scaleEl.textContent = 'Scale: not set';
             badgeEl.textContent = '⚠ Scale Not Set';
-            badgeEl.className = 'scale-badge scale-unset';
+            badgeEl.className   = 'scale-badge scale-unset';
         }
-
         _updateZoomDisplay();
     }
 
@@ -480,11 +640,16 @@ const TK = (() => {
     }
 
     function _updateCoordsDisplay(e) {
-        if (!pdfCanvas.width) return;
-        const rect = overlayCanvas.getBoundingClientRect();
-        const x = ((e.clientX - rect.left - state.panX) / state.zoom).toFixed(1);
-        const y = ((e.clientY - rect.top  - state.panY) / state.zoom).toFixed(1);
-        document.getElementById('tk-status-xy').textContent = `X: ${x}  Y: ${y}`;
+        if (!pdfCanvas.width || !state._lastRenderZoom) return;
+        const rect   = canvasWrap.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        // wrap space → canvas space → PDF natural space (px at zoom 1.0)
+        const canvasX = (mouseX - state.cssX) / state.cssScale;
+        const canvasY = (mouseY - state.cssY) / state.cssScale;
+        const pdfX = (canvasX / state.baseRenderScale / state._lastRenderZoom).toFixed(1);
+        const pdfY = (canvasY / state.baseRenderScale / state._lastRenderZoom).toFixed(1);
+        document.getElementById('tk-status-xy').textContent = `X: ${pdfX}  Y: ${pdfY}`;
     }
 
     // ── Upload modal ──────────────────────────────────────────────────────────
@@ -520,7 +685,7 @@ const TK = (() => {
         document.getElementById('drop-zone').style.display = 'none';
         document.getElementById('upload-progress').style.display = 'block';
         document.getElementById('upload-filename').textContent = file.name;
-        document.getElementById('upload-status-msg').textContent = 'Uploading…';
+        document.getElementById('upload-status-msg').textContent = 'Uploading...';
         document.getElementById('upload-progress-bar').style.width = '0%';
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -544,19 +709,15 @@ const TK = (() => {
                 const data = JSON.parse(xhr.responseText);
                 if (data.success) {
                     document.getElementById('upload-status-msg').textContent =
-                        `Uploaded ${data.page_count} page(s). Rendering thumbnails…`;
+                        `Uploaded ${data.page_count} page(s). Rendering thumbnails...`;
                     document.getElementById('upload-progress-bar').style.width = '100%';
-                    setTimeout(() => {
-                        closeUploadModal();
-                        _onUploadComplete(data);
-                    }, 400);
+                    setTimeout(() => { closeUploadModal(); _onUploadComplete(data); }, 400);
                 } else {
                     document.getElementById('upload-status-msg').textContent =
                         'Error: ' + (data.error || 'Upload failed');
                 }
             } else {
-                document.getElementById('upload-status-msg').textContent =
-                    'Upload failed (server error).';
+                document.getElementById('upload-status-msg').textContent = 'Upload failed (server error).';
             }
         };
         xhr.onerror = () => {
@@ -566,7 +727,6 @@ const TK = (() => {
     }
 
     function _onUploadComplete(data) {
-        // Add new plan to state — no page reload needed
         const newPlan = {
             id: data.plan_id,
             original_filename: data.original_filename || 'Uploaded Plan',
@@ -585,7 +745,6 @@ const TK = (() => {
         _renderPageList();
         _highlightActivePage();
 
-        // Load the first page of the new plan; loadPDF will generate thumbnails
         if (newPlan.pages.length > 0) {
             const firstPage = newPlan.pages[0];
             loadPDF(newPlan.id, firstPage.id, firstPage.page_number);
@@ -606,14 +765,13 @@ const TK = (() => {
 
     function submitNewItem(e) {
         e.preventDefault();
-        const payload = {
+        createItem({
             name:             document.getElementById('ni-name').value.trim(),
             measurement_type: document.getElementById('ni-type').value,
             color:            document.getElementById('ni-color').value,
             opacity:          parseInt(document.getElementById('ni-opacity').value) / 100,
             assembly_notes:   document.getElementById('ni-notes').value.trim(),
-        };
-        createItem(payload);
+        });
     }
 
     function createItem(payload) {
@@ -626,8 +784,7 @@ const TK = (() => {
         .then(data => {
             if (data.success) {
                 closeNewItemModal();
-                // Reset form
-                document.getElementById('ni-name').value = '';
+                document.getElementById('ni-name').value  = '';
                 document.getElementById('ni-notes').value = '';
                 fetchItems();
             } else {
@@ -638,14 +795,10 @@ const TK = (() => {
     }
 
     function deleteItem(itemId) {
-        fetch(`/project/${state.projectId}/takeoff/item/${itemId}`, {
-            method: 'DELETE',
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) fetchItems();
-        })
-        .catch(err => console.error('deleteItem:', err));
+        fetch(`/project/${state.projectId}/takeoff/item/${itemId}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => { if (data.success) fetchItems(); })
+            .catch(err => console.error('deleteItem:', err));
     }
 
     // ── Scale modal ───────────────────────────────────────────────────────────
@@ -667,14 +820,10 @@ const TK = (() => {
         const ppf = parseFloat(document.getElementById('scale-ppf').value);
         if (!ppf || ppf <= 0) { alert('Enter a valid pixels-per-foot value.'); return; }
         // Session 19: persist to TakeoffPage via PATCH/PUT route
-        // For now, update local state
         const plan = state.plans.find(p => p.id === state.currentPlanId);
         if (plan) {
             const page = plan.pages.find(p => p.id === state.currentPageId);
-            if (page) {
-                page.scale_set = true;
-                _updateStatusBar();
-            }
+            if (page) { page.scale_set = true; _updateStatusBar(); }
         }
         closeScaleModal();
         alert(`Scale set: ${ppf} px/ft. (Persist in Session 19.)`);
@@ -695,27 +844,21 @@ const TK = (() => {
     // ── Utilities ─────────────────────────────────────────────────────────────
     function _escHtml(str) {
         return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;') .replace(/"/g, '&quot;');
     }
 
     function _unitForType(type) {
-        switch (type) {
-            case 'area': return 'SF';
-            case 'count': return 'EA';
-            default: return 'FT';
-        }
+        return type === 'area' ? 'SF' : type === 'count' ? 'EA' : 'FT';
     }
 
     function _iconForType(type) {
         switch (type) {
-            case 'area':             return '▭';
-            case 'count':           return '•';
+            case 'area':              return '▭';
+            case 'count':            return '•';
             case 'linear_with_width': return '═';
-            case 'segment':         return '╌';
-            default:                return '─';
+            case 'segment':          return '╌';
+            default:                 return '─';
         }
     }
 
@@ -724,6 +867,8 @@ const TK = (() => {
         init,
         zoom,
         zoomToFit,
+        applyTransform,
+        rerenderAtCurrentZoom,
         filterPages,
         filterItems,
         fetchItems,
