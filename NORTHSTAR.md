@@ -1,4 +1,4 @@
-# Estimator AgentX — Northstar Document
+# Zenbid — Northstar Document
 **Purpose:** Foundational philosophy and feature architecture. Every design decision, feature build, and UI choice should be evaluated against this document.
 
 ---
@@ -11,7 +11,7 @@ The construction estimating industry faces a generational divide. Experienced es
 
 ### Strategic Positioning
 
-AgentX bridges this gap by offering dual-natured estimating: a tool that is simultaneously rigid enough to feel familiar and flexible enough to accommodate different thinking styles, with an optional AI layer that augments human judgment rather than replacing it.
+Zenbid bridges this gap by offering dual-natured estimating: a tool that is simultaneously rigid enough to feel familiar and flexible enough to accommodate different thinking styles, with an optional AI layer that augments human judgment rather than replacing it.
 
 ---
 
@@ -322,4 +322,4 @@ The build phases are complete when all of the following are true:
 
 ---
 
-*Last updated: 2026-03-09 — Session 3*
+*Last updated: 2026-03-22

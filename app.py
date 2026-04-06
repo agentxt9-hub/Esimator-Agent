@@ -298,6 +298,65 @@ class LineItemWBS(db.Model):
                                            name='uq_lineitem_wbs_property'),)
 
 # ─────────────────────────────────────────
+# TAKEOFF MODELS
+# ─────────────────────────────────────────
+
+class TakeoffPlan(db.Model):
+    __tablename__ = 'takeoff_plans'
+    id                 = db.Column(db.Integer, primary_key=True)
+    project_id         = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    company_id         = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    filename           = db.Column(db.String(500), nullable=False)   # stored filename (uuid_safe.pdf)
+    original_filename  = db.Column(db.String(500), nullable=False)   # user's original filename
+    page_count         = db.Column(db.Integer, default=0)
+    measurement_system = db.Column(db.String(20), default='imperial')
+    uploaded_at        = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    uploaded_by        = db.Column(db.Integer, db.ForeignKey('users.id'))
+    pages              = db.relationship('TakeoffPage', backref='plan', lazy=True,
+                                         cascade='all, delete-orphan',
+                                         order_by='TakeoffPage.page_number')
+
+class TakeoffPage(db.Model):
+    __tablename__ = 'takeoff_pages'
+    id                    = db.Column(db.Integer, primary_key=True)
+    plan_id               = db.Column(db.Integer, db.ForeignKey('takeoff_plans.id'), nullable=False)
+    page_number           = db.Column(db.Integer, nullable=False)
+    page_name             = db.Column(db.String(200), default='Page 1')
+    scale_pixels_per_foot = db.Column(db.Float, nullable=True)
+    scale_method          = db.Column(db.String(20), default='none')   # none | manual | ai
+    thumbnail_path        = db.Column(db.String(500), nullable=True)
+    measurements          = db.relationship('TakeoffMeasurement', backref='page', lazy=True,
+                                             cascade='all, delete-orphan')
+
+class TakeoffItem(db.Model):
+    __tablename__ = 'takeoff_items'
+    id               = db.Column(db.Integer, primary_key=True)
+    project_id       = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    company_id       = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+    name             = db.Column(db.String(255), nullable=False)
+    measurement_type = db.Column(db.String(30), nullable=False)  # linear | area | count | linear_with_width | segment
+    color            = db.Column(db.String(20), default='#2D5BFF')
+    opacity          = db.Column(db.Float, default=0.5)
+    width_ft         = db.Column(db.Float, nullable=True)
+    side_of_line     = db.Column(db.String(10), default='center')  # center | left | right
+    assembly_notes   = db.Column(db.Text, nullable=True)
+    division         = db.Column(db.String(100), nullable=True)
+    created_at       = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_by       = db.Column(db.Integer, db.ForeignKey('users.id'))
+    measurements     = db.relationship('TakeoffMeasurement', backref='item', lazy=True,
+                                        cascade='all, delete-orphan')
+
+class TakeoffMeasurement(db.Model):
+    __tablename__ = 'takeoff_measurements'
+    id                   = db.Column(db.Integer, primary_key=True)
+    item_id              = db.Column(db.Integer, db.ForeignKey('takeoff_items.id'), nullable=False)
+    page_id              = db.Column(db.Integer, db.ForeignKey('takeoff_pages.id'), nullable=False)
+    points_json          = db.Column(db.Text, nullable=False)  # JSON array of {x,y} normalized 0-1
+    calculated_value     = db.Column(db.Float, default=0.0)
+    calculated_secondary = db.Column(db.Float, nullable=True)
+    created_at           = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+# ─────────────────────────────────────────
 # AUTH HELPERS & DECORATORS
 # ─────────────────────────────────────────
 
@@ -3501,6 +3560,51 @@ def run_migrations():
                 wbs_value_id INTEGER REFERENCES wbs_values(id) ON DELETE CASCADE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )""",
+            # Takeoff tables (Session 18)
+            """CREATE TABLE IF NOT EXISTS takeoff_plans (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                filename VARCHAR(500) NOT NULL,
+                original_filename VARCHAR(500) NOT NULL,
+                page_count INTEGER DEFAULT 0,
+                measurement_system VARCHAR(20) DEFAULT 'imperial',
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                uploaded_by INTEGER REFERENCES users(id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS takeoff_pages (
+                id SERIAL PRIMARY KEY,
+                plan_id INTEGER NOT NULL REFERENCES takeoff_plans(id) ON DELETE CASCADE,
+                page_number INTEGER NOT NULL,
+                page_name VARCHAR(200) DEFAULT 'Page 1',
+                scale_pixels_per_foot FLOAT,
+                scale_method VARCHAR(20) DEFAULT 'none',
+                thumbnail_path VARCHAR(500)
+            )""",
+            """CREATE TABLE IF NOT EXISTS takeoff_items (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                name VARCHAR(255) NOT NULL,
+                measurement_type VARCHAR(30) NOT NULL,
+                color VARCHAR(20) DEFAULT '#2D5BFF',
+                opacity FLOAT DEFAULT 0.5,
+                width_ft FLOAT,
+                side_of_line VARCHAR(10) DEFAULT 'center',
+                assembly_notes TEXT,
+                division VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by INTEGER REFERENCES users(id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS takeoff_measurements (
+                id SERIAL PRIMARY KEY,
+                item_id INTEGER NOT NULL REFERENCES takeoff_items(id) ON DELETE CASCADE,
+                page_id INTEGER NOT NULL REFERENCES takeoff_pages(id) ON DELETE CASCADE,
+                points_json TEXT NOT NULL,
+                calculated_value FLOAT DEFAULT 0.0,
+                calculated_secondary FLOAT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
         ]
         for sql in stmts:
             try:
@@ -3542,6 +3646,14 @@ def seed_production_rates():
                 min_rate=min_r, typical_rate=typ_r, max_rate=max_r, source_notes=notes,
             ))
         db.session.commit()
+
+# ─────────────────────────────────────────
+# BLUEPRINT REGISTRATION
+# ─────────────────────────────────────────
+# Imported at bottom to avoid circular imports — all models and helpers
+# are defined above, so routes_takeoff.py can safely import from app.
+from routes_takeoff import takeoff_bp  # noqa: E402
+app.register_blueprint(takeoff_bp)
 
 if __name__ == '__main__':
     with app.app_context():
