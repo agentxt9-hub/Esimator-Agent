@@ -37,11 +37,6 @@ def _plan_dir(project_id):
     return base
 
 
-def _thumb_dir(project_id):
-    d = os.path.join(_plan_dir(project_id), 'thumbs')
-    os.makedirs(d, exist_ok=True)
-    return d
-
 
 def _get_plan_or_403(plan_id):
     plan = TakeoffPlan.query.get_or_404(plan_id)
@@ -139,76 +134,39 @@ def upload_pdf(project_id):
         db.session.add(plan)
         db.session.flush()  # get plan.id before commit
 
-        # Generate thumbnails and count pages using PyMuPDF (pure Python, no poppler)
+        # Count pages with PyMuPDF — thumbnails render client-side via PDF.js
         pages_data = []
         try:
-            import fitz  # PyMuPDF
+            import fitz
             doc = fitz.open(pdf_path)
             total_pages = len(doc)
-            plan.page_count = total_pages
-            thumb_dir = _thumb_dir(project_id)
-
-            for idx in range(total_pages):
-                page = doc[idx]
-                # zoom 1.0 = 72 DPI — low res thumbnail, fast, small memory
-                pix = page.get_pixmap(matrix=fitz.Matrix(1.0, 1.0))
-                thumb_name = f'p{plan.id}_{idx + 1}.jpg'
-                thumb_path = os.path.join(thumb_dir, thumb_name)
-                pix.save(thumb_path)
-                del pix  # free immediately
-
-                rel_path = os.path.join('uploads', 'takeoff', str(project_id),
-                                        'thumbs', thumb_name)
-                current_app.logger.info(
-                    f'Thumbnail {idx + 1}/{total_pages} saved')
-
-                page_record = TakeoffPage(
-                    plan_id=plan.id,
-                    page_number=idx + 1,
-                    page_name=f'Page {idx + 1}',
-                    thumbnail_path=rel_path,
-                )
-                db.session.add(page_record)
-                db.session.flush()
-                pages_data.append({
-                    'id': page_record.id,
-                    'page_number': idx + 1,
-                    'page_name': page_record.page_name,
-                    'thumbnail_url': '/static/' + rel_path.replace('\\', '/'),
-                })
-
             doc.close()
+        except Exception:
+            total_pages = 1  # last-resort fallback
 
-        except Exception as e:
-            # PyMuPDF unavailable — create page records without thumbnails
-            current_app.logger.warning(f'Thumbnail generation failed: {e}')
-            try:
-                import fitz
-                doc = fitz.open(pdf_path)
-                plan.page_count = len(doc)
-                doc.close()
-            except Exception:
-                plan.page_count = 1  # last-resort fallback
+        plan.page_count = total_pages
 
-            for idx in range(1, plan.page_count + 1):
-                page = TakeoffPage(
-                    plan_id=plan.id,
-                    page_number=idx,
-                    page_name=f'Page {idx}',
-                )
-                db.session.add(page)
-                db.session.flush()
-                pages_data.append({
-                    'id': page.id,
-                    'page_number': idx,
-                    'page_name': page.page_name,
-                    'thumbnail_url': None,
-                })
+        for idx in range(1, total_pages + 1):
+            page_record = TakeoffPage(
+                plan_id=plan.id,
+                page_number=idx,
+                page_name=f'Page {idx}',
+                thumbnail_path=None,
+            )
+            db.session.add(page_record)
+            db.session.flush()
+            pages_data.append({
+                'id': page_record.id,
+                'page_number': idx,
+                'page_name': page_record.page_name,
+                'thumbnail_url': None,  # rendered client-side
+            })
 
         db.session.commit()
         return jsonify({
             'success': True,
             'plan_id': plan.id,
+            'original_filename': plan.original_filename,
             'page_count': plan.page_count,
             'pages': pages_data,
         })

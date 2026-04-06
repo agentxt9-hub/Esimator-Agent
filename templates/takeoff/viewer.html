@@ -8,6 +8,15 @@
     /* Override app-content padding for full-viewport takeoff layout */
     .app-content { padding: 0 !important; overflow: hidden !important; }
     .app-main { overflow: hidden; }
+
+    /* Pulse placeholder while thumbnail renders client-side */
+    .page-thumb-img[src=""] {
+        animation: tk-thumb-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes tk-thumb-pulse {
+        0%, 100% { opacity: 0.4; }
+        50%       { opacity: 0.7; }
+    }
 </style>
 {% endblock %}
 

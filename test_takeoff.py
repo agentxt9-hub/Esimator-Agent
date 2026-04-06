@@ -184,19 +184,12 @@ with app.app_context():
         check("TakeoffPage records created", len(db_pages) == plan.page_count,
               f"{len(db_pages)} pages in DB")
 
-# 5. Thumbnail files
-print("\n-- 5. Thumbnail files --")
-has_thumbs = any(pg.get('thumbnail_url') for pg in pages)
-if has_thumbs:
-    for pg in pages:
-        url = pg.get('thumbnail_url') or ''
-        if url.startswith('/static/'):
-            rel  = url[len('/static/'):]
-            full = os.path.join(BASE_DIR, 'static', rel.replace('/', os.sep))
-            check(f"Thumbnail exists: {os.path.basename(full)}", os.path.isfile(full))
-else:
-    print("  [SKIP] Thumbnail generation skipped (poppler not installed on Windows dev machine).")
-    print("         Install poppler on the DigitalOcean droplet for production thumbnails.")
+# 5. Thumbnail generation (client-side)
+print("\n-- 5. Thumbnail generation (client-side) --")
+# Upload returns thumbnail_url=None; PDF.js renders thumbnails in the browser
+check("All pages have thumbnail_url=None (client renders via PDF.js)",
+      all(pg.get('thumbnail_url') is None for pg in pages),
+      str([pg.get('thumbnail_url') for pg in pages]))
 
 # 6. Serve PDF
 print("\n-- 6. Serve PDF --")

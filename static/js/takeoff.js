@@ -107,18 +107,51 @@ const TK = (() => {
     }
 
     // ── PDF loading ───────────────────────────────────────────────────────────
-    function loadPDF(planId, pageId, pageNum) {
+    async function loadPDF(planId, pageId, pageNum) {
         state.currentPlanId = planId;
         state.currentPageId = pageId;
         state.currentPageNum = pageNum;
 
         const url = `/project/${state.projectId}/takeoff/plan/${planId}/pdf`;
-        pdfjsLib.getDocument(url).promise.then(doc => {
+        try {
+            const doc = await pdfjsLib.getDocument(url).promise;
             state.pdfDoc = doc;
             renderPage(pageNum);
-        }).catch(err => {
+            // Generate thumbnails for all pages in this plan
+            const plan = state.plans.find(p => p.id === planId);
+            if (plan) generateThumbnails(planId, plan.pages);
+        } catch (err) {
             console.error('PDF load error:', err);
-        });
+        }
+    }
+
+    // ── Client-side thumbnail generation ─────────────────────────────────────
+    async function generateThumbnails(planId, pages) {
+        if (!state.pdfDoc) return;
+        for (const pageData of pages) {
+            const pageId = pageData.id;
+            const pageNum = pageData.page_number;
+
+            const thumbImg = document.querySelector(
+                `[data-page-id="${pageId}"] .page-thumb-img`
+            );
+            if (!thumbImg) continue;
+
+            try {
+                const pdfPage = await state.pdfDoc.getPage(pageNum);
+                const viewport = pdfPage.getViewport({ scale: 0.15 });
+
+                const canvas = document.createElement('canvas');
+                canvas.width  = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+
+                await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+                thumbImg.src = canvas.toDataURL('image/jpeg', 0.7);
+            } catch (err) {
+                console.error(`Thumbnail error page ${pageNum}:`, err);
+            }
+        }
     }
 
     function renderPage(pageNum) {
@@ -295,15 +328,17 @@ const TK = (() => {
             pages.forEach(page => {
                 const item = document.createElement('div');
                 item.className = 'page-thumb-item';
-                item.dataset.pageId = page.id;
-                item.dataset.pageNum = page.page_number;
+                item.dataset.pageId     = page.id;
+                item.dataset.pageNumber = page.page_number;
 
-                const thumb = page.thumbnail_url
-                    ? `<img src="${page.thumbnail_url}" class="page-thumb-img" loading="lazy" alt="">`
-                    : `<div class="page-thumb-placeholder">📄</div>`;
-
+                // Always render img; src="" triggers pulse animation until JS fills it
                 item.innerHTML = `
-                    ${thumb}
+                    <div class="thumb-wrapper">
+                        <img class="page-thumb-img"
+                             src="${page.thumbnail_url || ''}"
+                             style="width:100%;background:#252B33;min-height:80px;display:block;"
+                             alt="Page ${page.page_number}">
+                    </div>
                     <span class="page-thumb-name">${_escHtml(page.page_name)}</span>
                 `;
                 item.addEventListener('click', () => {
@@ -509,12 +544,12 @@ const TK = (() => {
                 const data = JSON.parse(xhr.responseText);
                 if (data.success) {
                     document.getElementById('upload-status-msg').textContent =
-                        `Processing ${data.page_count} page(s)…`;
+                        `Uploaded ${data.page_count} page(s). Rendering thumbnails…`;
                     document.getElementById('upload-progress-bar').style.width = '100%';
                     setTimeout(() => {
                         closeUploadModal();
                         _onUploadComplete(data);
-                    }, 600);
+                    }, 400);
                 } else {
                     document.getElementById('upload-status-msg').textContent =
                         'Error: ' + (data.error || 'Upload failed');
@@ -531,9 +566,30 @@ const TK = (() => {
     }
 
     function _onUploadComplete(data) {
-        // Reload page to get updated plans from server
-        // (Simple and reliable; avoids state sync complexity for Session 18)
-        window.location.reload();
+        // Add new plan to state — no page reload needed
+        const newPlan = {
+            id: data.plan_id,
+            original_filename: data.original_filename || 'Uploaded Plan',
+            page_count: data.page_count,
+            pages: data.pages.map(p => ({
+                id: p.id,
+                page_number: p.page_number,
+                page_name: p.page_name,
+                thumbnail_url: null,
+                scale_set: false,
+                scale_method: null,
+            })),
+        };
+        state.plans.push(newPlan);
+        document.getElementById('tk-empty-state').style.display = 'none';
+        _renderPageList();
+        _highlightActivePage();
+
+        // Load the first page of the new plan; loadPDF will generate thumbnails
+        if (newPlan.pages.length > 0) {
+            const firstPage = newPlan.pages[0];
+            loadPDF(newPlan.id, firstPage.id, firstPage.page_number);
+        }
     }
 
     // ── New item modal ────────────────────────────────────────────────────────
@@ -689,6 +745,7 @@ const TK = (() => {
         toggleRight,
         setActiveTool,
         renderOverlays,
+        generateThumbnails,
         // Expose state for Session 19 drawing tools
         _state: state,
     };
