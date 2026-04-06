@@ -139,55 +139,56 @@ def upload_pdf(project_id):
         db.session.add(plan)
         db.session.flush()  # get plan.id before commit
 
-        # Generate thumbnails and count pages — page-by-page to keep memory flat
+        # Generate thumbnails and count pages using PyMuPDF (pure Python, no poppler)
         pages_data = []
         try:
-            from pdf2image import convert_from_path, pdfinfo_from_path
-            info = pdfinfo_from_path(pdf_path, poppler_path='/usr/bin')
-            total_pages = info['Pages']
+            import fitz  # PyMuPDF
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
             plan.page_count = total_pages
             thumb_dir = _thumb_dir(project_id)
 
-            for idx in range(1, total_pages + 1):
-                current_app.logger.info(f'Processing page {idx} of {total_pages}')
-                images = convert_from_path(pdf_path, dpi=72, poppler_path='/usr/bin',
-                                           first_page=idx, last_page=idx)
-                img = images[0]
-
-                thumb_name = f'p{plan.id}_{idx}.jpg'
+            for idx in range(total_pages):
+                page = doc[idx]
+                # zoom 1.0 = 72 DPI — low res thumbnail, fast, small memory
+                pix = page.get_pixmap(matrix=fitz.Matrix(1.0, 1.0))
+                thumb_name = f'p{plan.id}_{idx + 1}.jpg'
                 thumb_path = os.path.join(thumb_dir, thumb_name)
-                img.save(thumb_path, 'JPEG', quality=75)
-
-                del images, img  # free memory before next page
+                pix.save(thumb_path)
+                del pix  # free immediately
 
                 rel_path = os.path.join('uploads', 'takeoff', str(project_id),
                                         'thumbs', thumb_name)
+                current_app.logger.info(
+                    f'Thumbnail {idx + 1}/{total_pages} saved')
 
-                page = TakeoffPage(
+                page_record = TakeoffPage(
                     plan_id=plan.id,
-                    page_number=idx,
-                    page_name=f'Page {idx}',
+                    page_number=idx + 1,
+                    page_name=f'Page {idx + 1}',
                     thumbnail_path=rel_path,
                 )
-                db.session.add(page)
+                db.session.add(page_record)
                 db.session.flush()
                 pages_data.append({
-                    'id': page.id,
-                    'page_number': idx,
-                    'page_name': page.page_name,
+                    'id': page_record.id,
+                    'page_number': idx + 1,
+                    'page_name': page_record.page_name,
                     'thumbnail_url': '/static/' + rel_path.replace('\\', '/'),
                 })
 
+            doc.close()
+
         except Exception as e:
-            # pdf2image / poppler not available — create pages without thumbnails
+            # PyMuPDF unavailable — create page records without thumbnails
             current_app.logger.warning(f'Thumbnail generation failed: {e}')
             try:
-                import PyPDF2
-                with open(pdf_path, 'rb') as fh:
-                    reader = PyPDF2.PdfReader(fh)
-                    plan.page_count = len(reader.pages)
+                import fitz
+                doc = fitz.open(pdf_path)
+                plan.page_count = len(doc)
+                doc.close()
             except Exception:
-                plan.page_count = 1  # fallback
+                plan.page_count = 1  # last-resort fallback
 
             for idx in range(1, plan.page_count + 1):
                 page = TakeoffPage(
