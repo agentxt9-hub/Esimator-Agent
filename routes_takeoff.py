@@ -120,94 +120,103 @@ def upload_pdf(project_id):
     if size > MAX_PDF_BYTES:
         return jsonify({'success': False, 'error': 'File exceeds 100 MB limit'}), 400
 
-    safe_orig = secure_filename(f.filename)
-    stored_name = f'{uuid.uuid4().hex}_{safe_orig}'
-    plan_dir = _plan_dir(project_id)
-    pdf_path = os.path.join(plan_dir, stored_name)
-    f.save(pdf_path)
-
-    # Create DB plan record first (need plan.id for thumbnail naming)
-    plan = TakeoffPlan(
-        project_id=project_id,
-        company_id=current_user.company_id,
-        filename=stored_name,
-        original_filename=safe_orig,
-        uploaded_by=current_user.id,
-    )
-    db.session.add(plan)
-    db.session.flush()  # get plan.id before commit
-
-    # Generate thumbnails and count pages — page-by-page to keep memory flat
-    pages_data = []
+    pdf_path = None  # tracked so we can clean up on any failure after save
     try:
-        from pdf2image import convert_from_path, pdfinfo_from_path
-        info = pdfinfo_from_path(pdf_path, poppler_path='/usr/bin')
-        total_pages = info['Pages']
-        plan.page_count = total_pages
-        thumb_dir = _thumb_dir(project_id)
+        safe_orig = secure_filename(f.filename)
+        stored_name = f'{uuid.uuid4().hex}_{safe_orig}'
+        plan_dir = _plan_dir(project_id)
+        pdf_path = os.path.join(plan_dir, stored_name)
+        f.save(pdf_path)
 
-        for idx in range(1, total_pages + 1):
-            images = convert_from_path(pdf_path, dpi=72, poppler_path='/usr/bin',
-                                       first_page=idx, last_page=idx)
-            img = images[0]
+        # Create DB plan record first (need plan.id for thumbnail naming)
+        plan = TakeoffPlan(
+            project_id=project_id,
+            company_id=current_user.company_id,
+            filename=stored_name,
+            original_filename=safe_orig,
+            uploaded_by=current_user.id,
+        )
+        db.session.add(plan)
+        db.session.flush()  # get plan.id before commit
 
-            thumb_name = f'p{plan.id}_{idx}.jpg'
-            thumb_path = os.path.join(thumb_dir, thumb_name)
-            img.save(thumb_path, 'JPEG', quality=75)
+        # Generate thumbnails and count pages — page-by-page to keep memory flat
+        pages_data = []
+        try:
+            from pdf2image import convert_from_path, pdfinfo_from_path
+            info = pdfinfo_from_path(pdf_path, poppler_path='/usr/bin')
+            total_pages = info['Pages']
+            plan.page_count = total_pages
+            thumb_dir = _thumb_dir(project_id)
 
-            del images, img  # free memory before next page
+            for idx in range(1, total_pages + 1):
+                images = convert_from_path(pdf_path, dpi=72, poppler_path='/usr/bin',
+                                           first_page=idx, last_page=idx)
+                img = images[0]
 
-            rel_path = os.path.join('uploads', 'takeoff', str(project_id),
-                                    'thumbs', thumb_name)
+                thumb_name = f'p{plan.id}_{idx}.jpg'
+                thumb_path = os.path.join(thumb_dir, thumb_name)
+                img.save(thumb_path, 'JPEG', quality=75)
 
-            page = TakeoffPage(
-                plan_id=plan.id,
-                page_number=idx,
-                page_name=f'Page {idx}',
-                thumbnail_path=rel_path,
-            )
-            db.session.add(page)
-            db.session.flush()
-            pages_data.append({
-                'id': page.id,
-                'page_number': idx,
-                'page_name': page.page_name,
-                'thumbnail_url': '/static/' + rel_path.replace('\\', '/'),
-            })
+                del images, img  # free memory before next page
+
+                rel_path = os.path.join('uploads', 'takeoff', str(project_id),
+                                        'thumbs', thumb_name)
+
+                page = TakeoffPage(
+                    plan_id=plan.id,
+                    page_number=idx,
+                    page_name=f'Page {idx}',
+                    thumbnail_path=rel_path,
+                )
+                db.session.add(page)
+                db.session.flush()
+                pages_data.append({
+                    'id': page.id,
+                    'page_number': idx,
+                    'page_name': page.page_name,
+                    'thumbnail_url': '/static/' + rel_path.replace('\\', '/'),
+                })
+
+        except Exception as e:
+            # pdf2image / poppler not available — create pages without thumbnails
+            current_app.logger.warning(f'Thumbnail generation failed: {e}')
+            try:
+                import PyPDF2
+                with open(pdf_path, 'rb') as fh:
+                    reader = PyPDF2.PdfReader(fh)
+                    plan.page_count = len(reader.pages)
+            except Exception:
+                plan.page_count = 1  # fallback
+
+            for idx in range(1, plan.page_count + 1):
+                page = TakeoffPage(
+                    plan_id=plan.id,
+                    page_number=idx,
+                    page_name=f'Page {idx}',
+                )
+                db.session.add(page)
+                db.session.flush()
+                pages_data.append({
+                    'id': page.id,
+                    'page_number': idx,
+                    'page_name': page.page_name,
+                    'thumbnail_url': None,
+                })
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'plan_id': plan.id,
+            'page_count': plan.page_count,
+            'pages': pages_data,
+        })
 
     except Exception as e:
-        # pdf2image / poppler not available — create pages without thumbnails
-        current_app.logger.warning(f'Thumbnail generation failed: {e}')
-        try:
-            import PyPDF2
-            with open(pdf_path, 'rb') as fh:
-                reader = PyPDF2.PdfReader(fh)
-                plan.page_count = len(reader.pages)
-        except Exception:
-            plan.page_count = 1  # fallback
-
-        for idx in range(1, plan.page_count + 1):
-            page = TakeoffPage(
-                plan_id=plan.id,
-                page_number=idx,
-                page_name=f'Page {idx}',
-            )
-            db.session.add(page)
-            db.session.flush()
-            pages_data.append({
-                'id': page.id,
-                'page_number': idx,
-                'page_name': page.page_name,
-                'thumbnail_url': None,
-            })
-
-    db.session.commit()
-    return jsonify({
-        'success': True,
-        'plan_id': plan.id,
-        'page_count': plan.page_count,
-        'pages': pages_data,
-    })
+        db.session.rollback()
+        if pdf_path and os.path.exists(pdf_path):
+            os.remove(pdf_path)
+        current_app.logger.error(f'PDF upload failed, cleaned up {pdf_path}: {e}')
+        return jsonify({'success': False, 'error': 'Upload failed. Please try again.'}), 500
 
 
 # ── serve raw PDF ─────────────────────────────────────────────────────────────
