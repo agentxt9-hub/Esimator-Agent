@@ -28,13 +28,15 @@ const TK = (() => {
         cssX: 0,
         cssY: 0,
 
-        // PDF decoded at zoom * baseRenderScale for crisp output
-        baseRenderScale: 1.5,
+        // PDF decoded at zoom * baseRenderScale for crisp output (2.0 = retina quality)
+        baseRenderScale: 2.0,
         // Zoom value at the last completed PDF decode
         _lastRenderZoom: 1.0,
 
         // Debounce timer for quality re-render on zoom end
         renderDebounceTimer: null,
+        // Guard: prevent concurrent quality re-renders
+        isRendering: false,
 
         // Space-bar pan mode
         spaceDown: false,
@@ -239,9 +241,15 @@ const TK = (() => {
         });
     }
 
-    // ── Quality re-render (called on zoom end, debounced 300 ms) ─────────────
+    // ── Quality re-render (called on zoom end, debounced 600 ms) ─────────────
+    // Renders to an offscreen canvas first, then swaps atomically on the next
+    // animation frame so the visible canvas never shows a partially-painted or
+    // empty state (eliminates the snap/jump on quality upgrade).
     function rerenderAtCurrentZoom() {
         if (!state.pdfDoc) return;
+        if (state.isRendering) return;      // don't stack concurrent re-renders
+        state.isRendering = true;
+
         if (state.renderTask) { state.renderTask.cancel(); state.renderTask = null; }
 
         const targetZoom = state.zoom;
@@ -249,29 +257,47 @@ const TK = (() => {
             const renderScale = state.baseRenderScale * targetZoom;
             const viewport    = page.getViewport({ scale: renderScale });
 
-            pdfCanvas.width      = viewport.width;
-            pdfCanvas.height     = viewport.height;
-            overlayCanvas.width  = viewport.width;
-            overlayCanvas.height = viewport.height;
+            // Render into an offscreen canvas — visible canvas untouched until done
+            const offscreen    = document.createElement('canvas');
+            offscreen.width    = viewport.width;
+            offscreen.height   = viewport.height;
+            const offCtx       = offscreen.getContext('2d');
 
-            const task = page.render({ canvasContext: pdfCtx, viewport });
+            const task = page.render({ canvasContext: offCtx, viewport });
             state.renderTask = task;
+
             task.promise.then(() => {
-                state.renderTask       = null;
-                state._lastRenderZoom  = targetZoom;
-                state.cssScale         = 1.0;
-                applyTransform();
-                renderOverlays();
-                _updateStatusBar();
+                state.renderTask = null;
+
+                // Atomic swap on next animation frame — syncs to screen refresh
+                requestAnimationFrame(() => {
+                    pdfCanvas.width      = offscreen.width;
+                    pdfCanvas.height     = offscreen.height;
+                    pdfCtx.drawImage(offscreen, 0, 0);
+
+                    overlayCanvas.width  = offscreen.width;
+                    overlayCanvas.height = offscreen.height;
+
+                    state._lastRenderZoom = targetZoom;
+                    state.cssScale        = 1.0;
+                    applyTransform();
+                    renderOverlays();
+                    _updateStatusBar();
+                    state.isRendering = false;
+                });
             }).catch(err => {
+                state.isRendering = false;
                 if (err.name !== 'RenderingCancelledException') console.error('Rerender error:', err);
             });
+        }).catch(err => {
+            state.isRendering = false;
+            console.error('getPage error in rerender:', err);
         });
     }
 
     function _scheduleRerender() {
         clearTimeout(state.renderDebounceTimer);
-        state.renderDebounceTimer = setTimeout(rerenderAtCurrentZoom, 300);
+        state.renderDebounceTimer = setTimeout(rerenderAtCurrentZoom, 600);
     }
 
     // ── Overlays (placeholder — drawing tools in Session 19) ─────────────────
@@ -283,10 +309,10 @@ const TK = (() => {
 
     // ── Pan / Zoom ────────────────────────────────────────────────────────────
 
-    // Mouse wheel — zoom centered on cursor
+    // Mouse wheel — zoom centered on cursor, continuous factor for smooth trackpad feel
     function _onWheel(e) {
         e.preventDefault();
-        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        const factor = Math.pow(0.999, e.deltaY);   // smoother than discrete 0.9/1.1
         const rect   = canvasWrap.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
@@ -356,14 +382,24 @@ const TK = (() => {
         }
     }
 
-    // Pan move
+    // Pan move — RAF-batched so updates sync to screen refresh rate
+    let _rafPending = false;
+    function _schedulePanUpdate() {
+        if (_rafPending) return;
+        _rafPending = true;
+        requestAnimationFrame(() => {
+            applyTransform();
+            _rafPending = false;
+        });
+    }
+
     function _onMouseMove(e) {
         if (!state.isPanning) return;
         state.cssX += e.clientX - state.lastX;
         state.cssY += e.clientY - state.lastY;
         state.lastX = e.clientX;
         state.lastY = e.clientY;
-        applyTransform();
+        _schedulePanUpdate();
     }
 
     // Pan end
