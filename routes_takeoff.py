@@ -149,6 +149,7 @@ def upload_pdf(project_id):
             thumb_dir = _thumb_dir(project_id)
 
             for idx in range(1, total_pages + 1):
+                current_app.logger.info(f'Processing page {idx} of {total_pages}')
                 images = convert_from_path(pdf_path, dpi=72, poppler_path='/usr/bin',
                                            first_page=idx, last_page=idx)
                 img = images[0]
@@ -229,7 +230,16 @@ def serve_pdf(project_id, plan_id):
 
     pdf_path = os.path.join(current_app.root_path, 'static', 'uploads',
                             'takeoff', str(project_id), plan.filename)
-    if not os.path.exists(pdf_path):
+
+    # Debug: log path details to help diagnose 0-byte responses
+    exists = os.path.exists(pdf_path)
+    size = os.path.getsize(pdf_path) if exists else -1
+    current_app.logger.info(
+        f'serve_pdf plan={plan_id} project={project_id} '
+        f'path={pdf_path!r} exists={exists} size={size}'
+    )
+
+    if not exists:
         abort(404)
 
     return send_file(
