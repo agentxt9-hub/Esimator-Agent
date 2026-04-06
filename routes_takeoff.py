@@ -137,18 +137,25 @@ def upload_pdf(project_id):
     db.session.add(plan)
     db.session.flush()  # get plan.id before commit
 
-    # Generate thumbnails and count pages
+    # Generate thumbnails and count pages — page-by-page to keep memory flat
     pages_data = []
     try:
-        from pdf2image import convert_from_path
-        images = convert_from_path(pdf_path, dpi=150)
-        plan.page_count = len(images)
+        from pdf2image import convert_from_path, pdfinfo_from_path
+        info = pdfinfo_from_path(pdf_path, poppler_path='/usr/bin')
+        total_pages = info['Pages']
+        plan.page_count = total_pages
         thumb_dir = _thumb_dir(project_id)
 
-        for idx, img in enumerate(images, start=1):
+        for idx in range(1, total_pages + 1):
+            images = convert_from_path(pdf_path, dpi=72, poppler_path='/usr/bin',
+                                       first_page=idx, last_page=idx)
+            img = images[0]
+
             thumb_name = f'p{plan.id}_{idx}.jpg'
             thumb_path = os.path.join(thumb_dir, thumb_name)
             img.save(thumb_path, 'JPEG', quality=75)
+
+            del images, img  # free memory before next page
 
             rel_path = os.path.join('uploads', 'takeoff', str(project_id),
                                     'thumbs', thumb_name)
