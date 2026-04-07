@@ -112,6 +112,11 @@ const TK = (() => {
 
     // ── Stage initialization ──────────────────────────────────────────────────
     function initStage() {
+        if (typeof Konva === 'undefined') {
+            console.error('[TK] Konva not loaded — cannot initialize stage');
+            return;
+        }
+
         // Fallback if CSS layout hasn't settled yet (can be 0 at DOMContentLoaded)
         const w = canvasWrap.clientWidth  || window.innerWidth  || 900;
         const h = canvasWrap.clientHeight || window.innerHeight || 600;

@@ -415,13 +415,12 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- PDF.js -->
+<!-- Scripts load synchronously in order at bottom of body — no defer/async -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/konva/9.3.6/konva.min.js"></script>
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 </script>
-<!-- Konva.js — stage, layers, hit detection, tweens -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/konva/9.3.6/konva.min.js"></script>
 <script src="/static/js/takeoff.js"></script>
 {% endblock %}
