@@ -305,6 +305,10 @@ const TK = (() => {
     // ── Page render — main entry point for ALL page navigation (Bug 1 fix) ────
     // Ensures the right PDF doc is loaded, then renders the requested page.
     async function loadPage(pageId, pageNum, planId) {
+        if (!state.stage || !state.pdfLayer) {
+            console.error('[TK] Stage not initialized — cannot load page');
+            return;
+        }
         console.log('[TK] loadPage —', { pageId, pageNum, planId });
 
         // Load PDF.js document if this is a new plan or not yet loaded
@@ -329,6 +333,10 @@ const TK = (() => {
 
     // ── Render a single PDF page onto pdfLayer ────────────────────────────────
     async function renderPDFPage(pageNum) {
+        if (!state.pdfLayer) {
+            console.error('[TK] pdfLayer is null');
+            return;
+        }
         if (!state.pdfDoc) {
             console.warn('[TK] renderPDFPage called but state.pdfDoc is null');
             return;
