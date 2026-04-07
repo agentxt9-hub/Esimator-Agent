@@ -206,11 +206,8 @@
 
         <!-- CENTER CANVAS -->
         <div id="tk-canvas-wrap">
-            <!-- canvas-inner is the CSS transform target; both canvases move together -->
-            <div id="canvas-inner">
-                <canvas id="pdf-canvas"></canvas>
-                <canvas id="overlay-canvas"></canvas>
-            </div>
+            <!-- Konva stage mounts here; fills tk-canvas-wrap -->
+            <div id="konva-container"></div>
 
             <!-- Empty state shown when no plans are uploaded -->
             <div id="tk-empty-state" style="display:none">
@@ -406,5 +403,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 </script>
+<!-- Konva.js — stage, layers, hit detection, tweens -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/konva/9.3.6/konva.min.js"></script>
 <script src="/static/js/takeoff.js"></script>
 {% endblock %}

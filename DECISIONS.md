@@ -577,7 +577,7 @@ All thumbnail rendering happens in the browser using PDF.js at `scale: 0.15`. Se
 ## ADR-015: CSS Transform Pan/Zoom with Offscreen Canvas Re-render
 
 **Date:** 2026-04-06 (Session 18)
-**Status:** Accepted
+**Status:** Superseded by ADR-017
 
 ### Context
 Re-rendering the PDF via PDF.js on every mouse event (wheel, mousemove) caused visibly laggy, jumpy pan/zoom — PDF decode is expensive even at modest zoom levels. The old approach called `page.render()` on every wheel tick.
@@ -606,6 +606,54 @@ All pan and zoom manipulates CSS `transform` on a `#canvas-inner` wrapper div. P
 - `#canvas-inner` wrapper is the only HTML change — rest of DOM untouched
 
 **Related Files:** static/js/takeoff.js (rerenderAtCurrentZoom, _onWheel, _schedulePanUpdate), templates/takeoff/viewer.html (#canvas-inner), static/css/takeoff.css (#canvas-inner styles)
+
+---
+
+## ADR-017: Konva.js Canvas Architecture (Supersedes ADR-015)
+
+**Date:** 2026-04-07 (Session 19)
+**Status:** Accepted
+
+### Context
+The CSS transform + dual raw canvas approach (ADR-015) solved Session 18's pan/zoom performance problem but left two architectural gaps heading into Session 19 measurement tools:
+1. **Hit detection** — raw canvas has no built-in object graph; Session 19 needs to know which measurement shape the user clicked
+2. **Layer management** — PDF rendering, measurement overlays, and selection handles on a single z-stacked pair of canvases is fragile and will require complex manual compositing
+
+### Decision
+Replace `#canvas-inner` / `#pdf-canvas` / `#overlay-canvas` with a Konva.js stage containing three explicit layers:
+- `pdfLayer` — one `Konva.Image` wrapping a PDF.js-rendered offscreen canvas
+- `measureLayer` — `Konva.Shape` objects for each measurement (Session 2)
+- `uiLayer` — selection handles, vertex dots, labels
+
+PDF.js still does all PDF decoding. Konva handles everything visual after that.
+
+### Rationale
+- **Native pan/zoom** — `stage.draggable: true` + wheel scale handler; buttery smooth, no custom RAF/debounce loop
+- **Built-in hit detection** — `shape.on('click')` fires without any manual bounding-box math; Session 2 measurement selection is trivial
+- **Layer isolation** — PDF and overlays are composited by the GPU in separate Konva layers; no manual canvas clearing/redraw ordering
+- **Tween API** — `Konva.Tween` gives smooth animated zoom-to-fit and button zooms with a single call
+- **Coordinate system** — `state.screenToPDF(x, y)` converts stage pointer → PDF-space; single source of truth for all Session 2 geometry
+
+### Consequences
+**Positive:**
+- Session 2 measurement tools reduce to: add Konva shape to measureLayer, store PDF-space coords
+- No debounce timer or offscreen canvas swap logic (simpler code, fewer edge cases)
+- `Konva.Stage` resizes cleanly on window/sidebar resize
+- Pinch zoom works via direct `stage.scale()` calls in the touch handler
+
+**Negative:**
+- Konva adds ~150 KB CDN script (loaded before takeoff.js)
+- PDF.js render still happens at 2× RENDER_SCALE for retina quality; no progressive re-render on zoom (acceptable — image scales via GPU)
+
+**Neutral:**
+- `generateThumbnails()` is unchanged — still uses PDF.js small-scale canvas renders
+- All 31 integration tests continue to pass (they test server routes, not canvas internals)
+
+**Alternatives Considered:**
+- **Fabric.js:** Similar to Konva but heavier, less maintained
+- **Continue with raw canvas:** Hit detection for Session 2 would require manual bounding-box math per shape type — rejected
+
+**Related Files:** static/js/takeoff.js (initStage, renderPDFPage, zoomToFit, zoom), templates/takeoff/viewer.html (#konva-container), static/css/takeoff.css (#konva-container)
 
 ---
 
