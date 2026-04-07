@@ -48,6 +48,14 @@
 
 ---
 
+## ✅ RECENTLY COMPLETED
+
+| Feature | Session | Notes |
+|---------|---------|-------|
+| **Estimate Table UI — TanStack Table v8** | Session 22 | Full production-grade grid; inline edit, grouping, sort, column reorder/resize/show-hide, CSV+Excel export, AI badges, Tally footer, Add Item panel, data flywheel fields captured |
+
+---
+
 ## 📊 MEDIUM PRIORITY
 **Core SaaS Features - Post-MVP**
 
@@ -56,9 +64,10 @@
 | **Free Trial Gate** | Medium | #[create] | Limit projects/features for new signups |
 | **In-App Onboarding** | Large | #[create] | Empty state CTAs, first-time user guide |
 | **About / Blog / Careers Pages** | Small | #[create] | Footer links currently return plain text |
-| **Delete Buttons in Estimate Table** | Small | #[create] | Currently must go to project page to delete line items |
-| **Audit Logging** | Large | #[create] | Enterprise compliance, debug support, track all CRUD operations |
+| **Delete Button in Estimate Grid** | Small | — | Soft-delete API is built (Session 22); needs UI button in estimate_table.js |
+| **Audit Logging** | Large | #[create] | Enterprise compliance; edit_delta flywheel field already captured on LineItem |
 | **Mobile-Responsive Estimate View** | Large | #[create] | Currently desktop-only; need tablet/mobile breakpoints |
+| **Tally Reactive Mode** | Large | — | "Review All" button in Tally banner wired to #; needs Tally Mode 2 (Reactive) implementation |
 
 ---
 

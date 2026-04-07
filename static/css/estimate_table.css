@@ -1,0 +1,188 @@
+/* estimate_table.css — Session 22: TanStack Table UI
+   Minimal CSS for animations, scrollbar, and resize handles.
+   All colors use Zenbid design tokens (defined as CSS vars in app_base.html). */
+
+/* ── Google Fonts: loaded here as a fallback; primary load in template <head> */
+
+/* ── Scrollbar styling for the table wrapper */
+.et-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.et-scroll::-webkit-scrollbar-track {
+  background: #0F1419;
+}
+.et-scroll::-webkit-scrollbar-thumb {
+  background: #2A3040;
+  border-radius: 3px;
+}
+.et-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3a4555;
+}
+
+/* ── Column resize handle */
+.et-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  background: transparent;
+  transition: background 0.15s;
+}
+.et-resizer:hover,
+.et-resizer.isResizing {
+  background: #2D5BFF;
+}
+
+/* ── Drag-over column indicator */
+.et-th-drag-over {
+  box-shadow: -2px 0 0 0 #2D5BFF inset;
+}
+
+/* ── Editing cell animation */
+@keyframes et-cell-focus {
+  from { box-shadow: 0 0 0 0 rgba(45, 91, 255, 0.5); }
+  to   { box-shadow: 0 0 0 3px rgba(45, 91, 255, 0.2); }
+}
+.et-cell-editing {
+  animation: et-cell-focus 0.15s ease-out forwards;
+}
+
+/* ── Row selected highlight */
+.et-row-selected {
+  background: rgba(45, 91, 255, 0.1) !important;
+}
+
+/* ── New row animation */
+@keyframes et-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.et-row-new {
+  animation: et-row-in 0.25s ease-out;
+}
+
+/* ── Add panel slide-in */
+@keyframes et-panel-slide {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+.et-add-panel {
+  animation: et-panel-slide 0.2s ease-out;
+}
+
+/* ── AI badge tooltip */
+.et-tooltip {
+  position: absolute;
+  z-index: 999;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.et-tooltip-arrow {
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid #1A1F26;
+}
+
+/* ── Column visibility dropdown */
+.et-col-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  min-width: 200px;
+  background: #1A1F26;
+  border: 1px solid #2A3040;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  padding: 8px 0;
+}
+
+/* ── Group-by dropdown */
+.et-group-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  min-width: 180px;
+  background: #1A1F26;
+  border: 1px solid #2A3040;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  padding: 8px 0;
+}
+
+/* ── IBM Plex Mono for numeric cells */
+.et-mono {
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+/* ── Chevron rotation for group expand/collapse */
+.et-chevron {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.et-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* ── Tally footer gradient */
+.et-tally-footer {
+  background: linear-gradient(120deg, rgba(45,91,255,0.1), rgba(255,107,53,0.06));
+  border: 1px solid rgba(45,91,255,0.18);
+}
+
+/* ── Custom checkbox (Zenbid-styled) */
+.et-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #2A3040;
+  border-radius: 3px;
+  background: #252B33;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+.et-checkbox:checked {
+  background: #2D5BFF;
+  border-color: #2D5BFF;
+}
+.et-checkbox:checked::after {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5l3 3 3-4' stroke='white' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.et-checkbox:hover {
+  border-color: #2D5BFF;
+}
+
+/* ── Scope gap row line_total tint */
+.et-scope-gap-total {
+  color: #FF6B35 !important;
+}

@@ -212,6 +212,18 @@ class LineItem(db.Model):
     total_cost             = db.Column(db.Numeric(12, 2))
     trade                  = db.Column(db.String(100))
     notes                  = db.Column(db.Text)
+    # Session 22 — Estimate Table (TanStack) fields
+    company_id             = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    phase                  = db.Column(db.String(100))
+    csi_division           = db.Column(db.String(100))   # denormalized string for new API
+    ai_status              = db.Column(db.String(20), default='verified')
+    ai_confidence          = db.Column(db.Integer, default=100)
+    ai_note                = db.Column(db.Text)
+    is_deleted             = db.Column(db.Boolean, default=False)
+    # Data flywheel fields (TALLY_VISION.md)
+    ai_generated           = db.Column(db.Boolean, default=False)
+    estimator_action       = db.Column(db.String(20))   # accepted/edited/rejected/ignored
+    edit_delta             = db.Column(db.Text)         # JSON of {field: {from, to}} on edit
     created_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -1138,14 +1150,10 @@ def estimate_view(project_id):
                  'equipment_cost_per_unit': float(i.equipment_cost_per_unit or 0),
                  'notes': i.notes or ''} for i in lib_items]
 
-    return render_template('estimate.html',
+    return render_template('estimate_table.html',
                            project=project,
-                           items_json=json.dumps(items),
-                           assemblies_json=json.dumps(assemblies_data),
                            csi1_json=json.dumps(csi1_data),
-                           csi2_json=json.dumps(csi2_data),
-                           props_json=props_json,
-                           library_json=json.dumps(lib_data))
+                           csi2_json=json.dumps(csi2_data))
 
 @app.route('/assembly/<int:assembly_id>/update', methods=['POST'])
 @login_required
@@ -1203,6 +1211,182 @@ def delete_line_item(item_id):
     db.session.delete(item)
     db.session.commit()
     return jsonify({'success': True})
+
+# ─────────────────────────────────────────
+# API: LINE ITEMS — Session 22 (TanStack Table)
+# ─────────────────────────────────────────
+
+def _api_item_dict(item, csi1_map):
+    """Serialize a LineItem to the TanStack Table API shape."""
+    csi_div = item.csi_division or ''
+    if not csi_div:
+        csi1_id = item.csi_level_1_id
+        if not csi1_id and item.assembly_id:
+            asm = Assembly.query.get(item.assembly_id)
+            if asm:
+                csi1_id = asm.csi_level_1_id
+        if csi1_id and csi1_id in csi1_map:
+            csi = csi1_map[csi1_id]
+            csi_div = f"{csi.code} \u2014 {csi.title}"
+
+    qty        = float(item.quantity or 0)
+    labor_rate = float(item.labor_cost_per_unit or 0)
+    mat_cost   = float(item.material_cost_per_unit or 0)
+    line_total = round(qty * (labor_rate + mat_cost), 4)
+
+    return {
+        'id':            item.id,
+        'description':   item.description or '',
+        'csi_division':  csi_div,
+        'phase':         item.phase or '',
+        'trade':         item.trade or '',
+        'qty':           qty,
+        'unit':          item.unit or '',
+        'labor_rate':    labor_rate,
+        'mat_cost':      mat_cost,
+        'ai_status':     item.ai_status or 'verified',
+        'ai_confidence': item.ai_confidence if item.ai_confidence is not None else 100,
+        'ai_note':       item.ai_note,
+        'line_total':    line_total,
+        'assembly_id':   item.assembly_id,
+    }
+
+@app.route('/api/projects/<int:project_id>/line_items', methods=['GET'])
+@login_required
+def api_list_line_items(project_id):
+    project = get_project_or_403(project_id)
+    csi1_map = {d.id: d for d in CSILevel1.query.all()}
+
+    result = []
+    # Items via assemblies
+    for asm in Assembly.query.filter_by(project_id=project_id).all():
+        for item in asm.line_items:
+            if item.is_deleted:
+                continue
+            result.append(_api_item_dict(item, csi1_map))
+    # Direct items (no assembly)
+    for item in LineItem.query.filter_by(project_id=project_id, assembly_id=None).all():
+        if item.is_deleted:
+            continue
+        result.append(_api_item_dict(item, csi1_map))
+
+    return jsonify({'items': result, 'project': {'id': project.id, 'name': project.project_name}})
+
+@app.route('/api/projects/<int:project_id>/line_items', methods=['POST'])
+@login_required
+def api_create_line_item(project_id):
+    project = get_project_or_403(project_id)
+    data = request.get_json() or {}
+
+    description = (data.get('description') or '').strip()
+    if not description:
+        return jsonify({'error': 'description is required'}), 400
+
+    qty = data.get('qty', 0)
+    try:
+        qty = float(qty)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'qty must be a number'}), 400
+
+    labor_rate = data.get('labor_rate', 0)
+    mat_cost   = data.get('mat_cost', 0)
+    try:
+        labor_rate = float(labor_rate)
+        mat_cost   = float(mat_cost)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'labor_rate and mat_cost must be numbers'}), 400
+
+    item = LineItem(
+        project_id             = project_id,
+        company_id             = current_user.company_id,
+        description            = description,
+        csi_division           = (data.get('csi_division') or '').strip() or None,
+        phase                  = (data.get('phase') or '').strip() or None,
+        trade                  = (data.get('trade') or '').strip() or None,
+        quantity               = qty,
+        unit                   = (data.get('unit') or 'EA').strip(),
+        labor_cost_per_unit    = labor_rate,
+        material_cost_per_unit = mat_cost,
+        total_cost             = qty * (labor_rate + mat_cost),
+        ai_status              = 'verified',
+        ai_confidence          = 100,
+        is_deleted             = False,
+        ai_generated           = False,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    csi1_map = {d.id: d for d in CSILevel1.query.all()}
+    return jsonify(_api_item_dict(item, csi1_map)), 201
+
+# Allowed fields for PATCH and their internal model attribute names
+_PATCH_FIELD_MAP = {
+    'description': 'description',
+    'phase':       'phase',
+    'trade':       'trade',
+    'qty':         'quantity',
+    'unit':        'unit',
+    'labor_rate':  'labor_cost_per_unit',
+    'mat_cost':    'material_cost_per_unit',
+}
+_NUMERIC_PATCH_FIELDS = {'qty', 'labor_rate', 'mat_cost'}
+
+@app.route('/api/line_items/<int:item_id>', methods=['PATCH'])
+@login_required
+def api_patch_line_item(item_id):
+    item = get_lineitem_or_403(item_id)
+    data = request.get_json() or {}
+
+    # Capture pre-edit state for flywheel
+    delta_before = {}
+    delta_after  = {}
+
+    for api_field, model_attr in _PATCH_FIELD_MAP.items():
+        if api_field not in data:
+            continue
+        old_val = getattr(item, model_attr)
+        new_raw = data[api_field]
+        if api_field in _NUMERIC_PATCH_FIELDS:
+            try:
+                new_val = float(new_raw)
+            except (ValueError, TypeError):
+                continue
+        else:
+            new_val = (new_raw or '').strip() if new_raw is not None else ''
+        if str(old_val) != str(new_val):
+            delta_before[api_field] = str(old_val)
+            delta_after[api_field]  = str(new_val)
+        setattr(item, model_attr, new_val)
+
+    # Recompute line_total whenever qty/labor_rate/mat_cost changed
+    qty        = float(item.quantity or 0)
+    labor_rate = float(item.labor_cost_per_unit or 0)
+    mat_cost   = float(item.material_cost_per_unit or 0)
+    item.total_cost = qty * (labor_rate + mat_cost)
+
+    # Flywheel: record edit delta
+    if delta_before:
+        item.estimator_action = 'edited'
+        existing_delta = json.loads(item.edit_delta or '{}')
+        for f in delta_before:
+            existing_delta[f] = {'from': delta_before[f], 'to': delta_after[f]}
+        item.edit_delta = json.dumps(existing_delta)
+
+    item.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    csi1_map = {d.id: d for d in CSILevel1.query.all()}
+    return jsonify(_api_item_dict(item, csi1_map))
+
+@app.route('/api/line_items/<int:item_id>', methods=['DELETE'])
+@login_required
+def api_delete_line_item(item_id):
+    item = get_lineitem_or_403(item_id)
+    item.is_deleted      = True
+    item.estimator_action = 'rejected'
+    item.updated_at      = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({'deleted': True}), 204
 
 @app.route('/assembly/<int:assembly_id>/delete', methods=['POST'])
 @login_required
@@ -3610,6 +3794,17 @@ def run_migrations():
             )""",
             # Session 2 — measurement_type on existing rows
             "ALTER TABLE takeoff_measurements ADD COLUMN IF NOT EXISTS measurement_type VARCHAR(30) NOT NULL DEFAULT 'linear'",
+            # Session 22 — Estimate Table (TanStack) — LineItem new columns
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS phase VARCHAR(100)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS csi_division VARCHAR(100)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_status VARCHAR(20) DEFAULT 'verified'",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_confidence INTEGER DEFAULT 100",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_note TEXT",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS estimator_action VARCHAR(20)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS edit_delta TEXT",
         ]
         for sql in stmts:
             try:

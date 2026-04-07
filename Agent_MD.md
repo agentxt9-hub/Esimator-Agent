@@ -21,7 +21,21 @@ Construction estimating is split between rigid Excel/legacy-software estimators 
 
 ---
 
-## Current State (Session 12 — 2026-03-15)
+## Current State (Session 22 — 2026-04-07)
+
+### Session 22 — Estimate Table UI (TanStack Table v8)
+- Replaced `estimate.html` with new `estimate_table.html` (React/TanStack Table v8 via CDN)
+- New API endpoints: `GET/POST /api/projects/<id>/line_items`, `PATCH/DELETE /api/line_items/<id>`
+- All endpoints enforce company_id isolation via `get_project_or_403()` / `get_lineitem_or_403()`
+- `LineItem` model extended: `company_id`, `phase`, `csi_division`, `ai_status`, `ai_confidence`, `ai_note`, `is_deleted`, `ai_generated`, `estimator_action`, `edit_delta` (data flywheel per TALLY_VISION.md)
+- Full grid features: sort, filter/search, column reorder (drag), column resize, show/hide, grouping by any field, inline cell edit (double-click → PATCH → optimistic update), AI status badges with tooltips, grand total row, Tally footer banner, CSV+Excel export (SheetJS), Add Item slide-in panel, row selection with badge
+- 29 pytest tests: all pass (GET/POST/PATCH/DELETE auth, company isolation, CSRF, data flywheel, line_total computation)
+- Added ADR-021 (TanStack Table decision) to DECISIONS.md
+- `run_migrations()` extended with 10 new ALTER TABLE statements (idempotent)
+
+---
+
+## Previous State (Session 12 — 2026-03-15)
 
 ### What's working (code-complete, locally tested)
 - Full multi-tenant auth: Company → User (admin/estimator/viewer), Flask-Login, email+username login

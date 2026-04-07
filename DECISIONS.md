@@ -790,6 +790,49 @@ Each `TakeoffMeasurement` belongs to a specific page (FK→`takeoff_pages.id`). 
 
 ---
 
+## ADR-021: TanStack Table v8 for Estimate Grid
+
+**Date:** 2026-04-07 (Session 22)
+**Status:** Accepted
+
+### Context
+Zenbid's estimate table is the core product surface. The existing `estimate.html` used a plain `<table>` with vanilla JS — functional but with a feature ceiling: no column reorder, no resize, no grouping, no inline row selection, no export. Evaluating AG Grid Enterprise vs. building on a headless library.
+
+### Decision
+Use **TanStack Table v8** (headless, MIT license) + custom React UI layer for the estimate grid. SheetJS for Excel/CSV export. Delivered via CDN script tags + Babel Standalone (no build pipeline added to repo).
+
+### Rationale
+- No vendor license ceiling — AG Grid Enterprise gates column panel, row grouping UI behind $1,500/dev/year
+- TanStack Table v8 is headless: provides row models, sorting, filtering, column state — we own all the UI
+- React via CDN + Babel Standalone fits the Flask+Jinja architecture (no npm required)
+- SheetJS (MIT) handles Excel formatting including currency column styles
+
+### Consequences
+
+**Positive:**
+- Full design system control — every pixel matches Zenbid design tokens
+- No feature gating from a vendor
+- Column reorder, resize, show/hide, grouping, inline edit, AI badges, export — all built and owned
+- Data flywheel fields (ai_generated, estimator_action, edit_delta) captured from day one per TALLY_VISION.md
+
+**Negative:**
+- Babel Standalone adds ~300 KB CDN load and transpiles JSX in-browser (one-time ~1s hit on first page load)
+- TanStack Table v8 UMD build (~50 KB) must be loaded from unpkg CDN
+- Future complex features (virtual scroll for 10,000+ rows) require additional work
+
+**Neutral:**
+- estimate.html preserved as fallback — route now serves estimate_table.html
+- 29 pytest tests cover all API endpoints (GET/POST/PATCH/DELETE), company isolation, CSRF, and data flywheel fields
+
+### Alternatives Considered
+- **AG Grid Community:** Free but missing grouping, column panel, Excel export without Enterprise
+- **AG Grid Enterprise:** Full-featured but $1,500/dev/year + React dependency + vendor lock-in
+- **Vanilla JS table (extend existing):** Rejecting — hit complexity ceiling; drag-reorder and column state alone would be 400+ lines of brittle custom code
+
+**Related Files:** `templates/estimate_table.html`, `static/js/estimate_table.js`, `static/css/estimate_table.css`, `tests/test_estimate_table.py`, `app.py` (API routes + LineItem model additions)
+
+---
+
 ## 📝 ADR Template
 
 Use this template for new decisions:
