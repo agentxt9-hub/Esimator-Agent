@@ -24,14 +24,28 @@ Construction estimating is split between rigid Excel/legacy-software estimators 
 ## Current State (Session 22 — 2026-04-07)
 
 ### Session 22 — Estimate Table UI (TanStack Table v8)
-- Replaced `estimate.html` with new `estimate_table.html` (React/TanStack Table v8 via CDN)
-- New API endpoints: `GET/POST /api/projects/<id>/line_items`, `PATCH/DELETE /api/line_items/<id>`
-- All endpoints enforce company_id isolation via `get_project_or_403()` / `get_lineitem_or_403()`
+**Type:** BUILD | **Status:** COMPLETE — deployed to production
+
+**Built:**
+- `templates/estimate_table.html`, `static/js/estimate_table.js`, `static/css/estimate_table.css`
 - `LineItem` model extended: `company_id`, `phase`, `csi_division`, `ai_status`, `ai_confidence`, `ai_note`, `is_deleted`, `ai_generated`, `estimator_action`, `edit_delta` (data flywheel per TALLY_VISION.md)
-- Full grid features: sort, filter/search, column reorder (drag), column resize, show/hide, grouping by any field, inline cell edit (double-click → PATCH → optimistic update), AI status badges with tooltips, grand total row, Tally footer banner, CSV+Excel export (SheetJS), Add Item slide-in panel, row selection with badge
-- 29 pytest tests: all pass (GET/POST/PATCH/DELETE auth, company isolation, CSRF, data flywheel, line_total computation)
-- Added ADR-021 (TanStack Table decision) to DECISIONS.md
-- `run_migrations()` extended with 10 new ALTER TABLE statements (idempotent)
+- 4 API routes: `GET/POST /api/projects/<id>/line_items`, `PATCH/DELETE /api/line_items/<id>`
+- All endpoints enforce company_id isolation via `get_project_or_403()` / `get_lineitem_or_403()`
+- Full grid features: sort, search/filter, column reorder (drag), column resize, show/hide, group by any column with collapsible headers + division color bars, inline cell edit (double-click → optimistic PATCH → rollback on error), AI status badges with hover tooltips, grand total row, Tally footer banner, CSV+Excel export (SheetJS), Add Item slide-in panel, row selection with count badge, column state persisted to localStorage
+- `run_migrations()` extended with 10 idempotent ALTER TABLE statements
+- ADR-021 added to DECISIONS.md (TanStack Table decision)
+
+**Tests:** 29/29 passing — API auth, company isolation (403), CSRF, line_total computation, soft delete, data flywheel fields
+
+**Key architectural note:** Session 22 built the new `/estimate` route as a parallel surface alongside the existing project page estimate view. These two views are not yet reconciled. The new TanStack table is the target architecture. Reconciliation with the existing view (merging Prod Rate, Labor Hrs, Labor $ columns) is queued for Session 23+.
+
+**Data flywheel:** `ai_generated`, `estimator_action`, `edit_delta` are now captured on all LineItem writes — ahead of any ML work, as required by TALLY_VISION.md.
+
+**Deployed:** `git push origin main` — commit `d19ba7f`. Production server updated.
+
+**Commits:**
+- `c022c8f` — docs: session 22 docs (Agent_MD, DECISIONS, FEATURE_ROADMAP)
+- `d19ba7f` — feat: estimate table — TanStack Table with full grid interactions
 
 ---
 

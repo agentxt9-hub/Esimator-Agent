@@ -199,6 +199,25 @@ AI suggestions are always opt-in, always shown with reasoning, never required. D
 
 ---
 
+### Current Three-Surface Architecture (2026-04)
+
+The product has three core surfaces. All three must feel like one product — no seams, no context switches between them.
+
+| Surface | Implementation | Status |
+|---|---|---|
+| **Takeoff** (measure) | Konva.js canvas, PDF.js, multi-page | ✅ LIVE — Session 21 complete, 99/99 tests |
+| **Estimate** (price) | TanStack Table v8, React, Flask API | ✅ LIVE — Session 22 complete, 29/29 tests |
+| **Proposal** (deliver) | Jinja template, print-to-PDF | ⚠️ Existing — pre-TanStack, pending integration |
+
+**Core user journey:**
+```
+Takeoff (measure) → Estimate (price) → Proposal (deliver)
+```
+
+Integration between **Takeoff → Estimate** is the next architectural priority (Session 23+): measurements from the Konva canvas flow directly into LineItem rows via `POST /api/projects/<id>/line_items`. This is the core product moat — no other construction estimating tool does this natively.
+
+---
+
 ### Design Rules (All New Interfaces)
 
 - Dark navy (`#1a1a2e`) page bg, `#16213e` card bg, `#0f3460` panel/input, `#e94560` accent red — no exceptions

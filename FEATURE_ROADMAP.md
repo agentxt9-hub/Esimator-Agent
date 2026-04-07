@@ -71,6 +71,32 @@
 
 ---
 
+## 🔜 UP NEXT (Session 23+)
+**Queued and prioritised**
+
+- [ ] **Takeoff → Estimate bridge**
+  Measurements from the Konva canvas flow directly into LineItem rows via
+  `POST /api/projects/<id>/line_items`. This is the core product moat —
+  no other tool does this natively. Takeoff surface is complete; Estimate API is
+  ready. The bridge is the next architectural priority.
+
+- [ ] **Estimate table reconciliation**
+  Audit existing project page estimate view vs. new TanStack table.
+  Merge column schemas (add Prod Rate, Labor Hrs, Labor $ to LineItem API response).
+  Migrate existing data into new structure.
+  Retire old estimate view — single estimate surface on project page.
+
+- [ ] **Tally Passive Mode**
+  Populate `ai_status`, `ai_confidence`, `ai_note` fields automatically.
+  Background analysis on line items flagging scope gaps vs. CSI assembly rules.
+  Badges are live in the UI — need the intelligence layer behind them.
+
+- [ ] **TALLY_VISION.md → committed to repo**
+  `TALLY_VISION.md` now in repo root. Defines Tally's three modes: Passive,
+  Reactive, Generative. Reference document for all future Tally feature decisions.
+
+---
+
 ## 🔮 FUTURE PRIORITY
 **Post-Launch - Innovation & Scale**
 
