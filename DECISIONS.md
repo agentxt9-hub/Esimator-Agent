@@ -538,6 +538,111 @@ Provision a second DigitalOcean droplet (45.55.33.136) exclusively for growth/ag
 
 ---
 
+## ADR-014: Client-Side PDF Thumbnails via PDF.js
+
+**Date:** 2026-04-06 (Session 18)
+**Status:** Accepted
+
+### Context
+Server-side thumbnail generation (pdf2image at 72 DPI, one page at a time) OOM-killed the 1 GB DigitalOcean droplet on large commercial drawing sets (50+ pages). Even page-by-page processing held all PIL Image objects in memory simultaneously before the first `del` could fire.
+
+### Decision
+All thumbnail rendering happens in the browser using PDF.js at `scale: 0.15`. Server stores `thumbnail_path=None` for every page record. No image data ever touches the server.
+
+### Rationale
+- Zero server memory for thumbnails regardless of PDF size
+- Upload is instant (page count via `fitz.open` only)
+- PDF.js is already loaded for the main canvas — no extra dependency
+- Thumbnails regenerate each session (acceptable for MVP)
+- Scales to any PDF size on any server hardware
+
+### Consequences
+**Positive:**
+- No OOM risk on upload
+- Instant upload response (just page count + DB records)
+- Works on the smallest DO droplet
+
+**Negative:**
+- Thumbnails visible ~1–3 seconds after page load while PDF.js renders them
+- Thumbnails re-render each session (no caching)
+- Requires JavaScript (no fallback for bots/crawlers — not relevant for app)
+
+**Neutral:**
+- `pdf2image` and `Pillow` removed from requirements.txt
+
+**Related Files:** routes_takeoff.py (upload route), static/js/takeoff.js (generateThumbnails), requirements.txt
+
+---
+
+## ADR-015: CSS Transform Pan/Zoom with Offscreen Canvas Re-render
+
+**Date:** 2026-04-06 (Session 18)
+**Status:** Accepted
+
+### Context
+Re-rendering the PDF via PDF.js on every mouse event (wheel, mousemove) caused visibly laggy, jumpy pan/zoom — PDF decode is expensive even at modest zoom levels. The old approach called `page.render()` on every wheel tick.
+
+### Decision
+All pan and zoom manipulates CSS `transform` on a `#canvas-inner` wrapper div. PDF.js decodes the page only on zoom end (600 ms debounce). The quality re-render renders to an offscreen canvas first, then swaps atomically via `requestAnimationFrame`. Pan updates are also RAF-batched.
+
+### Rationale
+- CSS `transform` is GPU-accelerated — zero CPU/decode cost during interaction
+- Offscreen render + RAF swap eliminates visible canvas resize or blank flash
+- 600 ms debounce means quality re-render fires only once per zoom gesture
+- `Math.pow(0.999, e.deltaY)` gives continuous wheel factor — smooth on trackpads
+- `baseRenderScale: 2.0` delivers retina-quality output after re-render
+
+### Consequences
+**Positive:**
+- Smooth 60fps pan/zoom at any zoom level
+- No jank during interaction
+- Clean coordinate system for Session 19 hit testing (wrap→canvas→PDF math)
+
+**Negative:**
+- Slight quality delay (up to 600ms) after zoom end — imperceptible in practice
+- Slightly higher initial render cost (2.0× scale vs 1.0×) — ~100ms extra on first load
+
+**Neutral:**
+- `#canvas-inner` wrapper is the only HTML change — rest of DOM untouched
+
+**Related Files:** static/js/takeoff.js (rerenderAtCurrentZoom, _onWheel, _schedulePanUpdate), templates/takeoff/viewer.html (#canvas-inner), static/css/takeoff.css (#canvas-inner styles)
+
+---
+
+## ADR-016: PyMuPDF for Page Count Only
+
+**Date:** 2026-04-06 (Session 18)
+**Status:** Accepted
+
+### Context
+Need to know how many pages a PDF has immediately on upload, so the server can create the correct number of `TakeoffPage` records. Options: pdf2image + pdfinfo, pypdf, PyMuPDF. All of these can count pages; the question is what else they pull into the process.
+
+### Decision
+`fitz.open(pdf_path)` → `total_pages = len(doc)` → `doc.close()`. No pixel data, no image extraction, no rendering. PyMuPDF is the only PDF library in production.
+
+### Rationale
+- PyMuPDF is fast and reliable for page count even on corrupt/unusual PDFs
+- `len(doc)` returns immediately without decoding any page content
+- Single library rather than pdf2image + poppler dependency chain
+- Makes the server-side contract explicit: count only, render never
+
+### Consequences
+**Positive:**
+- Upload is O(1) in memory regardless of page count
+- No poppler binary dependency on the server
+- Clean separation: server = metadata, browser = rendering
+
+**Negative:**
+- PyMuPDF (~40 MB) is a heavier install than pypdf (~1 MB) for just page count
+- If PyMuPDF import fails, fallback is `total_pages = 1` (graceful but wrong)
+
+**Neutral:**
+- `try/except` wraps the `fitz.open` call — fallback ensures upload never hard-fails
+
+**Related Files:** routes_takeoff.py (upload_pdf route), requirements.txt
+
+---
+
 ## 📝 ADR Template
 
 Use this template for new decisions:

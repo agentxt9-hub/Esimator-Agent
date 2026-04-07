@@ -82,10 +82,12 @@ Assembly measurements (user input)
 ### File structure
 ```
 Estimator Agent/
-├── app.py                      ← ~3450 lines; all routes + models
+├── app.py                      ← ~3500 lines; all routes + models
+├── routes_takeoff.py           ← Takeoff Blueprint (Session 18)
 ├── requirements.txt
 ├── Procfile                    ← gunicorn app:app
 ├── gunicorn.conf.py            ← runs migrations + seeding on_starting()
+├── test_takeoff.py             ← Takeoff integration tests (31 assertions)
 ├── .env                        ← local dev (gitignored)
 ├── NORTHSTAR.md                ← philosophy reference
 ├── CLAUDE.md                   ← Claude Code project instructions
@@ -94,13 +96,21 @@ Estimator Agent/
 ├── deploy/
 │   ├── setup.sh
 │   └── update.sh               ← `bash /var/www/zenbid/deploy/update.sh`
-└── Templates/
+├── static/
+│   ├── css/
+│   │   └── takeoff.css         ← Takeoff three-panel layout (Session 18)
+│   ├── js/
+│   │   └── takeoff.js          ← PDF viewer, pan/zoom, item CRUD (Session 18)
+│   └── uploads/
+│       └── takeoff/
+│           └── <project_id>/   ← Uploaded PDFs stored here
+└── templates/                  ← Lowercase — required for Linux
     ├── base.html               ← Marketing base (light theme)
     ├── app_base.html           ← App base (dark theme, CSS vars, CSRF fetch patch)
-    ├── login.html              ← /login
-    ├── signup.html             ← /signup
-    ├── forgot_password.html    ← /forgot-password  ← NEW Session 12
-    ├── reset_password.html     ← /reset-password/<token>  ← NEW Session 12
+    ├── login.html
+    ├── signup.html
+    ├── forgot_password.html
+    ├── reset_password.html
     ├── index.html              ← Dashboard (app)
     ├── new_project.html
     ├── project.html            ← Project detail + inline estimate table + WBS
@@ -115,7 +125,9 @@ Estimator Agent/
     ├── summary.html
     ├── estimate.html           ← Legacy full-estimate route (still exists)
     ├── csi_report.html
-    └── agentx_panel.html       ← AI panel partial, no Jinja tags
+    ├── agentx_panel.html       ← AI panel partial, no Jinja tags
+    └── takeoff/
+        └── viewer.html         ← Three-panel takeoff viewer (Session 18)
 ```
 
 ---
@@ -139,6 +151,10 @@ Estimator Agent/
 | `WBSProperty` | `wbs_properties` | project_id FK; property_type, display_order |
 | `WBSValue` | `wbs_values` | wbs_property_id FK; value_name, value_code, display_order |
 | `LineItemWBS` | `line_item_wbs` | FK→line_item + wbs_property + wbs_value |
+| `TakeoffPlan` | `takeoff_plans` | project_id + company_id FK; filename, original_filename, page_count, uploaded_by |
+| `TakeoffPage` | `takeoff_pages` | plan_id FK; page_number, page_name, thumbnail_path=None, scale_pixels_per_foot, scale_method |
+| `TakeoffItem` | `takeoff_items` | project_id + company_id FK; name, measurement_type, color, opacity, width_ft, assembly_notes |
+| `TakeoffMeasurement` | `takeoff_measurements` | item_id + page_id FK; points_json, calculated_value, calculated_secondary |
 
 ### Cost calculation logic (`calculate_item_costs()`)
 ```
@@ -236,6 +252,12 @@ AI routes additionally have `@limiter.limit('20 per minute')` (scope-gap: 10/min
 | POST | `/project/<id>/wbs/value/reorder` | Reorder WBS values |
 | DELETE | `/project/<id>/wbs/value/<id>` | Delete WBS value |
 | POST | `/line-item/<id>/wbs` | Assign WBS value to line item |
+| GET | `/project/<id>/takeoff` | Takeoff viewer (three-panel) |
+| POST | `/project/<id>/takeoff/upload` | Upload PDF plan set |
+| GET | `/project/<id>/takeoff/plan/<plan_id>/pdf` | Serve raw PDF to PDF.js |
+| GET | `/project/<id>/takeoff/items` | List takeoff items (JSON) |
+| POST | `/project/<id>/takeoff/item` | Create takeoff item |
+| DELETE | `/project/<id>/takeoff/item/<item_id>` | Delete takeoff item + measurements |
 
 ---
 
@@ -407,6 +429,75 @@ Sliding panel (fixed right, 400px wide) available on every app page. `Templates/
 
 ---
 
+## Takeoff Module
+
+Added Session 18 (2026-04-06). Blueprint-based, registered at bottom of `app.py`.
+
+### Architecture
+
+| Aspect | Detail |
+|--------|--------|
+| Blueprint | `takeoff_bp` in `routes_takeoff.py`, registered in `app.py` after all models |
+| Route prefix | `/project/<project_id>/takeoff/...` (no URL prefix on blueprint — full paths in routes) |
+| Template | `templates/takeoff/viewer.html` — extends `app_base.html`, overrides `.app-content` padding to 0 |
+| CSS | `static/css/takeoff.css` — three-panel layout using CSS vars, never hardcoded hex |
+| JS | `static/js/takeoff.js` — PDF viewer, pan/zoom, item CRUD, thumbnail generation |
+
+### Database tables
+
+| Table | Purpose |
+|-------|---------|
+| `takeoff_plans` | One record per uploaded PDF; filename, original_filename, page_count, uploaded_by |
+| `takeoff_pages` | One record per PDF page; `thumbnail_path=None` always (thumbnails rendered client-side) |
+| `takeoff_items` | Measurement type definitions: name, color, opacity, measurement_type, assembly_notes |
+| `takeoff_measurements` | Point coordinates (JSON) + calculated values; FK→item + page |
+
+All cascade deletes handled in Python via SQLAlchemy `cascade='all, delete-orphan'` — no `ON DELETE CASCADE` in DB.
+
+### File storage
+
+| Asset | Location |
+|-------|----------|
+| Uploaded PDFs | `static/uploads/takeoff/<project_id>/<uuid>_<filename>.pdf` |
+| Thumbnails | **Not stored** — rendered client-side by PDF.js on each session load |
+
+### Key technical decisions
+
+**PDF.js handles all rendering.** Server never processes pixel data. `PyMuPDF` (`fitz`) is called only once per upload to get `len(doc)` (page count), then immediately closed.
+
+**CSS transform pan/zoom.** All pan and zoom manipulates `transform` on a `#canvas-inner` wrapper div. PDF.js decodes the page once at `baseRenderScale: 2.0` (retina quality). Quality re-render fires only after 600 ms idle (offscreen canvas, then atomic swap via `requestAnimationFrame`).
+
+**Smooth wheel zoom.** `Math.pow(0.999, e.deltaY)` gives continuous zoom factor — much smoother on trackpads than discrete 0.9/1.1 steps.
+
+**Pan is RAF-batched.** `mousemove` accumulates deltas; `requestAnimationFrame` applies them — caps at 60fps regardless of mouse polling rate.
+
+**Auto zoom-to-fit on load.** `loadPDF()` calls `getViewport({scale: 1.0})` to get natural PDF dimensions before rendering, computes fit zoom, centers, then renders once at the correct zoom. No second render needed.
+
+### Dependencies added (Session 18)
+
+| Package | Use |
+|---------|-----|
+| `PyMuPDF>=1.24.0` | Page count only on upload (`fitz.open` → `len(doc)` → `doc.close()`) |
+| PDF.js 3.11.174 (CDN) | All PDF rendering — thumbnails + main canvas viewer |
+
+`pdf2image` and `Pillow` were evaluated and rejected (server OOM on large drawing sets — see ADR-013).
+
+### Multi-tenant security
+
+Every takeoff route double-checks company ownership:
+- `get_project_or_403(project_id)` from `app.py` — project belongs to current user's company
+- `_get_plan_or_403(plan_id)` — `plan.company_id == current_user.company_id`
+- `_get_item_or_403(item_id)` — `item.company_id == current_user.company_id`
+
+### Session 19 hooks (drawing tools — not yet built)
+
+The following stubs exist for Session 19:
+- `renderOverlays()` — `// Session 19: draw measurements on current page here`
+- `saveScale()` — `// Session 19: persist to TakeoffPage via PATCH/PUT route`
+- `state.activeTool` — tracks active drawing tool; toolbar buttons wired; canvas operations not yet implemented
+
+---
+
 ## Assembly Builder Formula Keys
 
 | Key | Calculation |
@@ -534,7 +625,12 @@ python app.py
 | 11b | 2026-03-14 | WBS value inline editing + drag-to-reorder, AI rate lookup panel, validate-rate, requirements.txt |
 | 11c | 2026-03-14 | Marketing site + dark theme re-skin (CSS vars), production deployment to zenbid.io (Gunicorn+Nginx+systemd), login via email, /signup route |
 | 12 | 2026-03-15 | **CSRF** (flask-wtf, meta tag, fetch monkey-patch, hidden fields on 3 forms) + **rate limiting** (flask-limiter on login + 5 AI routes) + **password reset** (flask-mail, /forgot-password, /reset-password/<token>, 2 new templates) |
-| 13 | 2026-03-17 | **Production deployment**: zenbid.io back online after DO outage. Fixed landing route (was redirecting to signup), templates case-sensitivity on Linux (Templates/ → templates/ in git), pool_pre_ping for stale DB connections, SendGrid SMTP setup (port 2525, verified sender thomas@zenbid.io). Full smoke test passed. **Concept C logo**: SVG mark + zen/bid wordmark applied across all templates (sidebar, marketing nav, footer, all auth pages). |
+| 13 | 2026-03-17 | **Production deployment**: zenbid.io back online after DO outage. Fixed landing route, templates case-sensitivity on Linux (Templates/ → templates/), pool_pre_ping for stale DB connections, SendGrid SMTP setup (port 2525). **Concept C logo**: SVG mark + ZENBID wordmark across all templates. |
+| 14 | 2026-03-18 | templates/ case-sensitivity fix in git, pool_pre_ping, SendGrid confirmed working, forgot-password e2e tested, Concept C logo deployed. |
+| 15 | 2026-03-18 | Logo wordmark → all-caps ZENBID across 7 locations. Waitlist flow (GET/POST /waitlist, WaitlistEntry model, micro-survey WaitlistSurvey). Dismissible waitlist banner. Pricing CTAs → Join Waitlist. |
+| 16 | 2026-03-18 | Fixed ZEN BID wordmark gap (flex issue). Navbar/login CTAs → Join Waitlist. Footer links de-linked (placeholder pages not yet built). Mobile responsive pass on base.html + landing.html. |
+| 17 | 2026-03-21 | NORTHSTAR.md updates, SECURITY.md framework added, Zenhub naming conventions, n8n webhook integration for waitlist. |
+| 18 | 2026-04-06 | **Takeoff module foundation**: 4 new DB tables, Blueprint (routes_takeoff.py), three-panel viewer (viewer.html), PDF upload with PyMuPDF page count, client-side thumbnails via PDF.js, CSS transform pan/zoom (offscreen RAF swap, continuous wheel factor, 600ms debounce), takeoff item CRUD, status bar, keyboard shortcuts, test_takeoff.py (31/31 passing). |
 
 ---
 

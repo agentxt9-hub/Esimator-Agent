@@ -68,7 +68,7 @@
 | Feature | Category | Notes |
 |---------|----------|-------|
 | **Subcontractor Bid Requests** | Workflow | Send line items to subs, receive quotes, compare in-app |
-| **Takeoff File Import** | AI/Automation | PDF/DWG → auto-populate assemblies via AI parsing |
+| **Takeoff → Estimate Link** | AI/Automation | Wire takeoff measurements directly into assembly quantities |
 | **Public API** | Integration | Webhook / REST for firm integrations, Procore/Autodesk sync |
 | **Streaming AI Responses** | Performance | Token-by-token output via SSE (Server-Sent Events) |
 | **AgentX Conversation Memory** | AI Enhancement | `axHistory[]` array; multi-turn context across sessions |
@@ -78,7 +78,67 @@
 
 ---
 
+## 📐 TAKEOFF MODULE
+
+### Session 18 — Foundation (2026-04-06) ✅ Complete
+
+- [x] PDF plan upload (instant, no server-side image processing)
+- [x] Multi-page PDF support
+- [x] Page thumbnail sidebar (client-side PDF.js rendering, pulse skeleton while loading)
+- [x] PDF viewer with pan/zoom (CSS transform, smooth 60fps, retina quality on zoom end)
+- [x] Three-panel layout (sheets sidebar, canvas, takeoffs sidebar)
+- [x] Takeoff item CRUD (create with color/opacity/type/notes, delete via modal)
+- [x] Status bar (live coordinates, zoom %, scale indicator)
+- [x] Keyboard shortcuts (F=fit, Space=pan, arrows=page nav, Esc=select tool)
+- [x] Auto zoom-to-fit on initial PDF load
+- [x] Touch support (single-finger pan, pinch-to-zoom)
+- [x] Integration test suite (test_takeoff.py — 31/31 passing)
+
+### Session 19 — Drawing Tools (UP NEXT)
+
+- [ ] Scale calibration tool (click two points on drawing, enter known distance)
+- [ ] Linear measurement tool (polyline, returns LF)
+- [ ] Area measurement tool (polygon, returns SF)
+- [ ] Count tool (click to place markers, returns EA)
+- [ ] Segment tool (separate line segments)
+- [ ] Overlay rendering (colored shapes drawn on overlay canvas)
+- [ ] Scale persistence (PATCH /project/<id>/takeoff/page/<page_id>/scale)
+- [ ] Properties panel (slide-in, edit item color/opacity/notes inline)
+- [ ] Floating on-plan data table (totals by item for current page)
+- [ ] Contextual toolbar behavior (active tool state, undo last point)
+
+---
+
 ## ✅ SHIPPED (Recent Sessions)
+
+### Session 18 (2026-04-06)
+- ✅ Takeoff module foundation — 4 DB tables, Blueprint, three-panel viewer
+- ✅ PDF upload (instant, PyMuPDF page count only, no image processing)
+- ✅ Client-side thumbnails via PDF.js (zero server memory)
+- ✅ CSS transform pan/zoom — offscreen canvas swap, RAF pan, continuous wheel factor
+- ✅ Takeoff item CRUD (create/delete with color, opacity, measurement type)
+- ✅ test_takeoff.py — 31/31 integration tests passing
+
+### Session 17 (2026-03-21)
+- ✅ SECURITY.md framework added
+- ✅ NORTHSTAR.md updates
+- ✅ n8n webhook integration for waitlist (flows.zenbid.io)
+
+### Session 16 (2026-03-18)
+- ✅ Fixed ZENBID wordmark gap (flex alignment)
+- ✅ Navbar + login CTAs → "Join Waitlist"
+- ✅ Mobile responsive pass on base.html + landing.html
+
+### Session 15 (2026-03-18)
+- ✅ ZENBID wordmark (all-caps, one word) across all 7 template locations
+- ✅ Waitlist flow (/waitlist GET/POST, WaitlistEntry model, micro-survey)
+- ✅ Dismissible waitlist banner on marketing site
+- ✅ Pricing CTAs → Join Waitlist
+
+### Session 14 (2026-03-18)
+- ✅ templates/ case-sensitivity fix in git (Linux was seeing two dirs)
+- ✅ pool_pre_ping=True for stale DB connections
+- ✅ SendGrid confirmed working end-to-end (forgot-password flow)
 
 ### Session 12 (2026-03-15)
 - ✅ CSRF protection (flask-wtf, meta tag, fetch monkey-patch)
