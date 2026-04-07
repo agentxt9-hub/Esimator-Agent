@@ -355,6 +355,7 @@ class TakeoffMeasurement(db.Model):
     points_json          = db.Column(db.Text, nullable=False)  # JSON array of {x,y} normalized 0-1
     calculated_value     = db.Column(db.Float, default=0.0)
     calculated_secondary = db.Column(db.Float, nullable=True)
+    measurement_type     = db.Column(db.String(30), nullable=False, default='linear')  # linear | area | count | linear_with_width
     created_at           = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 # ─────────────────────────────────────────
@@ -3604,8 +3605,11 @@ def run_migrations():
                 points_json TEXT NOT NULL,
                 calculated_value FLOAT DEFAULT 0.0,
                 calculated_secondary FLOAT,
+                measurement_type VARCHAR(30) NOT NULL DEFAULT 'linear',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )""",
+            # Session 2 — measurement_type on existing rows
+            "ALTER TABLE takeoff_measurements ADD COLUMN IF NOT EXISTS measurement_type VARCHAR(30) NOT NULL DEFAULT 'linear'",
         ]
         for sql in stmts:
             try:

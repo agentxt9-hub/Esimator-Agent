@@ -302,3 +302,180 @@ def delete_item(project_id, item_id):
     db.session.delete(item)
     db.session.commit()
     return jsonify({'success': True})
+
+
+# ── Session 2: scale, measurements, item patch ───────────────────────────────
+
+def _get_page_or_403(page_id, project_id):
+    """Verify TakeoffPage belongs to this project + company, abort 403 if not."""
+    page = TakeoffPage.query.get_or_404(page_id)
+    plan = TakeoffPlan.query.get(page.plan_id)
+    if (not plan or plan.project_id != project_id
+            or plan.company_id != current_user.company_id):
+        abort(403)
+    return page
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/page/<int:page_id>/scale',
+                  methods=['POST'])
+@login_required
+def set_page_scale(project_id, page_id):
+    get_project_or_403(project_id)
+    page = _get_page_or_403(page_id, project_id)
+
+    data = request.get_json(silent=True) or {}
+    try:
+        ppf = float(data.get('pixels_per_foot', 0))
+    except (TypeError, ValueError):
+        ppf = 0
+    if ppf <= 0:
+        return jsonify({'success': False, 'error': 'Invalid pixels_per_foot'}), 400
+
+    page.scale_pixels_per_foot = ppf
+    page.scale_method = data.get('method', 'manual')
+    db.session.commit()
+    return jsonify({'success': True, 'pixels_per_foot': ppf})
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/measurement', methods=['POST'])
+@login_required
+def create_measurement(project_id):
+    get_project_or_403(project_id)
+    data = request.get_json(silent=True) or {}
+
+    item_id = data.get('item_id')
+    page_id = data.get('page_id')
+    if not item_id or not page_id:
+        return jsonify({'success': False, 'error': 'item_id and page_id required'}), 400
+
+    item = _get_item_or_403(item_id)
+    _get_page_or_403(page_id, project_id)
+
+    try:
+        calc_val = float(data.get('calculated_value', 0))
+    except (TypeError, ValueError):
+        calc_val = 0.0
+    calc_sec = None
+    if data.get('calculated_secondary') is not None:
+        try:
+            calc_sec = float(data['calculated_secondary'])
+        except (TypeError, ValueError):
+            calc_sec = None
+
+    m = TakeoffMeasurement(
+        item_id=item_id,
+        page_id=page_id,
+        points_json=data.get('points_json', '[]'),
+        calculated_value=calc_val,
+        calculated_secondary=calc_sec,
+        measurement_type=data.get('measurement_type', 'linear'),
+    )
+    db.session.add(m)
+    db.session.commit()
+
+    item_total = sum(x.calculated_value or 0 for x in item.measurements)
+    return jsonify({
+        'success': True,
+        'measurement_id': m.id,
+        'item_totals': {'item_id': item_id, 'total': round(item_total, 2)},
+    }), 201
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/measurement/<int:meas_id>',
+                  methods=['DELETE'])
+@login_required
+def delete_measurement(project_id, meas_id):
+    get_project_or_403(project_id)
+    m = TakeoffMeasurement.query.get_or_404(meas_id)
+    item = _get_item_or_403(m.item_id)
+
+    db.session.delete(m)
+    db.session.commit()
+
+    item_total = sum(x.calculated_value or 0 for x in item.measurements)
+    return jsonify({
+        'success': True,
+        'item_totals': {'item_id': m.item_id, 'total': round(item_total, 2)},
+    })
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/item/<int:item_id>',
+                  methods=['PATCH'])
+@login_required
+def update_item(project_id, item_id):
+    get_project_or_403(project_id)
+    item = _get_item_or_403(item_id)
+    data = request.get_json(silent=True) or {}
+
+    if 'name' in data:
+        name = str(data['name']).strip()
+        if name:
+            item.name = name
+    if 'color' in data:
+        item.color = str(data['color'])
+    if 'opacity' in data:
+        try:
+            item.opacity = float(data['opacity'])
+        except (TypeError, ValueError):
+            pass
+    if 'width_ft' in data:
+        item.width_ft = float(data['width_ft']) if data['width_ft'] else None
+    if 'side_of_line' in data:
+        item.side_of_line = str(data['side_of_line'])
+    if 'assembly_notes' in data:
+        item.assembly_notes = str(data['assembly_notes'])
+    if 'division' in data:
+        item.division = str(data['division'])
+
+    db.session.commit()
+
+    total = sum(x.calculated_value or 0 for x in item.measurements)
+    return jsonify({
+        'success': True,
+        'item': {
+            'id': item.id,
+            'name': item.name,
+            'measurement_type': item.measurement_type,
+            'color': item.color,
+            'opacity': item.opacity,
+            'width_ft': item.width_ft,
+            'side_of_line': item.side_of_line,
+            'assembly_notes': item.assembly_notes,
+            'division': item.division,
+            'total': round(total, 2),
+            'measurement_count': len(item.measurements),
+        },
+    })
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/page/<int:page_id>/measurements')
+@login_required
+def page_measurements(project_id, page_id):
+    get_project_or_403(project_id)
+    page = _get_page_or_403(page_id, project_id)
+
+    measurements = (TakeoffMeasurement.query
+                    .filter_by(page_id=page_id)
+                    .order_by(TakeoffMeasurement.created_at)
+                    .all())
+    result = []
+    for m in measurements:
+        item = TakeoffItem.query.get(m.item_id)
+        if item and item.company_id == current_user.company_id:
+            result.append({
+                'id': m.id,
+                'item_id': item.id,
+                'item_name': item.name,
+                'item_color': item.color,
+                'item_opacity': item.opacity,
+                'item_width_ft': item.width_ft,
+                'measurement_type': m.measurement_type,
+                'points_json': m.points_json,
+                'calculated_value': m.calculated_value,
+                'calculated_secondary': m.calculated_secondary,
+            })
+
+    return jsonify({
+        'measurements': result,
+        'scale_pixels_per_foot': page.scale_pixels_per_foot,
+    })

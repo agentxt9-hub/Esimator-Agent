@@ -168,6 +168,9 @@
             </button>
         </div>
 
+        <!-- Center: tool hint text -->
+        <div id="tk-tool-hint" style="display:none"></div>
+
         <!-- Right: zoom + scale display -->
         <div id="tk-tools-right">
             <div id="tk-scale-display" class="scale-badge scale-unset">⚠ Scale Not Set</div>
@@ -265,6 +268,145 @@
                        placeholder="Search takeoffs…" oninput="TK.filterItems(this.value)">
             </div>
             <div id="tk-item-list" class="tk-scroll-list"></div>
+
+            <!-- Properties panel — slides over the right sidebar -->
+            <div id="tk-props-panel">
+                <div class="pp-header">
+                    <h4>Properties</h4>
+                    <button class="pp-close-btn" onclick="TK.closePropsPanel()" title="Close">×</button>
+                </div>
+                <div class="pp-body">
+                    <input type="hidden" id="pp-item-id">
+
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="pp-name" class="tk-input" placeholder="e.g. WT-B">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Measurement Type</label>
+                        <select id="pp-type" class="tk-input">
+                            <option value="linear">Linear</option>
+                            <option value="area">Area</option>
+                            <option value="count">Count</option>
+                            <option value="linear_with_width">Linear with Width</option>
+                            <option value="segment">Segment</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Color</label>
+                        <div class="color-swatches" id="pp-color-swatches">
+                            <span class="color-swatch selected" style="background:#2D5BFF" data-color="#2D5BFF"></span>
+                            <span class="color-swatch" style="background:#FF6B35" data-color="#FF6B35"></span>
+                            <span class="color-swatch" style="background:#EF4444" data-color="#EF4444"></span>
+                            <span class="color-swatch" style="background:#10B981" data-color="#10B981"></span>
+                            <span class="color-swatch" style="background:#EC4899" data-color="#EC4899"></span>
+                            <span class="color-swatch" style="background:#06B6D4" data-color="#06B6D4"></span>
+                            <span class="color-swatch" style="background:#F59E0B" data-color="#F59E0B"></span>
+                            <span class="color-swatch" style="background:#8B5CF6" data-color="#8B5CF6"></span>
+                            <span class="color-swatch" style="background:#84CC16" data-color="#84CC16"></span>
+                            <span class="color-swatch" style="background:#0000FF" data-color="#0000FF"></span>
+                            <span class="color-swatch" style="background:#FFD700" data-color="#FFD700"></span>
+                            <span class="color-swatch" style="background:#FF69B4" data-color="#FF69B4"></span>
+                        </div>
+                        <input type="hidden" id="pp-color" value="#2D5BFF">
+                    </div>
+
+                    <div id="pp-width-row" style="display:none">
+                        <div class="form-group">
+                            <label>Width</label>
+                            <div class="pp-dim-row">
+                                <input type="number" id="pp-width-ft" class="tk-input" placeholder="Ft" min="0">
+                                <span class="pp-dim-sep">'</span>
+                                <input type="number" id="pp-width-in" class="tk-input" placeholder="In" min="0" max="11.99" step="0.1">
+                                <span class="pp-dim-sep">"</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Side of Line</label>
+                            <select id="pp-sol" class="tk-input">
+                                <option value="center">Center</option>
+                                <option value="left">Left</option>
+                                <option value="right">Right</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Opacity <span id="pp-opacity-label">50%</span></label>
+                        <input type="range" id="pp-opacity" class="tk-input" min="0" max="100" value="50"
+                               oninput="document.getElementById('pp-opacity-label').textContent=this.value+'%'">
+                    </div>
+
+                    <!-- Measurements collapsible -->
+                    <div class="pp-section">
+                        <div class="pp-section-toggle" onclick="this.classList.toggle('collapsed');this.nextElementSibling.classList.toggle('collapsed')">
+                            <span class="pp-section-title">Measurements</span>
+                            <span class="pp-section-chevron">▾</span>
+                        </div>
+                        <div class="pp-section-body">
+                            <div id="pp-meas-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Work Breakdown Structure collapsible -->
+                    <div class="pp-section">
+                        <div class="pp-section-toggle" onclick="this.classList.toggle('collapsed');this.nextElementSibling.classList.toggle('collapsed')">
+                            <span class="pp-section-title">Work Breakdown Structure</span>
+                            <span class="pp-section-chevron">▾</span>
+                        </div>
+                        <div class="pp-section-body">
+                            <div class="form-group">
+                                <label>Division</label>
+                                <select id="pp-division" class="tk-input">
+                                    <option value="">— None —</option>
+                                    <option value="01">01 — General Requirements</option>
+                                    <option value="02">02 — Existing Conditions</option>
+                                    <option value="03">03 — Concrete</option>
+                                    <option value="04">04 — Masonry</option>
+                                    <option value="05">05 — Metals</option>
+                                    <option value="06">06 — Wood, Plastics &amp; Composites</option>
+                                    <option value="07">07 — Thermal &amp; Moisture Protection</option>
+                                    <option value="08">08 — Openings</option>
+                                    <option value="09">09 — Finishes</option>
+                                    <option value="10">10 — Specialties</option>
+                                    <option value="11">11 — Equipment</option>
+                                    <option value="12">12 — Furnishings</option>
+                                    <option value="13">13 — Special Construction</option>
+                                    <option value="14">14 — Conveying Equipment</option>
+                                    <option value="21">21 — Fire Suppression</option>
+                                    <option value="22">22 — Plumbing</option>
+                                    <option value="23">23 — HVAC</option>
+                                    <option value="26">26 — Electrical</option>
+                                    <option value="31">31 — Earthwork</option>
+                                    <option value="32">32 — Exterior Improvements</option>
+                                    <option value="33">33 — Utilities</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Assembly Notes collapsible -->
+                    <div class="pp-section">
+                        <div class="pp-section-toggle" onclick="this.classList.toggle('collapsed');this.nextElementSibling.classList.toggle('collapsed')">
+                            <span class="pp-section-title">Assembly Notes</span>
+                            <span class="pp-section-chevron">▾</span>
+                        </div>
+                        <div class="pp-section-body">
+                            <div class="form-group">
+                                <textarea id="pp-notes" class="tk-input" rows="3"
+                                          placeholder="Construction spec, wall type details…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- .pp-body -->
+                <div class="pp-footer">
+                    <button type="button" class="btn-secondary" onclick="TK.closePropsPanel()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="TK.savePropsPanel()">Save</button>
+                </div>
+            </div><!-- #tk-props-panel -->
         </div>
 
     </div>
@@ -273,6 +415,7 @@
     <div id="tk-status">
         <span id="tk-status-page">No page selected</span>
         <span id="tk-status-scale">Scale: not set</span>
+        <span id="tk-status-draw"></span>
         <span id="tk-status-right">
             <span id="tk-status-xy">X: 0.0  Y: 0.0</span>
             &nbsp;|&nbsp;
@@ -391,29 +534,56 @@
             <button class="tk-modal-close" onclick="TK.closeScaleModal()">×</button>
         </div>
         <div class="tk-modal-body">
-            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:1rem;">
-                Enter a known scale, or click two points on the drawing that represent a known distance.
-            </p>
-            <div class="form-group">
-                <label>Drawing Scale</label>
-                <select id="scale-preset" class="tk-input" onchange="TK.applyScalePreset(this.value)">
-                    <option value="">Choose preset…</option>
-                    <option value="48">1/4″ = 1′  (1:48)</option>
-                    <option value="96">1/8″ = 1′  (1:96)</option>
-                    <option value="24">1/2″ = 1′  (1:24)</option>
-                    <option value="16">3/4″ = 1′  (1:16)</option>
-                    <option value="192">1/16″ = 1′ (1:192)</option>
-                </select>
+
+            <!-- Mode A: dimension entry after 2-click -->
+            <div id="scale-dim-mode">
+                <p style="color:var(--text-secondary);font-size:13px;margin-bottom:1rem;">
+                    Enter the known real-world dimension for the line you drew.
+                </p>
+                <p class="scale-px-info" id="scale-px-info"></p>
+                <div class="form-group">
+                    <label>Known Dimension</label>
+                    <div class="scale-dim-row">
+                        <input type="number" id="scale-feet" class="tk-input" placeholder="Feet" min="0" step="1">
+                        <span class="scale-dim-sep">'</span>
+                        <input type="number" id="scale-inches" class="tk-input" placeholder="In" min="0" max="11.99" step="0.1">
+                        <span class="scale-dim-sep">"</span>
+                    </div>
+                </div>
+                <div class="tk-modal-footer">
+                    <button type="button" class="btn-secondary" onclick="TK.closeScaleModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="TK.saveScaleFromDim()">Set Scale</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Pixels per Foot (manual override)</label>
-                <input type="number" id="scale-ppf" class="tk-input" placeholder="e.g. 48"
-                       min="1" step="0.1">
+
+            <!-- Mode B: preset / manual pixels-per-foot -->
+            <div id="scale-px-mode">
+                <p style="color:var(--text-secondary);font-size:13px;margin-bottom:1rem;">
+                    Choose a drawing scale preset, or enter pixels per foot directly.
+                    To measure from the drawing, click <strong>Scale</strong> in the toolbar then click two points.
+                </p>
+                <div class="form-group">
+                    <label>Drawing Scale Preset</label>
+                    <select id="scale-preset" class="tk-input" onchange="TK.applyScalePreset(this.value)">
+                        <option value="">Choose preset…</option>
+                        <option value="48">1/4″ = 1′  (1:48)</option>
+                        <option value="96">1/8″ = 1′  (1:96)</option>
+                        <option value="24">1/2″ = 1′  (1:24)</option>
+                        <option value="16">3/4″ = 1′  (1:16)</option>
+                        <option value="192">1/16″ = 1′ (1:192)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Pixels per Foot</label>
+                    <input type="number" id="scale-ppf" class="tk-input" placeholder="e.g. 48"
+                           min="1" step="0.1">
+                </div>
+                <div class="tk-modal-footer">
+                    <button type="button" class="btn-secondary" onclick="TK.closeScaleModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="TK.saveScale()">Set Scale</button>
+                </div>
             </div>
-            <div class="tk-modal-footer">
-                <button type="button" class="btn-secondary" onclick="TK.closeScaleModal()">Cancel</button>
-                <button type="button" class="btn-primary" onclick="TK.saveScale()">Set Scale</button>
-            </div>
+
         </div>
     </div>
 </div>

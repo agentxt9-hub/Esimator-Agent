@@ -59,6 +59,13 @@ const TK = (() => {
         leftCollapsed:  false,
         rightCollapsed: false,
 
+        // Session 2 — measurement tool state
+        scalePixelsPerFoot: null,
+        currentDrawing:     [],   // [{x,y}] PDF-space points being placed
+        activeItemId:       null, // item selected for new measurements
+        selectedMeasId:     null, // measurement selected on canvas
+        measurements:       [],   // loaded for current page
+
         // Touch tracking for pinch zoom
         _touches: {},
     };
@@ -68,6 +75,12 @@ const TK = (() => {
 
     // Space-bar temporary pan mode
     let _spaceDown = false;
+
+    // Scale tool 2-click state
+    let _scaleClickState = 0;   // 0=idle, 1=point A placed
+    let _scalePointA     = null; // PDF-space {x,y}
+    let _scalePxDist     = 0;   // pixel distance computed from two clicks
+    let _pendingScalePPF = null; // computed ppf waiting for modal confirm
 
     // DOM ref
     let canvasWrap;
@@ -94,6 +107,7 @@ const TK = (() => {
         // Bind click handlers to server-pre-rendered sidebar items
         _bindSidebarClicks();
         fetchItems();
+        _initDataTableDrag();
 
         if (state.plans.length > 0) {
             const firstPlan = state.plans[0];
@@ -194,13 +208,39 @@ const TK = (() => {
                 (state.activeTool === 'select' || _spaceDown) ? 'grab' : 'crosshair';
         });
 
-        // Coordinate readout in status bar
+        // Coordinate readout + live drawing preview
         state.stage.on('mousemove', () => {
             const pos = state.stage.getPointerPosition();
             if (!pos) return;
             const pdf = _screenToPDF(pos.x, pos.y);
             document.getElementById('tk-status-xy').textContent =
                 `X: ${pdf.x.toFixed(1)}  Y: ${pdf.y.toFixed(1)}`;
+            // Live preview for in-progress drawings
+            if (['linear', 'area'].includes(state.activeTool)
+                    && state.currentDrawing.length > 0) {
+                _updateDrawPreview(pdf);
+            }
+        });
+
+        // Stage click — dispatch to active drawing tool
+        state.stage.on('click', (e) => {
+            if (_spaceDown) return;
+            const pos = state.stage.getPointerPosition();
+            if (!pos) return;
+            const pdf = _screenToPDF(pos.x, pos.y);
+            switch (state.activeTool) {
+                case 'scale':  _scaleToolClick(pdf);   break;
+                case 'linear':
+                case 'area':   _drawToolClick(pdf, e); break;
+                case 'count':  _countToolClick(pdf);   break;
+            }
+        });
+
+        // Double-click — complete current drawing
+        state.stage.on('dblclick', () => {
+            if (['linear', 'area'].includes(state.activeTool)) {
+                _completeDraw();
+            }
         });
 
         // screenToPDF: converts stage pointer coords → PDF-space coords
@@ -227,21 +267,32 @@ const TK = (() => {
         canvasWrap.addEventListener('touchend',   _onTouchEnd,   { passive: true });
 
         // Color swatches in new-item modal
-        document.querySelectorAll('.color-swatch').forEach(el => {
+        document.querySelectorAll('#ni-color-swatches .color-swatch').forEach(el => {
             el.addEventListener('click', () => {
-                document.querySelectorAll('.color-swatch')
+                document.querySelectorAll('#ni-color-swatches .color-swatch')
                     .forEach(s => s.classList.remove('selected'));
                 el.classList.add('selected');
                 document.getElementById('ni-color').value = el.dataset.color;
             });
         });
 
+        // Color swatches in properties panel
+        document.querySelectorAll('#pp-color-swatches .color-swatch').forEach(el => {
+            el.addEventListener('click', () => {
+                document.querySelectorAll('#pp-color-swatches .color-swatch')
+                    .forEach(s => s.classList.remove('selected'));
+                el.classList.add('selected');
+                document.getElementById('pp-color').value = el.dataset.color;
+            });
+        });
+
         // Toolbar tool buttons
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (btn.dataset.tool === 'scale') { openScaleModal(); return; }
-                if (btn.dataset.tool === 'fit')   { zoomToFit();      return; }
-                if (btn.dataset.tool === 'print') { return; }
+                if (btn.dataset.tool === 'fit')    { zoomToFit();                  return; }
+                if (btn.dataset.tool === 'print')  { return; }
+                if (btn.dataset.tool === 'props')  { openPropsPanel(state.activeItemId); return; }
+                if (btn.dataset.tool === 'delete') { deleteSelectedMeasurement(); return; }
                 setActiveTool(btn.dataset.tool);
             });
         });
@@ -266,6 +317,22 @@ const TK = (() => {
 
     // ── Tool management ───────────────────────────────────────────────────────
     function setActiveTool(tool) {
+        // Pre-condition checks for drawing tools
+        if (['linear', 'area', 'count'].includes(tool)) {
+            if (!state.scalePixelsPerFoot && !_pageHasScale()) {
+                _showToast('Set page scale before measuring', 'warn');
+                _flashBtn('tool-scale');
+                return;
+            }
+            if (!state.activeItemId) {
+                _showToast('Select a takeoff item in the right panel first', 'warn');
+                return;
+            }
+        }
+
+        // Cancel any in-progress drawing when switching tools
+        if (state.activeTool !== tool) _cancelDraw();
+
         state.activeTool = tool;
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tool === tool);
@@ -276,6 +343,44 @@ const TK = (() => {
         } else {
             state.stage.draggable(false);
             canvasWrap.style.cursor = 'crosshair';
+        }
+        _updateToolbarHint();
+    }
+
+    function _pageHasScale() {
+        const plan = state.plans.find(p => p.id === state.currentPlanId);
+        if (!plan) return false;
+        const page = plan.pages.find(p => p.id === state.currentPageId);
+        return page && page.scale_set;
+    }
+
+    function _flashBtn(btnId) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.style.background = '#FF6B35';
+        setTimeout(() => { btn.style.background = ''; }, 600);
+    }
+
+    function _updateToolbarHint() {
+        const hintEl = document.getElementById('tk-tool-hint');
+        if (!hintEl) return;
+        switch (state.activeTool) {
+            case 'linear':
+            case 'area':
+                hintEl.textContent = 'Click to add points  •  Double-click or C to complete  •  Backspace to undo last';
+                hintEl.style.display = 'block';
+                break;
+            case 'scale':
+                hintEl.textContent = 'Click first point, then second point on a known dimension';
+                hintEl.style.display = 'block';
+                break;
+            case 'count':
+                hintEl.textContent = 'Click to place markers  •  Escape to finish';
+                hintEl.style.display = 'block';
+                break;
+            default:
+                hintEl.textContent = '';
+                hintEl.style.display = 'none';
         }
     }
 
@@ -319,6 +424,11 @@ const TK = (() => {
         state.currentPageId  = pageId;
         state.currentPageNum = pageNum;
 
+        // Cancel any in-progress drawing when switching pages
+        _cancelDraw();
+        state.selectedMeasId = null;
+        state.measurements   = [];
+
         // Clear Konva layers for the incoming page
         state.pdfLayer.destroyChildren();
         state.measureLayer.destroyChildren();
@@ -329,6 +439,7 @@ const TK = (() => {
         zoomToFit();
         _highlightActivePage();
         _updateStatusBar();
+        loadPageMeasurements(pageId);
     }
 
     // ── Render a single PDF page onto pdfLayer ────────────────────────────────
@@ -566,14 +677,35 @@ const TK = (() => {
             return;
         }
 
+        // Ctrl+Z — undo last measurement
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+            e.preventDefault();
+            undoLastMeasurement();
+            return;
+        }
+
         switch (e.key) {
-            case 'f': case 'F':  zoomToFit(); break;
-            case '=': case '+':  zoom(0.1);   break;
-            case '-':            zoom(-0.1);  break;
-            case 'ArrowRight':   _nextPage(); break;
-            case 'ArrowLeft':    _prevPage(); break;
-            case 'Escape':       setActiveTool('select'); break;
-            case 'Delete':       break;  // Session 2: delete selected measurement
+            case 'f': case 'F':  zoomToFit();            break;
+            case '=': case '+':  zoom(0.1);               break;
+            case '-':            zoom(-0.1);              break;
+            case 'ArrowRight':   _nextPage();             break;
+            case 'ArrowLeft':    _prevPage();             break;
+            case 'l': case 'L':  setActiveTool('linear'); break;
+            case 'a': case 'A':  setActiveTool('area');   break;
+            case 'k': case 'K':  setActiveTool('count');  break;
+            case 's': case 'S':  setActiveTool('scale');  break;
+            case 'c': case 'C':  _completeDraw();         break;
+            case 'Delete':       deleteSelectedMeasurement(); break;
+            case 'Backspace':    _removeLastPoint();      break;
+            case 'Escape':
+                if (state.currentDrawing.length > 0) {
+                    _cancelDraw();
+                } else {
+                    deselectMeasurement();
+                    closePropsPanel();
+                    setActiveTool('select');
+                }
+                break;
         }
     }
 
@@ -716,6 +848,7 @@ const TK = (() => {
         filtered.forEach(item => {
             const row    = document.createElement('div');
             row.className   = 'takeoff-item-row';
+            if (item.id === state.activeItemId) row.classList.add('active');
             row.dataset.itemId = item.id;
             const unit   = _unitForType(item.measurement_type);
             const valStr = item.total > 0
@@ -723,13 +856,15 @@ const TK = (() => {
                 : '—';
             row.innerHTML = `
                 <span class="ti-icon">${_iconForType(item.measurement_type)}</span>
+                <span class="ti-color-dot" style="background:${item.color}"></span>
                 <span class="ti-name">${_escHtml(item.name)}</span>
                 <span class="ti-value">${valStr}</span>
-                <span class="ti-color-dot" style="background:${item.color}"></span>
                 <span class="ti-actions">
                     <button class="ti-del-btn" title="Delete" data-id="${item.id}">&times;</button>
                 </span>
             `;
+            // Click row → set as active item + open props panel
+            row.addEventListener('click', () => setActiveItem(item.id));
             row.querySelector('.ti-del-btn').addEventListener('click', e => {
                 e.stopPropagation();
                 if (confirm(`Delete "${item.name}"? This also deletes all measurements.`)) {
@@ -738,29 +873,60 @@ const TK = (() => {
             });
             list.appendChild(row);
         });
+
+        // Aggregate totals footer
+        const totalLF  = state.items.filter(i => i.measurement_type !== 'area' && i.measurement_type !== 'count')
+                                    .reduce((s, i) => s + (i.total || 0), 0);
+        const totalSF  = state.items.filter(i => i.measurement_type === 'area')
+                                    .reduce((s, i) => s + (i.total || 0), 0);
+        const totalEA  = state.items.filter(i => i.measurement_type === 'count')
+                                    .reduce((s, i) => s + (i.total || 0), 0);
+        const footer   = document.createElement('div');
+        footer.className = 'tk-item-totals';
+        footer.innerHTML = `
+            <span>LF: ${totalLF.toFixed(1)}</span>
+            <span>SF: ${totalSF.toFixed(1)}</span>
+            <span>EA: ${totalEA}</span>
+        `;
+        list.appendChild(footer);
     }
 
     function filterItems(text) { _renderItemList(text); }
 
     // ── Floating data table ───────────────────────────────────────────────────
+    // Shows page-specific measurement totals derived from state.measurements
     function _updateDataTable() {
-        const tableEl   = document.getElementById('tk-data-table');
-        const rowsEl    = document.getElementById('tk-dt-rows');
-        const pageItems = state.items.filter(i => i.measurement_count > 0);
+        const tableEl = document.getElementById('tk-data-table');
+        const rowsEl  = document.getElementById('tk-dt-rows');
 
-        if (pageItems.length === 0) { tableEl.style.display = 'none'; return; }
+        // Build per-item totals from page measurements
+        const byItem = {};
+        state.measurements.forEach(m => {
+            if (!byItem[m.item_id]) {
+                byItem[m.item_id] = {
+                    name:    m.item_name,
+                    color:   m.item_color,
+                    type:    m.measurement_type,
+                    total:   0,
+                };
+            }
+            byItem[m.item_id].total += (m.calculated_value || 0);
+        });
+
+        const entries = Object.values(byItem);
+        if (entries.length === 0) { tableEl.style.display = 'none'; return; }
 
         tableEl.style.display = 'block';
         rowsEl.innerHTML = '';
-        pageItems.forEach(item => {
-            const unit = _unitForType(item.measurement_type);
+        entries.forEach(entry => {
+            const unit = _unitForType(entry.type);
             const row  = document.createElement('div');
             row.className = 'tk-dt-row';
             row.innerHTML = `
-                <span class="tk-dt-dot" style="background:${item.color}"></span>
-                <span class="tk-dt-name">${_escHtml(item.name)}</span>
+                <span class="tk-dt-dot" style="background:${entry.color}"></span>
+                <span class="tk-dt-name">${_escHtml(entry.name)}</span>
                 <span class="tk-dt-val">
-                    ${item.total.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}
+                    ${entry.total.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}
                 </span>
             `;
             rowsEl.appendChild(row);
@@ -795,9 +961,9 @@ const TK = (() => {
         document.getElementById('tk-status-zoom').textContent = pct;
     }
 
-    // ── Overlays — placeholder for Session 2 drawing tools ───────────────────
+    // ── Overlays — delegates to renderMeasurements ───────────────────────────
     function renderOverlays() {
-        // Session 2: add Konva.Line/Polygon/Circle shapes to measureLayer here.
+        renderMeasurements(state.measurements);
         _updateDataTable();
     }
 
@@ -958,12 +1124,24 @@ const TK = (() => {
 
     // ── Scale modal ───────────────────────────────────────────────────────────
     function openScaleModal() {
+        const dimMode = document.getElementById('scale-dim-mode');
+        const pxMode  = document.getElementById('scale-px-mode');
+        if (dimMode) dimMode.style.display = 'none';
+        if (pxMode)  pxMode.style.display  = 'block';
         document.getElementById('scale-modal').style.display = 'flex';
     }
 
     function closeScaleModal(e) {
         if (!e || e.target === document.getElementById('scale-modal')) {
             document.getElementById('scale-modal').style.display = 'none';
+            // If cancelling a 2-click scale, clear the UI dots
+            if (_scaleClickState > 0) {
+                state.uiLayer.find('[id^="scale-"]').forEach(n => n.destroy());
+                state.uiLayer.batchDraw();
+                _scaleClickState = 0;
+                _scalePointA     = null;
+                _pendingScalePPF = null;
+            }
         }
     }
 
@@ -972,16 +1150,61 @@ const TK = (() => {
     }
 
     function saveScale() {
-        const ppf = parseFloat(document.getElementById('scale-ppf').value);
-        if (!ppf || ppf <= 0) { alert('Enter a valid pixels-per-foot value.'); return; }
-        // Session 2: persist to TakeoffPage via PATCH route
-        const plan = state.plans.find(p => p.id === state.currentPlanId);
-        if (plan) {
-            const page = plan.pages.find(p => p.id === state.currentPageId);
-            if (page) { page.scale_set = true; _updateStatusBar(); }
+        if (!state.currentPageId) { alert('No page selected.'); return; }
+
+        let ppf;
+        if (_pendingScalePPF) {
+            // 2-click mode: use pre-computed value
+            ppf = _pendingScalePPF;
+        } else {
+            ppf = parseFloat(document.getElementById('scale-ppf').value);
         }
-        closeScaleModal();
-        alert(`Scale set: ${ppf} px/ft. (Persist in Session 2.)`);
+        if (!ppf || ppf <= 0) { alert('Enter a valid pixels-per-foot value.'); return; }
+
+        fetch(`/project/${state.projectId}/takeoff/page/${state.currentPageId}/scale`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ pixels_per_foot: ppf, method: 'manual' }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                state.scalePixelsPerFoot = ppf;
+                // Update in-memory plan page so scale badge refreshes
+                const plan = state.plans.find(p => p.id === state.currentPlanId);
+                if (plan) {
+                    const page = plan.pages.find(p => p.id === state.currentPageId);
+                    if (page) { page.scale_set = true; page.scale_method = 'manual'; }
+                }
+                _updateStatusBarScale(ppf);
+                // Clear scale tool visuals
+                state.uiLayer.destroyChildren();
+                state.uiLayer.batchDraw();
+                _scaleClickState = 0;
+                _scalePointA     = null;
+                _pendingScalePPF = null;
+                closeScaleModal();
+                setActiveTool('select');
+                _showToast('Scale set successfully', 'ok');
+            } else {
+                alert('Error saving scale: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error('[TK] saveScale error:', err);
+            alert('Network error saving scale.');
+        });
+    }
+
+    function _updateStatusBarScale(ppf) {
+        const scaleEl = document.getElementById('tk-status-scale');
+        const badgeEl = document.getElementById('tk-scale-display');
+        const label   = `${ppf.toFixed(1)} px/ft`;
+        if (scaleEl) scaleEl.textContent = `Scale: ${label}`;
+        if (badgeEl) {
+            badgeEl.textContent = label;
+            badgeEl.className   = 'scale-badge scale-set';
+        }
     }
 
     // ── Panel collapse ────────────────────────────────────────────────────────
@@ -1028,6 +1251,649 @@ const TK = (() => {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SESSION 2 — MEASUREMENT TOOLS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── Load page measurements from server ────────────────────────────────────
+    function loadPageMeasurements(pageId) {
+        if (!pageId) return;
+        fetch(`/project/${state.projectId}/takeoff/page/${pageId}/measurements`)
+            .then(r => r.json())
+            .then(data => {
+                state.measurements = data.measurements || [];
+                // Sync scale from server
+                if (data.scale_pixels_per_foot) {
+                    state.scalePixelsPerFoot = data.scale_pixels_per_foot;
+                    // Update in-memory plan page scale_set flag
+                    const plan = state.plans.find(p => p.id === state.currentPlanId);
+                    if (plan) {
+                        const page = plan.pages.find(p => p.id === pageId);
+                        if (page) page.scale_set = true;
+                    }
+                    _updateStatusBarScale(data.scale_pixels_per_foot);
+                }
+                renderMeasurements(state.measurements);
+                _updateDataTable();
+            })
+            .catch(err => console.error('[TK] loadPageMeasurements:', err));
+    }
+
+    // ── Scale tool — 2-click workflow ─────────────────────────────────────────
+    function _scaleToolClick(pdf) {
+        if (_scaleClickState === 0) {
+            // First click: place point A
+            _scalePointA    = pdf;
+            _scaleClickState = 1;
+            _drawScalePoint(pdf, 'A');
+        } else {
+            // Second click: compute distance, open modal for dimension entry
+            const dx   = pdf.x - _scalePointA.x;
+            const dy   = pdf.y - _scalePointA.y;
+            _scalePxDist = Math.sqrt(dx * dx + dy * dy);
+            _drawScaleLine(_scalePointA, pdf);
+            _pendingScalePPF = null; // will be set when user enters feet
+            _openScaleModalDim();
+        }
+    }
+
+    function _drawScalePoint(pdf, label) {
+        const size = 8;
+        const g    = new Konva.Group({ id: `scale-pt-${label}` });
+        g.add(new Konva.Line({
+            points: [pdf.x - size, pdf.y, pdf.x + size, pdf.y],
+            stroke: '#EF4444', strokeWidth: 2,
+        }));
+        g.add(new Konva.Line({
+            points: [pdf.x, pdf.y - size, pdf.x, pdf.y + size],
+            stroke: '#EF4444', strokeWidth: 2,
+        }));
+        state.uiLayer.add(g);
+        state.uiLayer.batchDraw();
+    }
+
+    function _drawScaleLine(a, b) {
+        state.uiLayer.add(new Konva.Line({
+            points: [a.x, a.y, b.x, b.y],
+            stroke: '#EF4444', strokeWidth: 1.5, dash: [6, 4],
+            id: 'scale-line',
+        }));
+        state.uiLayer.batchDraw();
+    }
+
+    function _openScaleModalDim() {
+        // Switch scale modal to "enter known dimension" mode
+        const modal   = document.getElementById('scale-modal');
+        const dimMode = document.getElementById('scale-dim-mode');
+        const pxMode  = document.getElementById('scale-px-mode');
+        if (dimMode) dimMode.style.display = 'block';
+        if (pxMode)  pxMode.style.display  = 'none';
+        modal.style.display = 'flex';
+    }
+
+    // Called by "Set Scale" in the dimension-entry mode of the scale modal
+    function saveScaleFromDim() {
+        const ft  = parseFloat(document.getElementById('scale-feet').value)  || 0;
+        const ins = parseFloat(document.getElementById('scale-inches').value) || 0;
+        const knownFt = ft + ins / 12;
+        if (knownFt <= 0 || _scalePxDist <= 0) {
+            alert('Enter a valid dimension.'); return;
+        }
+        _pendingScalePPF = _scalePxDist / knownFt;
+        saveScale();
+    }
+
+    // ── Drawing tools — click handler ─────────────────────────────────────────
+    function _drawToolClick(pdf, e) {
+        // Double-click fires click + dblclick — ignore second click of a dblclick
+        if (e && e.evt && e.evt.detail >= 2) return;
+
+        // If area tool: check if clicking near first vertex to close
+        if (state.activeTool === 'area' && state.currentDrawing.length >= 3) {
+            const first = state.currentDrawing[0];
+            const dx = pdf.x - first.x;
+            const dy = pdf.y - first.y;
+            const scale = state.stage.scaleX();
+            if (Math.sqrt(dx * dx + dy * dy) * scale < 12) {
+                _completeDraw();
+                return;
+            }
+        }
+
+        state.currentDrawing.push(pdf);
+        _redrawCurrentSegments();
+        _updateStatusDraw();
+    }
+
+    function _countToolClick(pdf) {
+        if (!state.activeItemId) return;
+        const item = state.items.find(i => i.id === state.activeItemId);
+        if (!item) return;
+
+        const norm = _normalizePt(pdf);
+        fetch(`/project/${state.projectId}/takeoff/measurement`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                item_id:          state.activeItemId,
+                page_id:          state.currentPageId,
+                points_json:      JSON.stringify([norm]),
+                calculated_value: 1,
+                measurement_type: 'count',
+            }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                _onMeasurementSaved(data);
+            }
+        })
+        .catch(err => console.error('[TK] countToolClick:', err));
+    }
+
+    // ── Complete / cancel drawing ─────────────────────────────────────────────
+    function _completeDraw() {
+        const tool  = state.activeTool;
+        const pts   = state.currentDrawing;
+
+        if (tool === 'linear' && pts.length < 2) { _cancelDraw(); return; }
+        if (tool === 'area'   && pts.length < 3) { _cancelDraw(); return; }
+
+        const item = state.items.find(i => i.id === state.activeItemId);
+        if (!item) { _cancelDraw(); return; }
+
+        const ppf = state.scalePixelsPerFoot;
+
+        // Calculate value
+        let calcVal = 0;
+        let calcSec = null;
+        const mType = (tool === 'area') ? 'area' : 'linear';
+
+        if (tool === 'linear') {
+            for (let i = 1; i < pts.length; i++) {
+                const dx = pts[i].x - pts[i-1].x;
+                const dy = pts[i].y - pts[i-1].y;
+                calcVal += Math.sqrt(dx * dx + dy * dy);
+            }
+            calcVal = ppf ? calcVal / ppf : calcVal;
+
+        } else if (tool === 'area') {
+            // Shoelace formula for area
+            let areaPx = 0;
+            const n = pts.length;
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                areaPx += pts[i].x * pts[j].y;
+                areaPx -= pts[j].x * pts[i].y;
+            }
+            areaPx = Math.abs(areaPx) / 2;
+            calcVal = ppf ? areaPx / (ppf * ppf) : areaPx;
+            // Perimeter
+            let perimPx = 0;
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                const dx = pts[j].x - pts[i].x;
+                const dy = pts[j].y - pts[i].y;
+                perimPx += Math.sqrt(dx * dx + dy * dy);
+            }
+            calcSec = ppf ? perimPx / ppf : perimPx;
+        }
+
+        const normPts = pts.map(p => _normalizePt(p));
+        fetch(`/project/${state.projectId}/takeoff/measurement`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                item_id:              state.activeItemId,
+                page_id:              state.currentPageId,
+                points_json:          JSON.stringify(normPts),
+                calculated_value:     Math.round(calcVal * 100) / 100,
+                calculated_secondary: calcSec ? Math.round(calcSec * 100) / 100 : null,
+                measurement_type:     mType,
+            }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                _onMeasurementSaved(data);
+                state.currentDrawing = [];
+                state.uiLayer.find('#draw-preview').forEach(n => n.destroy());
+                state.uiLayer.find('#draw-segments').forEach(n => n.destroy());
+                state.uiLayer.batchDraw();
+                document.getElementById('tk-status-draw').textContent = '';
+            }
+        })
+        .catch(err => console.error('[TK] completeDraw:', err));
+    }
+
+    function _cancelDraw() {
+        state.currentDrawing = [];
+        if (state.uiLayer) {
+            state.uiLayer.find('#draw-preview').forEach(n => n.destroy());
+            state.uiLayer.find('#draw-segments').forEach(n => n.destroy());
+            state.uiLayer.batchDraw();
+        }
+        const sdEl = document.getElementById('tk-status-draw');
+        if (sdEl) sdEl.textContent = '';
+    }
+
+    function _removeLastPoint() {
+        if (state.currentDrawing.length === 0) return;
+        state.currentDrawing.pop();
+        _redrawCurrentSegments();
+        _updateStatusDraw();
+    }
+
+    function _onMeasurementSaved(data) {
+        // Reload measurements for current page and refresh item totals
+        loadPageMeasurements(state.currentPageId);
+        fetchItems();
+    }
+
+    // ── Draw preview (live dashed line from last point to cursor) ─────────────
+    function _updateDrawPreview(cursorPdf) {
+        if (state.currentDrawing.length === 0) return;
+        const last = state.currentDrawing[state.currentDrawing.length - 1];
+
+        // Remove stale preview line
+        state.uiLayer.find('#draw-preview').forEach(n => n.destroy());
+
+        const item = state.items.find(i => i.id === state.activeItemId);
+        const col  = item ? item.color : '#2D5BFF';
+
+        state.uiLayer.add(new Konva.Line({
+            id:          'draw-preview',
+            points:      [last.x, last.y, cursorPdf.x, cursorPdf.y],
+            stroke:      col,
+            strokeWidth: 1.5,
+            dash:        [8, 5],
+            opacity:     0.7,
+            listening:   false,
+        }));
+        state.uiLayer.batchDraw();
+    }
+
+    function _redrawCurrentSegments() {
+        state.uiLayer.find('#draw-segments').forEach(n => n.destroy());
+        const pts  = state.currentDrawing;
+        if (pts.length < 2) {
+            state.uiLayer.batchDraw();
+            return;
+        }
+        const item = state.items.find(i => i.id === state.activeItemId);
+        const col  = item ? item.color : '#2D5BFF';
+        const flat = pts.flatMap(p => [p.x, p.y]);
+
+        state.uiLayer.add(new Konva.Line({
+            id:          'draw-segments',
+            points:      flat,
+            stroke:      col,
+            strokeWidth: 2,
+            listening:   false,
+        }));
+
+        // Vertex dots
+        pts.forEach((pt, idx) => {
+            state.uiLayer.add(new Konva.Circle({
+                id:          'draw-segments',
+                x:           pt.x,
+                y:           pt.y,
+                radius:      idx === 0 ? 5 : 4,
+                fill:        idx === 0 ? '#FFFFFF' : col,
+                stroke:      col,
+                strokeWidth: 1.5,
+                listening:   false,
+            }));
+        });
+        state.uiLayer.batchDraw();
+    }
+
+    function _updateStatusDraw() {
+        const sdEl = document.getElementById('tk-status-draw');
+        if (!sdEl) return;
+        const pts = state.currentDrawing;
+        if (pts.length < 2) { sdEl.textContent = ''; return; }
+        const ppf = state.scalePixelsPerFoot;
+        let total = 0;
+        for (let i = 1; i < pts.length; i++) {
+            const dx = pts[i].x - pts[i-1].x;
+            const dy = pts[i].y - pts[i-1].y;
+            total += Math.sqrt(dx * dx + dy * dy);
+        }
+        const val = ppf ? (total / ppf).toFixed(1) + ' FT' : total.toFixed(0) + ' px';
+        sdEl.textContent = `Drawing: ${val}`;
+    }
+
+    // ── Normalize / denormalize points ────────────────────────────────────────
+    function _normalizePt(pdf) {
+        return {
+            x: state.renderWidth  > 0 ? pdf.x / state.renderWidth  : 0,
+            y: state.renderHeight > 0 ? pdf.y / state.renderHeight : 0,
+        };
+    }
+
+    function _denormalizePt(norm) {
+        return {
+            x: norm.x * state.renderWidth,
+            y: norm.y * state.renderHeight,
+        };
+    }
+
+    // ── Render measurements onto measureLayer ─────────────────────────────────
+    function renderMeasurements(measurements) {
+        if (!state.measureLayer) return;
+        state.measureLayer.destroyChildren();
+
+        const ppf = state.scalePixelsPerFoot;
+
+        measurements.forEach(m => {
+            let pts;
+            try {
+                pts = JSON.parse(m.points_json);
+            } catch (e) {
+                return;
+            }
+            if (!pts || pts.length === 0) return;
+
+            // Denormalize
+            const dpts = pts.map(p => _denormalizePt(p));
+            const flat  = dpts.flatMap(p => [p.x, p.y]);
+            const color = m.item_color || '#2D5BFF';
+            const alpha = m.item_opacity != null ? m.item_opacity : 0.5;
+            let shape;
+
+            switch (m.measurement_type) {
+                case 'area':
+                    shape = new Konva.Line({
+                        id:          'meas_' + m.id,
+                        points:      flat,
+                        closed:      true,
+                        fill:        color,
+                        stroke:      color,
+                        strokeWidth: 1.5,
+                        opacity:     alpha,
+                        listening:   true,
+                    });
+                    break;
+
+                case 'linear_with_width': {
+                    const sw = (m.item_width_ft && ppf) ? m.item_width_ft * ppf : 4;
+                    shape = new Konva.Line({
+                        id:          'meas_' + m.id,
+                        points:      flat,
+                        stroke:      color,
+                        strokeWidth: sw,
+                        opacity:     alpha,
+                        lineCap:     'round',
+                        lineJoin:    'round',
+                        listening:   true,
+                    });
+                    break;
+                }
+
+                case 'count':
+                    shape = new Konva.Circle({
+                        id:          'meas_' + m.id,
+                        x:           dpts[0].x,
+                        y:           dpts[0].y,
+                        radius:      8,
+                        fill:        color,
+                        stroke:      '#FFFFFF',
+                        strokeWidth: 1.5,
+                        opacity:     alpha,
+                        listening:   true,
+                    });
+                    break;
+
+                default: // linear
+                    shape = new Konva.Line({
+                        id:          'meas_' + m.id,
+                        points:      flat,
+                        stroke:      color,
+                        strokeWidth: 2,
+                        opacity:     alpha,
+                        lineCap:     'round',
+                        lineJoin:    'round',
+                        listening:   true,
+                    });
+            }
+
+            if (shape) {
+                shape.on('click', () => selectMeasurement(m.id));
+                state.measureLayer.add(shape);
+            }
+        });
+
+        state.measureLayer.batchDraw();
+    }
+
+    // ── Measurement selection ─────────────────────────────────────────────────
+    function selectMeasurement(measId) {
+        state.selectedMeasId = measId;
+        state.uiLayer.find('[id^="sel-"]').forEach(n => n.destroy());
+
+        const m = state.measurements.find(x => x.id === measId);
+        if (!m) return;
+
+        let pts;
+        try { pts = JSON.parse(m.points_json); } catch (e) { return; }
+        const dpts = pts.map(p => _denormalizePt(p));
+
+        // Blue square handles at each vertex
+        dpts.forEach(pt => {
+            state.uiLayer.add(new Konva.Rect({
+                id:          'sel-handle',
+                x:           pt.x - 5,
+                y:           pt.y - 5,
+                width:       10,
+                height:      10,
+                fill:        '#2D5BFF',
+                stroke:      '#FFFFFF',
+                strokeWidth: 1.5,
+                listening:   false,
+            }));
+        });
+        state.uiLayer.batchDraw();
+
+        // Open props panel for this item
+        if (m.item_id) openPropsPanel(m.item_id);
+    }
+
+    function deselectMeasurement() {
+        state.selectedMeasId = null;
+        if (state.uiLayer) {
+            state.uiLayer.find('[id^="sel-"]').forEach(n => n.destroy());
+            state.uiLayer.batchDraw();
+        }
+    }
+
+    function deleteSelectedMeasurement() {
+        if (!state.selectedMeasId) return;
+        if (!confirm('Delete this measurement?')) return;
+        const measId = state.selectedMeasId;
+        fetch(`/project/${state.projectId}/takeoff/measurement/${measId}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    deselectMeasurement();
+                    _onMeasurementSaved(data);
+                }
+            })
+            .catch(err => console.error('[TK] deleteSelectedMeasurement:', err));
+    }
+
+    function undoLastMeasurement() {
+        if (state.measurements.length === 0) return;
+        const last = state.measurements[state.measurements.length - 1];
+        fetch(`/project/${state.projectId}/takeoff/measurement/${last.id}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) _onMeasurementSaved(data);
+            })
+            .catch(err => console.error('[TK] undoLastMeasurement:', err));
+    }
+
+    // ── Active item management ────────────────────────────────────────────────
+    function setActiveItem(itemId) {
+        state.activeItemId = itemId;
+        _renderItemList();
+        openPropsPanel(itemId);
+    }
+
+    // ── Properties panel ──────────────────────────────────────────────────────
+    function openPropsPanel(itemId) {
+        if (!itemId) return;
+        const item = state.items.find(i => i.id === itemId);
+        if (!item) return;
+
+        state.activeItemId = itemId;
+        const panel = document.getElementById('tk-props-panel');
+        if (!panel) return;
+
+        // Populate fields
+        document.getElementById('pp-name').value         = item.name;
+        document.getElementById('pp-type').value         = item.measurement_type;
+        document.getElementById('pp-opacity').value      = Math.round(item.opacity * 100);
+        document.getElementById('pp-opacity-label').textContent = Math.round(item.opacity * 100) + '%';
+        document.getElementById('pp-notes').value        = item.assembly_notes || '';
+        document.getElementById('pp-division').value     = item.division || '';
+
+        // Color swatches
+        document.querySelectorAll('#pp-color-swatches .color-swatch').forEach(s => {
+            s.classList.toggle('selected', s.dataset.color === item.color);
+        });
+        document.getElementById('pp-color').value = item.color;
+
+        // Width fields (show/hide for linear_with_width)
+        const widthRow = document.getElementById('pp-width-row');
+        if (widthRow) {
+            widthRow.style.display =
+                item.measurement_type === 'linear_with_width' ? '' : 'none';
+        }
+        if (item.width_ft) {
+            const ftFull  = Math.floor(item.width_ft);
+            const insFrac = (item.width_ft - ftFull) * 12;
+            const wftEl   = document.getElementById('pp-width-ft');
+            const winEl   = document.getElementById('pp-width-in');
+            if (wftEl) wftEl.value = ftFull  || '';
+            if (winEl) winEl.value = insFrac ? insFrac.toFixed(1) : '';
+        }
+        const solEl = document.getElementById('pp-sol');
+        if (solEl) solEl.value = item.side_of_line || 'center';
+
+        // Measurements list in panel
+        const measListEl = document.getElementById('pp-meas-list');
+        if (measListEl) {
+            measListEl.innerHTML = '';
+            const pageMeas = state.measurements.filter(m => m.item_id === itemId);
+            if (pageMeas.length === 0) {
+                measListEl.innerHTML = '<div class="pp-meas-empty">No measurements on this page.</div>';
+            } else {
+                pageMeas.forEach((m, idx) => {
+                    const unit = _unitForType(m.measurement_type);
+                    const val  = (m.calculated_value || 0).toFixed(2);
+                    const row  = document.createElement('div');
+                    row.className = 'pp-meas-row';
+                    row.innerHTML = `
+                        <span class="pp-meas-label">Measurement ${idx + 1}</span>
+                        <span class="pp-meas-val">${val} ${unit}</span>
+                    `;
+                    measListEl.appendChild(row);
+                });
+            }
+        }
+
+        panel.classList.add('open');
+        document.getElementById('pp-item-id').value = itemId;
+    }
+
+    function closePropsPanel() {
+        const panel = document.getElementById('tk-props-panel');
+        if (panel) panel.classList.remove('open');
+    }
+
+    function savePropsPanel() {
+        const itemId = parseInt(document.getElementById('pp-item-id').value);
+        if (!itemId) return;
+
+        const ftVal  = parseFloat(document.getElementById('pp-width-ft')?.value) || 0;
+        const inVal  = parseFloat(document.getElementById('pp-width-in')?.value) || 0;
+        const wFt    = ftVal + inVal / 12;
+
+        const payload = {
+            name:           document.getElementById('pp-name').value.trim(),
+            color:          document.getElementById('pp-color').value,
+            opacity:        parseInt(document.getElementById('pp-opacity').value) / 100,
+            width_ft:       wFt > 0 ? wFt : null,
+            side_of_line:   document.getElementById('pp-sol')?.value || 'center',
+            assembly_notes: document.getElementById('pp-notes').value,
+            division:       document.getElementById('pp-division').value,
+        };
+
+        fetch(`/project/${state.projectId}/takeoff/item/${itemId}`, {
+            method:  'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                fetchItems();
+                renderMeasurements(state.measurements);
+                closePropsPanel();
+                _showToast('Saved', 'ok');
+            } else {
+                alert('Error: ' + (data.error || 'Save failed'));
+            }
+        })
+        .catch(err => console.error('[TK] savePropsPanel:', err));
+    }
+
+    // ── Toast notification ────────────────────────────────────────────────────
+    function _showToast(msg, type = 'ok') {
+        let toast = document.getElementById('tk-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'tk-toast';
+            document.getElementById('takeoff-app').appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.className   = `tk-toast tk-toast-${type} visible`;
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => toast.classList.remove('visible'), 2800);
+    }
+
+    // ── Data table draggable ──────────────────────────────────────────────────
+    function _initDataTableDrag() {
+        const table = document.getElementById('tk-data-table');
+        if (!table) return;
+        let dragging = false, ox = 0, oy = 0, sx = 0, sy = 0;
+
+        table.addEventListener('mousedown', e => {
+            if (e.target.closest('#tk-dt-rows')) return; // don't drag from rows
+            dragging = true;
+            const rect = table.getBoundingClientRect();
+            ox = e.clientX - rect.left;
+            oy = e.clientY - rect.top;
+            sx = rect.left;
+            sy = rect.top;
+            table.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', e => {
+            if (!dragging) return;
+            table.style.left   = (e.clientX - ox) + 'px';
+            table.style.top    = (e.clientY - oy) + 'px';
+            table.style.bottom = 'auto';
+        });
+
+        document.addEventListener('mouseup', () => {
+            dragging = false;
+            table.style.cursor = '';
+        });
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
     return {
         init,
@@ -1056,7 +1922,18 @@ const TK = (() => {
         setActiveTool,
         renderOverlays,
         regenerateAllThumbnails,
-        // Expose state for Session 2 drawing tools
+        // Session 2 additions
+        saveScaleFromDim,
+        loadPageMeasurements,
+        renderMeasurements,
+        selectMeasurement,
+        deselectMeasurement,
+        deleteSelectedMeasurement,
+        undoLastMeasurement,
+        setActiveItem,
+        openPropsPanel,
+        closePropsPanel,
+        savePropsPanel,
         _state: state,
     };
 
