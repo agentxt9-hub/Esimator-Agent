@@ -88,6 +88,8 @@
 
 .tool-btn-danger { color: var(--error) !important; }
 .tool-btn-danger:hover { background: var(--error-bg) !important; }
+.tool-btn-start { color: #10B981 !important; }
+.tool-btn-start:hover { background: rgba(16,185,129,0.12) !important; }
 
 .tool-sep {
     width: 1px;
@@ -267,6 +269,18 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.page-thumb-name:hover { text-decoration: underline dotted; cursor: text; }
+
+.tk-inline-rename {
+    font-size: 12px;
+    background: var(--app-input);
+    border: 1px solid var(--primary-brand);
+    border-radius: 3px;
+    color: var(--text-primary);
+    padding: 1px 4px;
+    width: 120px;
+    outline: none;
 }
 
 /* Bookmarks section */
@@ -537,6 +551,14 @@
 #tk-status-page  { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tk-status-scale { text-align: center; white-space: nowrap; }
 #tk-status-right { white-space: nowrap; text-align: right; }
+
+.tk-status-toggle {
+    cursor: pointer;
+    transition: color 0.15s;
+    user-select: none;
+}
+.tk-status-toggle:hover { color: var(--text-primary); }
+.tk-status-toggle.active { color: var(--primary-brand); font-weight: 600; }
 
 /* ── Modals ────────────────────────────────────────────────────────────────── */
 .tk-modal-overlay {
@@ -868,6 +890,7 @@ input[type="range"].tk-input {
 }
 .pp-meas-val { color: var(--primary-brand); font-weight: 600; }
 .pp-meas-empty { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.pp-meas-secondary { color: var(--text-muted); font-style: italic; }
 
 /* Width fields row */
 .pp-dim-row {

@@ -630,6 +630,98 @@ if S2_ITEM_ID and PAGE_ID:
         check("total is numeric", isinstance(totals.get('total'), (int, float)),
               str(totals.get('total')))
 
+# ============================================================
+# SESSION 3 TESTS — Polish fixes
+# ============================================================
+
+# S3.1 — GET /items aggregated project totals across pages
+print("\n-- S3.1: GET /items project totals (all pages) --")
+if S2_ITEM_ID and PAGE_ID:
+    # Use second page if available to test cross-page aggregation
+    second_page_id = pages[1]['id'] if len(pages) >= 2 else PAGE_ID
+    # Add a measurement on page 2 (or same page if only 1)
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/measurement',
+        json={
+            'item_id': S2_ITEM_ID, 'page_id': second_page_id,
+            'points_json': json.dumps([{'x': 0.0, 'y': 0.0}, {'x': 1.0, 'y': 0.0}]),
+            'calculated_value': 55.5, 'measurement_type': 'linear',
+        },
+        content_type='application/json',
+    )
+    p2_data = json.loads(resp.data)
+    check("S3.1 page-2 measurement created", p2_data.get('success'))
+
+    resp2 = client.get(f'/project/{PROJECT_ID}/takeoff/items')
+    check("S3.1 GET /items -> 200", resp2.status_code == 200)
+    items_s3 = json.loads(resp2.data)
+    it_s3 = next((i for i in items_s3 if i['id'] == S2_ITEM_ID), None)
+    check("S3.1 item found in list", it_s3 is not None)
+    check("S3.1 total field present", it_s3 is not None and 'total' in it_s3)
+    check("S3.1 total is numeric", it_s3 is not None and isinstance(it_s3.get('total'), (int, float)),
+          str(it_s3.get('total') if it_s3 else None))
+    # total should include page-2 measurement (55.5 + area measurement on page 1)
+    check("S3.1 total >= 55.5 (cross-page sum)", it_s3 is not None and it_s3.get('total', 0) >= 55.5,
+          str(it_s3.get('total') if it_s3 else None))
+
+# S3.2 — PUT /page/<id>/name (page rename)
+print("\n-- S3.2: Page name rename --")
+if PAGE_ID:
+    resp = client.put(
+        f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/name',
+        json={'page_name': 'A1.0 - Floor Plan'},
+        content_type='application/json',
+    )
+    check("S3.2 PUT /page/<id>/name -> 200", resp.status_code == 200,
+          f"status={resp.status_code}")
+    ren_data = json.loads(resp.data)
+    check("S3.2 rename success=True", ren_data.get('success'))
+    check("S3.2 page_name returned", ren_data.get('page_name') == 'A1.0 - Floor Plan',
+          str(ren_data.get('page_name')))
+
+    with app.app_context():
+        from app import TakeoffPage
+        pg_ren = TakeoffPage.query.get(PAGE_ID)
+        check("S3.2 DB page_name updated",
+              pg_ren and pg_ren.page_name == 'A1.0 - Floor Plan',
+              str(pg_ren.page_name if pg_ren else None))
+
+    # Empty name rejected
+    resp2 = client.put(
+        f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/name',
+        json={'page_name': '   '},
+        content_type='application/json',
+    )
+    check("S3.2 empty name -> 400", resp2.status_code == 400,
+          f"status={resp2.status_code}")
+
+# S3.3 — GET /page/<id>/measurements returns scale_pixels_per_foot (regression)
+print("\n-- S3.3: GET measurements returns scale (regression) --")
+if PAGE_ID:
+    resp = client.get(f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/measurements')
+    check("S3.3 GET measurements -> 200", resp.status_code == 200)
+    s3_data = json.loads(resp.data)
+    check("S3.3 scale_pixels_per_foot present", 'scale_pixels_per_foot' in s3_data)
+    check("S3.3 scale == 48.0 (set in S2.1)",
+          s3_data.get('scale_pixels_per_foot') == 48.0,
+          str(s3_data.get('scale_pixels_per_foot')))
+
+# S3.4 — Cross-company page rename blocked
+print("\n-- S3.4: Cross-company page rename blocked --")
+if PAGE_ID:
+    with app.app_context():
+        xco_proj = (Project.query.filter(Project.company_id != COMPANY_ID).first())
+    if xco_proj:
+        resp = client.put(
+            f'/project/{xco_proj.id}/takeoff/page/{PAGE_ID}/name',
+            json={'page_name': 'Hacked'},
+            content_type='application/json',
+        )
+        check("S3.4 cross-company rename -> 403", resp.status_code == 403,
+              f"status={resp.status_code}")
+    else:
+        check("S3.4 cross-company rename (skipped)", True, "skipped")
+
 # ── Final summary ─────────────────────────────────────────────────────────────
 print("\n" + "=" * 50)
 passed = sum(1 for _, ok, _ in results if ok)

@@ -448,6 +448,21 @@ def update_item(project_id, item_id):
     })
 
 
+@takeoff_bp.route('/project/<int:project_id>/takeoff/page/<int:page_id>/name',
+                  methods=['PUT'])
+@login_required
+def rename_page(project_id, page_id):
+    get_project_or_403(project_id)
+    page = _get_page_or_403(page_id, project_id)
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('page_name', '')).strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'Name required'}), 400
+    page.page_name = name
+    db.session.commit()
+    return jsonify({'success': True, 'page_name': name})
+
+
 @takeoff_bp.route('/project/<int:project_id>/takeoff/page/<int:page_id>/measurements')
 @login_required
 def page_measurements(project_id, page_id):

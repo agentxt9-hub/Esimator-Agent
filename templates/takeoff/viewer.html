@@ -158,6 +158,15 @@
                 <span>Props</span>
             </button>
 
+            <!-- Start button — shown only when a takeoff item is selected -->
+            <button class="tool-btn tool-btn-start" id="tool-start" data-tool="start"
+                    title="Start drawing on selected takeoff" style="display:none">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <polygon points="4,2 14,8 4,14"/>
+                </svg>
+                <span>Start</span>
+            </button>
+
             <div class="tool-spacer"></div>
 
             <button class="tool-btn tool-btn-danger" id="tool-delete" title="Delete selected">
@@ -417,11 +426,13 @@
         <span id="tk-status-scale">Scale: not set</span>
         <span id="tk-status-draw"></span>
         <span id="tk-status-right">
-            <span id="tk-status-xy">X: 0.0  Y: 0.0</span>
+            <span id="tk-status-xy">X: 0px  Y: 0px</span>
             &nbsp;|&nbsp;
             <span id="tk-status-zoom">100%</span>
             &nbsp;|&nbsp;
-            PDF Snap: Off&nbsp;|&nbsp;Snap: Off&nbsp;|&nbsp;Ortho: On
+            <span id="tk-status-snap" class="tk-status-toggle" onclick="TK.toggleSnap()" title="Toggle snap">Snap: Off</span>
+            &nbsp;|&nbsp;
+            <span id="tk-status-ortho" class="tk-status-toggle" onclick="TK.toggleOrtho()" title="Toggle ortho (constrain to 45°)">Ortho: Off</span>
         </span>
     </div>
 
