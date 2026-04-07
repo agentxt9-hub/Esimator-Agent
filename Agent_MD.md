@@ -87,7 +87,7 @@ Estimator Agent/
 ├── requirements.txt
 ├── Procfile                    ← gunicorn app:app
 ├── gunicorn.conf.py            ← runs migrations + seeding on_starting()
-├── test_takeoff.py             ← Takeoff integration tests (31 assertions)
+├── test_takeoff.py             ← Takeoff integration tests (99/99 passing)
 ├── .env                        ← local dev (gitignored)
 ├── NORTHSTAR.md                ← philosophy reference
 ├── CLAUDE.md                   ← Claude Code project instructions
@@ -255,9 +255,15 @@ AI routes additionally have `@limiter.limit('20 per minute')` (scope-gap: 10/min
 | GET | `/project/<id>/takeoff` | Takeoff viewer (three-panel) |
 | POST | `/project/<id>/takeoff/upload` | Upload PDF plan set |
 | GET | `/project/<id>/takeoff/plan/<plan_id>/pdf` | Serve raw PDF to PDF.js |
-| GET | `/project/<id>/takeoff/items` | List takeoff items (JSON) |
+| GET | `/project/<id>/takeoff/items` | List takeoff items + project-level totals (JSON) |
 | POST | `/project/<id>/takeoff/item` | Create takeoff item |
 | DELETE | `/project/<id>/takeoff/item/<item_id>` | Delete takeoff item + measurements |
+| POST | `/project/<id>/takeoff/page/<page_id>/scale` | Save calibrated scale (pixels_per_foot) |
+| POST | `/project/<id>/takeoff/measurement` | Save measurement (points_json + calculated values) |
+| DELETE | `/project/<id>/takeoff/measurement/<meas_id>` | Delete measurement |
+| PATCH | `/project/<id>/takeoff/item/<item_id>` | Edit item properties (name/color/opacity/width_ft) |
+| PUT | `/project/<id>/takeoff/page/<page_id>/name` | Rename page |
+| GET | `/project/<id>/takeoff/page/<page_id>/measurements` | Get measurements + scale for a page |
 
 ---
 
@@ -496,12 +502,68 @@ Every takeoff route double-checks company ownership:
 - `_get_plan_or_403(plan_id)` — `plan.company_id == current_user.company_id`
 - `_get_item_or_403(item_id)` — `item.company_id == current_user.company_id`
 
-### Session 2 hooks (drawing tools — not yet built)
+### Measurement Tools (Session 2 — complete as of Session 21)
 
-- `state.activeTool` — tracks active drawing tool; toolbar buttons wired; canvas ops not yet implemented
-- `state.screenToPDF(x, y)` — coordinate converter exported on `state` for drawing tools to use
-- `measureLayer` — Konva layer ready to receive `Konva.Shape` objects for each measurement
-- `saveScale()` — stub; Session 2 will persist to `TakeoffPage` via API route
+**Scale System**
+- Two-click calibration: user clicks two known points, enters real-world distance; `pixels_per_foot` saved via `POST /page/<id>/scale`
+- `ARCH_SCALES` lookup table maps ppf to architectural notation (e.g., 48 ppf → `1/4″=1′`) with 1.5% tolerance
+- Status bar shows architectural ratio label (or "Custom"); badge turns blue when scale is set
+- Coordinates display in real-world feet (e.g., `X: 42.3′  Y: 18.7′`) when scale is set; raw px otherwise
+
+**Drawing Tools**
+- **Linear** (`linear`) — polyline; stores point array; result in LF
+- **Linear with Width** (`linear_with_width`) — same polyline but rendered as a filled band using `item.width_ft × ppf` for stroke width; result in LF, band fills the corridor
+- **Area** (`area`) — closed polygon; double-click or click-first-vertex to close; result in SF + perimeter in FT stored as `calculated_secondary`
+- **Count** (`count`) — single click per point; result in EA
+- **Ortho mode** — constrains vertex placement to 45° increments (`atan2` → round to `π/4`); applied to both click points and live preview line; toggled via status bar
+- **Close-polygon indicator** — green circle appears on first vertex when cursor is within 15 screen-px; cursor changes to `cell`
+- All measurement points stored in normalized 0–1 PDF-space coords (`state.screenToPDF(x,y)`)
+
+**Overlay Rendering**
+- `renderMeasurements(items, measurements, ppf)` draws all shapes onto `measureLayer`
+- Linear: `Konva.Line` with item color + opacity; dashed for `linear_with_width`
+- Area: `Konva.Line` closed with fill at item opacity
+- Count: `Konva.Circle` per point
+- `linear_with_width`: dynamic `strokeWidth = item.width_ft × ppf` for visual band
+- Labels: `Konva.Text` anchored to centroid/midpoint of each measurement
+
+**Properties Panel**
+- Slide-in right panel (`#props-panel`) opens on item click
+- Shows: item name (editable), color swatch, opacity slider, measurement type badge
+- Measurement list: each entry shows type + value; Area shows both SF and FT perimeter on separate rows (perimeter row styled italic/muted via `.pp-meas-secondary`)
+- Delete individual measurements from list
+
+**Contextual Toolbar**
+- Start button (▶) — visible only when an item is active (`state.activeItemId` set); clicking activates the matching drawing tool for that item's `measurement_type`
+- Props button — opens properties panel for active item
+
+**Page Features**
+- Double-click page name in sidebar → inline `<input>` rename; commits on blur/Enter, cancels on Escape
+- Hover on page name shows dotted underline as rename affordance
+- PUT `/project/<id>/takeoff/page/<page_id>/name` persists rename; toast confirms
+
+**Status Bar**
+- XY coordinates in feet (or px when no scale)
+- Scale label (architectural ratio or "Custom / unset")
+- `Ortho: Off/On` — clickable toggle; green when active
+- `Snap: Off/On` — clickable toggle; visual only (functional snapping planned Session 3)
+
+**Project-Level Totals (right sidebar)**
+- `GET /project/<id>/takeoff/items` returns `total` field = sum of `calculated_value` across ALL pages for that item
+- Right sidebar "Takeoff" card shows per-item totals regardless of active page
+
+**Routes (added Sessions 20–21)**
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| POST | `/project/<id>/takeoff/page/<page_id>/scale` | Save calibrated scale to TakeoffPage |
+| POST | `/project/<id>/takeoff/measurement` | Save measurement (points_json, calculated_value, calculated_secondary) |
+| DELETE | `/project/<id>/takeoff/measurement/<meas_id>` | Delete measurement; returns updated item total |
+| PATCH | `/project/<id>/takeoff/item/<item_id>` | Edit item name/color/opacity/width_ft/notes/division |
+| PUT | `/project/<id>/takeoff/page/<page_id>/name` | Rename page |
+| GET | `/project/<id>/takeoff/page/<page_id>/measurements` | Measurements for one page + scale |
+
+**Test Coverage:** `test_takeoff.py` — 99/99 passing (Sessions 18–21)
 
 ---
 
@@ -639,6 +701,8 @@ python app.py
 | 17 | 2026-03-21 | NORTHSTAR.md updates, SECURITY.md framework added, Zenhub naming conventions, n8n webhook integration for waitlist. |
 | 18 | 2026-04-06 | **Takeoff module foundation**: 4 new DB tables, Blueprint (routes_takeoff.py), three-panel viewer (viewer.html), PDF upload with PyMuPDF page count, client-side thumbnails via PDF.js, CSS transform pan/zoom (offscreen RAF swap, continuous wheel factor, 600ms debounce), takeoff item CRUD, status bar, keyboard shortcuts, test_takeoff.py (31/31 passing). |
 | 19 | 2026-04-07 | **Konva.js migration + bug fixes**: Replaced raw canvas + CSS transforms with Konva.js 3-layer stage (`pdfLayer`, `measureLayer`, `uiLayer`). Fixed black canvas (loadPDF/loadPage separation), missing thumbnails (abort guard), plans disappearing on refresh (explicit TakeoffPage query, server-side sidebar pre-render). Konva vendored locally after CDN unreliable on DO. `static/uploads/` gitignored. |
+| 20 | 2026-04-07 | **Takeoff drawing tools (Session 2 core)**: Scale calibration (two-click + distance entry, `POST /page/<id>/scale`). Linear, linear_with_width, area, count measurement tools. `renderMeasurements()` draws all overlays onto measureLayer. Area stores SF + FT perimeter as `calculated_secondary`. Properties panel with measurement list. Project-level totals aggregated in `list_items`. `PATCH /item/<id>` for inline edits. 7 new API routes. test_takeoff.py expanded to 95/95. |
+| 21 | 2026-04-07 | **Takeoff polish (Session 2 complete)**: `ARCH_SCALES` lookup → architectural ratio labels (1/4″=1′ etc.). Real-world feet coordinates in status bar when scale set. Ortho mode (45° snap, `_orthoConstrain()`). Close-polygon green indicator + `cell` cursor at 15px threshold. Start (▶) button in contextual toolbar. Area properties panel shows both SF area and FT perimeter. Ortho/Snap toggles in status bar (clickable). Page inline rename (dblclick → input → `PUT /page/<id>/name`). 4 new tests → 99/99 passing. |
 
 ---
 

@@ -93,20 +93,57 @@
 - [x] Multi-tenant security (company_id isolation)
 - [x] Auto-load first page on viewer open
 
-### Session 2 — Drawing Tools (UP NEXT)
+### Session 2 — Drawing Tools ✅ Complete (Sessions 20–21)
 
-- [ ] Scale calibration tool (manual)
-- [ ] Linear measurement tool (LF)
-- [ ] Area measurement tool (SF)
-- [ ] Count tool
-- [ ] Overlay rendering on Konva measureLayer
-- [ ] Properties panel (slide-in)
-- [ ] Floating on-plan data table
-- [ ] Contextual toolbar
+- [x] Scale calibration tool (two-click + real-world distance entry)
+- [x] Scale display as architectural ratios (1/4″=1′ etc.) via ARCH_SCALES lookup
+- [x] Real-world feet coordinates in status bar when scale set
+- [x] Linear measurement tool (LF polyline)
+- [x] Linear with Width (LF band with dynamic stroke width)
+- [x] Area measurement tool (SF + FT perimeter as calculated_secondary)
+- [x] Count tool (EA per click)
+- [x] Ortho mode — 45° snap constraint on click + live preview
+- [x] Close-polygon green indicator + cell cursor at 15px threshold
+- [x] Overlay rendering on Konva measureLayer (renderMeasurements)
+- [x] Properties panel — name, color, opacity, measurement list, dual area/perimeter
+- [x] Contextual toolbar — Start (▶) button activates drawing for active item
+- [x] Project-level totals in right sidebar (sum across all pages)
+- [x] Page inline rename (dblclick → input → PUT /page/<id>/name)
+- [x] Ortho + Snap status bar toggles
+
+### Session 3 — Polish & Link-to-Estimate (UP NEXT)
+
+- [ ] Snap-to-vertex (functional snapping, currently visual toggle only)
+- [ ] Measurement label editing (click label to rename)
+- [ ] Undo/redo for drawing steps (Ctrl+Z / Ctrl+Y)
+- [ ] Floating on-plan data table overlay
+- [ ] Export takeoff quantities to CSV
+- [ ] Link takeoff item → assembly (populate measurement_params)
+- [ ] Auto-populate assembly qty from linked takeoff measurement
+- [ ] Zoom-to-measurement (click item in sidebar → canvas zooms to first measurement)
+- [ ] Multi-page scale inheritance (copy scale from page 1 to all pages)
+- [ ] Bulk delete measurements for an item
 
 ---
 
 ## ✅ SHIPPED (Recent Sessions)
+
+### Sessions 20–21 (2026-04-07) — Takeoff Session 2 Complete
+- ✅ Scale calibration — two-click + distance entry, saves pixels_per_foot to TakeoffPage
+- ✅ Architectural scale labels (ARCH_SCALES: 1/16″=1′ through 1″=1′, Custom)
+- ✅ Real-world feet coordinates in status bar when scale is set
+- ✅ Linear, Linear with Width, Area, Count drawing tools
+- ✅ renderMeasurements() — full overlay rendering on measureLayer
+- ✅ Area dual measurement: SF area + FT perimeter (calculated_secondary)
+- ✅ Ortho mode — 45° snap constraint via _orthoConstrain() (ADR-019)
+- ✅ Close-polygon green indicator + cell cursor at 15px screen threshold
+- ✅ Properties panel — name edit, color swatch, opacity slider, measurement list
+- ✅ Start (▶) contextual toolbar button — activates drawing for active item
+- ✅ Project-level totals across all pages (ADR-020)
+- ✅ Page inline rename (dblclick sidebar name → input → PUT /page/<id>/name)
+- ✅ Ortho + Snap clickable status bar toggles
+- ✅ 6 new API routes (scale, measurement CRUD, item PATCH, page rename, measurements GET)
+- ✅ test_takeoff.py: 99/99 passing — Commit: 694dec9
 
 ### Session 19 (2026-04-07)
 - ✅ Konva.js migration — 3-layer stage (pdfLayer, measureLayer, uiLayer)

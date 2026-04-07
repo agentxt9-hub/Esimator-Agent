@@ -726,6 +726,70 @@ Vendor Konva.js locally at `static/js/konva.min.js`. Load it with a direct `<scr
 
 ---
 
+## ADR-019: Ortho Mode Constrains to 45° Increments
+
+**Date:** 2026-04-07 (Session 21)
+**Status:** Accepted
+
+### Context
+During polygon/polyline drawing, construction estimators frequently need perfectly horizontal, vertical, or 45° diagonal lines (wall runs, roof ridges, etc.). Without a constraint mode, hand-drawn lines are slightly off-axis, making takeoffs look imprecise.
+
+### Decision
+Ortho mode uses `Math.atan2(dy, dx)` → rounds to nearest `Math.PI / 4` increment → reconstructs endpoint at original distance. Applied to both click-commit points and the live preview line while cursor moves.
+
+### Rationale
+- `π/4` increments give 8 directions: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
+- Preserves cursor distance (no shortening) — only snaps direction
+- Same formula applied to preview = user sees snapped line before committing
+- Toggle via status bar click or keyboard (future) — non-destructive, off by default
+
+### Consequences
+**Positive:**
+- Precise horizontal/vertical/diagonal measurements with one toggle
+- Preview snapping gives immediate visual feedback
+
+**Negative:**
+- 45° increments only (no arbitrary angle lock); acceptable for construction takeoff
+- Cursor visually "jumps" direction — expected behavior in CAD tools
+
+**Neutral:**
+- State stored in `state.orthoMode` boolean; no DB changes
+
+**Related Files:** `static/js/takeoff.js` (`_orthoConstrain()`, `_drawToolClick()`, `_updateDrawPreview()`), `templates/takeoff/viewer.html` (`#tk-status-ortho`)
+
+---
+
+## ADR-020: Project-Level Measurement Totals via Relationship Traversal
+
+**Date:** 2026-04-07 (Session 21)
+**Status:** Accepted
+
+### Context
+Each `TakeoffMeasurement` belongs to a specific page (FK→`takeoff_pages.id`). The `GET /items` endpoint initially returned only the list of items without any aggregate quantities. Users need to see total LF / SF / EA for an item summed across all pages in the project.
+
+### Decision
+`list_items` iterates `item.measurements` (SQLAlchemy relationship, no page filter) and sums `calculated_value` for each item. This cross-page total is returned as `item['total']` in the JSON response. No separate aggregation route needed.
+
+### Rationale
+- The SQLAlchemy `TakeoffItem.measurements` relationship already returns all measurements across all pages for that item
+- No `GROUP BY` query needed — Python-side sum over the ORM relationship is clean and readable
+- Single endpoint (`GET /items`) returns both item definitions and totals — fewer round trips
+
+### Consequences
+**Positive:**
+- Zero extra code beyond what was already written — just use the relationship
+- Single API call populates both item list and totals sidebar
+
+**Negative:**
+- For items with thousands of measurements this could be slow — not a concern at MVP scale
+
+**Neutral:**
+- `calculated_secondary` (perimeter) is not aggregated here — intentional; perimeter per-measurement is the correct unit
+
+**Related Files:** `routes_takeoff.py` (`list_items`), `static/js/takeoff.js` (right-sidebar total render)
+
+---
+
 ## 📝 ADR Template
 
 Use this template for new decisions:
