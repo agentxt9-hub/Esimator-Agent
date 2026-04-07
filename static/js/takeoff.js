@@ -1,10 +1,9 @@
 /**
  * takeoff.js — ZenBid Takeoff Module
  * Session 18 — Foundation: PDF viewer, page nav, item CRUD
- * Session 19 — Konva.js migration: GPU-accelerated stage, 3-layer architecture.
- *   PDF.js renders page → offscreen canvas → Konva.Image on pdfLayer.
- *   Pan/zoom is native Konva stage drag + scale (buttery smooth).
- *   Hit detection, selection, and measurement tools ready for Session 2.
+ * Session 19 — Konva.js migration: 3-layer stage, native pan/zoom
+ * Session 19b — Bug fixes: loadPDF/loadPage separation, sidebar pre-render,
+ *               thumbnail regeneration, console diagnostics
  *
  * LAYER ARCHITECTURE
  * pdfLayer     — Konva.Image of current PDF page (PDF.js rendered at 2× scale)
@@ -16,6 +15,13 @@
  * (0,0) = top-left of PDF page at RENDER_SCALE (2.0).
  * Use state.screenToPDF(x, y) to convert stage/screen coords.
  * Use state.stage.scale() and .position() for the inverse transform.
+ *
+ * LOAD FLOW (Bug 1 fix)
+ * loadPage(pageId, pageNum, planId)  — main entry point for any page navigation
+ *   ↳ loadPDF(planId)               — loads PDF.js doc if plan changed / not loaded
+ *       ↳ regenerateAllThumbnails() — renders sidebar thumbnails after doc loads
+ *   ↳ renderPDFPage(pageNum)         — renders the page to Konva pdfLayer
+ *   ↳ zoomToFit()                   — centers and fits the rendered page
  */
 'use strict';
 
@@ -32,11 +38,11 @@ const TK = (() => {
         renderTask:     null,   // in-flight PDF.js render task (cancel on page change)
 
         // Konva objects
-        stage:        null,     // Konva.Stage
-        pdfLayer:     null,     // Konva.Layer — PDF image
-        measureLayer: null,     // Konva.Layer — measurements (Session 2)
-        uiLayer:      null,     // Konva.Layer — handles/labels
-        pdfImage:     null,     // Konva.Image holding rendered PDF page
+        stage:        null,
+        pdfLayer:     null,
+        measureLayer: null,
+        uiLayer:      null,
+        pdfImage:     null,
 
         // Current stage zoom (stage.scaleX())
         currentZoom: 1.0,
@@ -45,7 +51,7 @@ const TK = (() => {
         renderWidth:  0,
         renderHeight: 0,
 
-        // coordinate converter — set in initStage(), exported for Session 2
+        // Coordinate converter — exported for Session 2 drawing tools
         screenToPDF: null,
 
         activeTool:     'select',
@@ -57,7 +63,7 @@ const TK = (() => {
         _touches: {},
     };
 
-    // Active Konva tween (cancelled before starting a new one)
+    // Active Konva tween (destroyed before starting a new one)
     let _zoomTween = null;
 
     // Space-bar temporary pan mode
@@ -80,29 +86,43 @@ const TK = (() => {
 
         canvasWrap = document.getElementById('tk-canvas-wrap');
 
+        console.log('[TK] init — projectId:', state.projectId,
+                    'plans:', state.plans.length);
+
         initStage();
         _bindEvents();
-        _renderPageList();
+        // Bind click handlers to server-pre-rendered sidebar items
+        _bindSidebarClicks();
         fetchItems();
 
         if (state.plans.length > 0) {
             const firstPlan = state.plans[0];
             if (firstPlan.pages && firstPlan.pages.length > 0) {
                 const firstPage = firstPlan.pages[0];
-                loadPDF(firstPlan.id, firstPage.id, firstPage.page_number);
+                console.log('[TK] Auto-loading first page:',
+                            firstPage.page_name, 'plan:', firstPlan.id);
+                loadPage(firstPage.id, firstPage.page_number, firstPlan.id)
+                    .catch(err => console.error('[TK] Auto-load failed:', err));
             }
         } else {
+            console.log('[TK] No plans — showing empty state');
             document.getElementById('tk-empty-state').style.display = 'flex';
         }
     }
 
     // ── Stage initialization ──────────────────────────────────────────────────
     function initStage() {
+        // Fallback if CSS layout hasn't settled yet (can be 0 at DOMContentLoaded)
+        const w = canvasWrap.clientWidth  || window.innerWidth  || 900;
+        const h = canvasWrap.clientHeight || window.innerHeight || 600;
+
+        console.log('[TK] initStage — container size:', w, '×', h);
+
         state.stage = new Konva.Stage({
             container: 'konva-container',
-            width:     canvasWrap.clientWidth,
-            height:    canvasWrap.clientHeight,
-            draggable: true,    // native pan when activeTool === 'select'
+            width:  w,
+            height: h,
+            draggable: true,
         });
 
         state.pdfLayer     = new Konva.Layer();
@@ -112,6 +132,17 @@ const TK = (() => {
         state.stage.add(state.pdfLayer);
         state.stage.add(state.measureLayer);
         state.stage.add(state.uiLayer);
+
+        // Correct dimensions after first paint (handles flexbox layout settling)
+        requestAnimationFrame(() => {
+            const rw = canvasWrap.clientWidth;
+            const rh = canvasWrap.clientHeight;
+            if (rw > 0 && (rw !== w || rh !== h)) {
+                console.log('[TK] Correcting stage size after layout:', rw, '×', rh);
+                state.stage.width(rw);
+                state.stage.height(rh);
+            }
+        });
 
         // Zoom on mouse wheel — cursor-centered, continuous factor for trackpads
         state.stage.on('wheel', (e) => {
@@ -167,7 +198,7 @@ const TK = (() => {
                 `X: ${pdf.x.toFixed(1)}  Y: ${pdf.y.toFixed(1)}`;
         });
 
-        // screenToPDF: stage/screen coords → PDF-space coords (Session 2 needs this)
+        // screenToPDF: converts stage pointer coords → PDF-space coords
         function _screenToPDF(screenX, screenY) {
             const pos   = state.stage.position();
             const scale = state.stage.scaleX();
@@ -177,13 +208,11 @@ const TK = (() => {
             };
         }
 
-        // Export on state so Session 2 drawing tools can import it
         state.screenToPDF = _screenToPDF;
     }
 
     // ── Event binding ─────────────────────────────────────────────────────────
     function _bindEvents() {
-        // Keyboard shortcuts
         window.addEventListener('keydown', _onKeyDown);
         window.addEventListener('keyup',   _onKeyUp);
 
@@ -202,13 +231,30 @@ const TK = (() => {
             });
         });
 
-        // Tool buttons
+        // Toolbar tool buttons
         document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (btn.dataset.tool === 'scale') { openScaleModal(); return; }
                 if (btn.dataset.tool === 'fit')   { zoomToFit();      return; }
                 if (btn.dataset.tool === 'print') { return; }
                 setActiveTool(btn.dataset.tool);
+            });
+        });
+    }
+
+    // Bind click handlers to sidebar items — works on both Jinja-rendered and
+    // JS-rendered items. Call after any DOM rebuild (_renderPageList / init).
+    function _bindSidebarClicks() {
+        document.querySelectorAll('#tk-page-list .page-thumb-item').forEach(item => {
+            // Use replaceWith clone to strip any prior listeners before rebinding
+            const fresh = item.cloneNode(true);
+            item.parentNode.replaceChild(fresh, item);
+            fresh.addEventListener('click', () => {
+                const planId  = parseInt(fresh.dataset.planId);
+                const pageId  = parseInt(fresh.dataset.pageId);
+                const pageNum = parseInt(fresh.dataset.pageNumber);
+                loadPage(pageId, pageNum, planId)
+                    .catch(err => console.error('[TK] loadPage error:', err));
             });
         });
     }
@@ -228,33 +274,63 @@ const TK = (() => {
         }
     }
 
-    // ── PDF loading ───────────────────────────────────────────────────────────
-    async function loadPDF(planId, pageId, pageNum) {
-        state.currentPlanId  = planId;
-        state.currentPageId  = pageId;
-        state.currentPageNum = pageNum;
-
+    // ── PDF document loading (Bug 1 fix) ──────────────────────────────────────
+    // Loads the PDF.js document for a plan. Does NOT render any page.
+    // Called by loadPage() if the plan changes or doc is null.
+    async function loadPDF(planId) {
+        console.log('[TK] loadPDF — planId:', planId);
         const url = `/project/${state.projectId}/takeoff/plan/${planId}/pdf`;
         try {
             const doc = await pdfjsLib.getDocument(url).promise;
-            state.pdfDoc = doc;
-            await renderPDFPage(pageNum);
-            zoomToFit();
-            _highlightActivePage();
+            state.pdfDoc       = doc;
+            state.currentPlanId = planId;
+            console.log('[TK] PDF document ready — numPages:', doc.numPages);
 
-            // Client-side thumbnails for all pages in this plan
+            // Kick off thumbnail generation for this plan's pages
             const plan = state.plans.find(p => p.id === planId);
-            if (plan) generateThumbnails(planId, plan.pages);
+            if (plan && plan.pages.length > 0) {
+                regenerateAllThumbnails(planId, plan.pages);
+            }
         } catch (err) {
-            console.error('PDF load error:', err);
+            console.error('[TK] loadPDF failed — url:', url, err);
+            throw err;
         }
     }
 
-    // ── Render PDF page → offscreen canvas → Konva.Image on pdfLayer ─────────
-    async function renderPDFPage(pageNum) {
-        if (!state.pdfDoc) return;
+    // ── Page render — main entry point for ALL page navigation (Bug 1 fix) ────
+    // Ensures the right PDF doc is loaded, then renders the requested page.
+    async function loadPage(pageId, pageNum, planId) {
+        console.log('[TK] loadPage —', { pageId, pageNum, planId });
 
-        // Cancel any in-flight render
+        // Load PDF.js document if this is a new plan or not yet loaded
+        if (!state.pdfDoc || state.currentPlanId !== planId) {
+            await loadPDF(planId);
+        }
+
+        state.currentPageId  = pageId;
+        state.currentPageNum = pageNum;
+
+        // Clear Konva layers for the incoming page
+        state.pdfLayer.destroyChildren();
+        state.measureLayer.destroyChildren();
+        state.uiLayer.destroyChildren();
+        state.pdfImage = null;
+
+        await renderPDFPage(pageNum);
+        zoomToFit();
+        _highlightActivePage();
+        _updateStatusBar();
+    }
+
+    // ── Render a single PDF page onto pdfLayer ────────────────────────────────
+    async function renderPDFPage(pageNum) {
+        if (!state.pdfDoc) {
+            console.warn('[TK] renderPDFPage called but state.pdfDoc is null');
+            return;
+        }
+        console.log('[TK] renderPDFPage — page', pageNum);
+
+        // Cancel any in-flight render task
         if (state.renderTask) {
             state.renderTask.cancel();
             state.renderTask = null;
@@ -263,7 +339,11 @@ const TK = (() => {
         const page     = await state.pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale: RENDER_SCALE });
 
-        // Render PDF.js into offscreen canvas (never touches the visible stage)
+        console.log('[TK] Rendering page', pageNum,
+                    'at scale', RENDER_SCALE,
+                    '→ canvas', viewport.width, '×', viewport.height);
+
+        // Render PDF.js into an offscreen canvas (never touches the visible Konva stage)
         const offscreen    = document.createElement('canvas');
         offscreen.width    = viewport.width;
         offscreen.height   = viewport.height;
@@ -276,7 +356,7 @@ const TK = (() => {
             await task.promise;
         } catch (err) {
             if (err.name !== 'RenderingCancelledException') {
-                console.error('Render error:', err);
+                console.error('[TK] renderPDFPage error:', err);
             }
             return;
         }
@@ -286,7 +366,7 @@ const TK = (() => {
         state.renderWidth  = viewport.width;
         state.renderHeight = viewport.height;
 
-        // Create or update Konva.Image (update avoids layer rebuild on page nav)
+        // Create or update the Konva.Image on pdfLayer
         if (state.pdfImage) {
             state.pdfImage.image(offscreen);
             state.pdfImage.width(viewport.width);
@@ -303,19 +383,40 @@ const TK = (() => {
         }
 
         state.pdfLayer.batchDraw();
+        console.log('[TK] Page', pageNum, 'rendered onto pdfLayer ✓');
         _updateStatusBar();
     }
 
-    // ── Client-side thumbnail generation (unchanged from Session 18) ──────────
-    async function generateThumbnails(planId, pages) {
-        if (!state.pdfDoc) return;
+    // ── Thumbnail regeneration (Bug 2 fix) ───────────────────────────────────
+    // Renders small-scale thumbnails for all pages of a plan, sequentially.
+    // Aborts early if the plan changes during generation.
+    async function regenerateAllThumbnails(planId, pages) {
+        const pdfDoc = state.pdfDoc;  // capture at call time
+        if (!pdfDoc || state.currentPlanId !== planId) return;
+
+        console.log('[TK] regenerateAllThumbnails — plan', planId,
+                    pages.length, 'pages');
+
         for (const pageData of pages) {
-            const thumbImg = document.querySelector(
-                `[data-page-id="${pageData.id}"] .page-thumb-img`
+            // Abort if another plan loaded in the meantime
+            if (state.currentPlanId !== planId || state.pdfDoc !== pdfDoc) {
+                console.log('[TK] Thumbnail generation aborted — plan changed');
+                break;
+            }
+
+            // Find the thumbnail <img> — works on both Jinja and JS-rendered items
+            const parentEl = document.querySelector(
+                `#tk-page-list [data-page-id="${pageData.id}"]`
             );
-            if (!thumbImg) continue;
+            const thumbImg = parentEl && parentEl.querySelector('.page-thumb-img');
+            if (!thumbImg) {
+                console.warn('[TK] No thumb img for page id', pageData.id,
+                             '— DOM element missing');
+                continue;
+            }
+
             try {
-                const pdfPage  = await state.pdfDoc.getPage(pageData.page_number);
+                const pdfPage  = await pdfDoc.getPage(pageData.page_number);
                 const viewport = pdfPage.getViewport({ scale: 0.15 });
                 const canvas   = document.createElement('canvas');
                 canvas.width   = viewport.width;
@@ -326,9 +427,12 @@ const TK = (() => {
                 }).promise;
                 thumbImg.src = canvas.toDataURL('image/jpeg', 0.7);
             } catch (err) {
-                console.error(`Thumbnail error page ${pageData.page_number}:`, err);
+                console.error('[TK] Thumbnail error page',
+                              pageData.page_number, err);
             }
         }
+
+        console.log('[TK] Thumbnail generation complete — plan', planId);
     }
 
     // ── Zoom to fit — animated via Konva.Tween ────────────────────────────────
@@ -386,7 +490,7 @@ const TK = (() => {
         _zoomTween.play();
     }
 
-    // ── Touch: pinch zoom (single-finger pan is Konva draggable) ─────────────
+    // ── Touch: pinch zoom (single-finger pan handled by Konva draggable) ──────
     function _onTouchStart(e) {
         for (const t of e.changedTouches) {
             state._touches[t.identifier] = { x: t.clientX, y: t.clientY };
@@ -440,7 +544,7 @@ const TK = (() => {
     function _onKeyDown(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-        // Space — temporary pan mode
+        // Space — temporary pan mode (re-enable draggable even in drawing tools)
         if (e.code === 'Space' && !_spaceDown) {
             e.preventDefault();
             _spaceDown = true;
@@ -450,13 +554,13 @@ const TK = (() => {
         }
 
         switch (e.key) {
-            case 'f': case 'F':    zoomToFit(); break;
-            case '=': case '+':    zoom(0.1);   break;
-            case '-':              zoom(-0.1);  break;
-            case 'ArrowRight':     _nextPage(); break;
-            case 'ArrowLeft':      _prevPage(); break;
-            case 'Escape':         setActiveTool('select'); break;
-            case 'Delete':         break;  // Session 2: delete selected measurement
+            case 'f': case 'F':  zoomToFit(); break;
+            case '=': case '+':  zoom(0.1);   break;
+            case '-':            zoom(-0.1);  break;
+            case 'ArrowRight':   _nextPage(); break;
+            case 'ArrowLeft':    _prevPage(); break;
+            case 'Escape':       setActiveTool('select'); break;
+            case 'Delete':       break;  // Session 2: delete selected measurement
         }
     }
 
@@ -479,7 +583,8 @@ const TK = (() => {
         const idx = plan.pages.findIndex(p => p.id === state.currentPageId);
         if (idx < plan.pages.length - 1) {
             const next = plan.pages[idx + 1];
-            loadPage(next.id, next.page_number);
+            loadPage(next.id, next.page_number, plan.id)
+                .catch(err => console.error('[TK] _nextPage error:', err));
         }
     }
 
@@ -489,30 +594,20 @@ const TK = (() => {
         const idx = plan.pages.findIndex(p => p.id === state.currentPageId);
         if (idx > 0) {
             const prev = plan.pages[idx - 1];
-            loadPage(prev.id, prev.page_number);
+            loadPage(prev.id, prev.page_number, plan.id)
+                .catch(err => console.error('[TK] _prevPage error:', err));
         }
     }
 
-    function loadPage(pageId, pageNum) {
-        state.currentPageId  = pageId;
-        state.currentPageNum = pageNum;
-
-        // Clear layers for new page (Session 2 reloads measurements here too)
-        state.pdfLayer.destroyChildren();
-        state.measureLayer.destroyChildren();
-        state.uiLayer.destroyChildren();
-        state.pdfImage = null;
-
-        renderPDFPage(pageNum).then(() => zoomToFit());
-        _highlightActivePage();
-        _updateStatusBar();
-    }
-
     // ── Page list sidebar ─────────────────────────────────────────────────────
+    // Rebuilds the sidebar from state.plans. Called for:
+    //   • filtering (filterText != '')
+    //   • after upload (_onUploadComplete)
+    // On first load, the sidebar is already Jinja-rendered; JS just binds clicks.
     function _renderPageList(filterText = '') {
         const list = document.getElementById('tk-page-list');
         list.innerHTML = '';
-        const q = filterText.toLowerCase();
+        const q = filterText.toLowerCase().trim();
 
         state.plans.forEach(plan => {
             const pages = plan.pages.filter(p =>
@@ -521,42 +616,62 @@ const TK = (() => {
             if (pages.length === 0) return;
 
             const header = document.createElement('div');
-            header.className = 'plan-header';
-            header.textContent = plan.original_filename;
+            header.className      = 'plan-header';
+            header.dataset.planId = plan.id;
+            header.textContent    = plan.original_filename;
             list.appendChild(header);
 
             pages.forEach(page => {
                 const item = document.createElement('div');
-                item.className = 'page-thumb-item';
+                item.className          = 'page-thumb-item';
+                item.dataset.planId     = plan.id;
                 item.dataset.pageId     = page.id;
                 item.dataset.pageNumber = page.page_number;
                 item.innerHTML = `
                     <div class="thumb-wrapper">
-                        <img class="page-thumb-img"
-                             src="${page.thumbnail_url || ''}"
-                             style="width:100%;background:#252B33;min-height:80px;display:block;"
-                             alt="Page ${page.page_number}">
+                        <img class="page-thumb-img" src="${page.thumbnail_url || ''}"
+                             alt="Page ${page.page_number}"
+                             style="width:100%;background:#252B33;min-height:80px;display:block;">
                     </div>
                     <span class="page-thumb-name">${_escHtml(page.page_name)}</span>
                 `;
                 item.addEventListener('click', () => {
-                    state.currentPlanId = plan.id;
-                    loadPage(page.id, page.page_number);
+                    loadPage(page.id, page.page_number, plan.id)
+                        .catch(err => console.error('[TK] loadPage error:', err));
                 });
                 list.appendChild(item);
             });
         });
+
+        _highlightActivePage();
     }
 
     function _highlightActivePage() {
         document.querySelectorAll('.page-thumb-item').forEach(el => {
+            // == (not ===) to handle string/int comparison across data attrs
             el.classList.toggle('active', el.dataset.pageId == state.currentPageId);
         });
     }
 
+    // Filter sidebar by page name (show/hide — no rebuild needed)
     function filterPages(text) {
-        _renderPageList(text);
-        _highlightActivePage();
+        const q = text.toLowerCase().trim();
+        if (!q) {
+            document.querySelectorAll(
+                '#tk-page-list .page-thumb-item, #tk-page-list .plan-header'
+            ).forEach(el => { el.style.display = ''; });
+            return;
+        }
+        const visiblePlans = new Set();
+        document.querySelectorAll('#tk-page-list .page-thumb-item').forEach(el => {
+            const name = (el.querySelector('.page-thumb-name') || {}).textContent || '';
+            const show = name.toLowerCase().includes(q);
+            el.style.display = show ? '' : 'none';
+            if (show) visiblePlans.add(el.dataset.planId);
+        });
+        document.querySelectorAll('#tk-page-list .plan-header').forEach(el => {
+            el.style.display = visiblePlans.has(el.dataset.planId) ? '' : 'none';
+        });
     }
 
     // ── Right sidebar — items list ────────────────────────────────────────────
@@ -568,7 +683,7 @@ const TK = (() => {
                 _renderItemList();
                 _updateDataTable();
             })
-            .catch(err => console.error('fetchItems:', err));
+            .catch(err => console.error('[TK] fetchItems:', err));
     }
 
     function _renderItemList(filterText = '') {
@@ -709,7 +824,8 @@ const TK = (() => {
         document.getElementById('upload-status-msg').textContent    = 'Uploading...';
         document.getElementById('upload-progress-bar').style.width  = '0%';
 
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')
+            .getAttribute('content');
         const fd = new FormData();
         fd.append('pdf', file);
 
@@ -730,7 +846,7 @@ const TK = (() => {
                 const data = JSON.parse(xhr.responseText);
                 if (data.success) {
                     document.getElementById('upload-status-msg').textContent =
-                        `Uploaded ${data.page_count} page(s). Rendering thumbnails...`;
+                        `Uploaded ${data.page_count} page(s). Rendering thumbnails…`;
                     document.getElementById('upload-progress-bar').style.width = '100%';
                     setTimeout(() => { closeUploadModal(); _onUploadComplete(data); }, 400);
                 } else {
@@ -748,6 +864,7 @@ const TK = (() => {
         xhr.send(fd);
     }
 
+    // Bug 3 fix: rebuild sidebar (so new plan appears), then load its first page.
     function _onUploadComplete(data) {
         const newPlan = {
             id:                data.plan_id,
@@ -762,14 +879,17 @@ const TK = (() => {
                 scale_method:  null,
             })),
         };
+
         state.plans.push(newPlan);
         document.getElementById('tk-empty-state').style.display = 'none';
+
+        // Rebuild sidebar from state.plans (includes new plan) + re-bind clicks
         _renderPageList();
-        _highlightActivePage();
 
         if (newPlan.pages.length > 0) {
             const firstPage = newPlan.pages[0];
-            loadPDF(newPlan.id, firstPage.id, firstPage.page_number);
+            loadPage(firstPage.id, firstPage.page_number, newPlan.id)
+                .catch(err => console.error('[TK] Post-upload loadPage error:', err));
         }
     }
 
@@ -813,14 +933,14 @@ const TK = (() => {
                 alert('Error: ' + (data.error || 'Could not create takeoff.'));
             }
         })
-        .catch(err => console.error('createItem:', err));
+        .catch(err => console.error('[TK] createItem:', err));
     }
 
     function deleteItem(itemId) {
         fetch(`/project/${state.projectId}/takeoff/item/${itemId}`, { method: 'DELETE' })
             .then(r => r.json())
             .then(data => { if (data.success) fetchItems(); })
-            .catch(err => console.error('deleteItem:', err));
+            .catch(err => console.error('[TK] deleteItem:', err));
     }
 
     // ── Scale modal ───────────────────────────────────────────────────────────
@@ -857,11 +977,10 @@ const TK = (() => {
         document.getElementById('tk-left').classList.toggle('collapsed', state.leftCollapsed);
         document.getElementById('tk-left-collapse').textContent =
             state.leftCollapsed ? '▶' : '◀';
-        // Let stage know its container changed width
         setTimeout(() => {
             state.stage.width(canvasWrap.clientWidth);
             state.stage.height(canvasWrap.clientHeight);
-        }, 210);    // after 200ms CSS transition
+        }, 210);
     }
 
     function toggleRight() {
@@ -907,6 +1026,7 @@ const TK = (() => {
         createItem,
         deleteItem,
         loadPage,
+        loadPDF,
         openUploadModal,
         closeUploadModal,
         handleDrop,
@@ -922,7 +1042,7 @@ const TK = (() => {
         toggleRight,
         setActiveTool,
         renderOverlays,
-        generateThumbnails,
+        regenerateAllThumbnails,
         // Expose state for Session 2 drawing tools
         _state: state,
     };

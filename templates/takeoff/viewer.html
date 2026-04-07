@@ -21,8 +21,8 @@
 {% endblock %}
 
 {% block content %}
-<!-- Embedded data (XSS-safe) -->
-<script id="tk-plans-data" type="application/json">{{ plans_json | safe }}</script>
+<!-- Embedded data — tojson escapes HTML chars; parsed by takeoff.js on init -->
+<script id="tk-plans-data" type="application/json">{{ plans_data | tojson }}</script>
 <script id="tk-project-id" type="application/json">{{ project.id }}</script>
 
 <div id="takeoff-app">
@@ -192,7 +192,25 @@
                 <input type="text" id="tk-page-search" class="tk-search-input"
                        placeholder="Search sheets…" oninput="TK.filterPages(this.value)">
             </div>
-            <div id="tk-page-list" class="tk-scroll-list"></div>
+            <!-- Server-pre-rendered sidebar: visible instantly, JS binds clicks on init -->
+            <div id="tk-page-list" class="tk-scroll-list">
+                {% for plan in plans_data %}
+                <div class="plan-header" data-plan-id="{{ plan.id }}">{{ plan.original_filename }}</div>
+                {% for page in plan.pages %}
+                <div class="page-thumb-item"
+                     data-plan-id="{{ plan.id }}"
+                     data-page-id="{{ page.id }}"
+                     data-page-number="{{ page.page_number }}">
+                    <div class="thumb-wrapper">
+                        <img class="page-thumb-img" src=""
+                             alt="Page {{ page.page_number }}"
+                             style="width:100%;background:#252B33;min-height:80px;display:block;">
+                    </div>
+                    <span class="page-thumb-name">{{ page.page_name }}</span>
+                </div>
+                {% endfor %}
+                {% endfor %}
+            </div>
 
             <div class="tk-bookmarks-section">
                 <div class="tk-section-label">BOOKMARKS</div>

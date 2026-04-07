@@ -65,19 +65,21 @@ def viewer(project_id):
 
     plans_data = []
     for plan in plans:
+        # Explicit query (not plan.pages relationship) to guarantee correct results
+        pages = (TakeoffPage.query
+                 .filter_by(plan_id=plan.id)
+                 .order_by(TakeoffPage.page_number)
+                 .all())
         pages_data = [
             {
                 'id': p.id,
                 'page_number': p.page_number,
                 'page_name': p.page_name,
-                'thumbnail_url': (
-                    '/static/' + p.thumbnail_path.replace('\\', '/')
-                    if p.thumbnail_path else None
-                ),
+                'thumbnail_url': None,   # always None — rendered client-side by PDF.js
                 'scale_set': p.scale_pixels_per_foot is not None,
                 'scale_method': p.scale_method,
             }
-            for p in plan.pages
+            for p in pages
         ]
         plans_data.append({
             'id': plan.id,
@@ -89,8 +91,7 @@ def viewer(project_id):
     return render_template(
         'takeoff/viewer.html',
         project=project,
-        plans=plans_data,
-        plans_json=json.dumps(plans_data),
+        plans_data=plans_data,
     )
 
 
