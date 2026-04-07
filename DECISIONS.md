@@ -691,6 +691,41 @@ Need to know how many pages a PDF has immediately on upload, so the server can c
 
 ---
 
+## ADR-018: Vendor Critical JS Dependencies Locally
+
+**Date:** 2026-04-07 (Session 19)
+**Status:** Accepted
+
+### Context
+After migrating to Konva.js, the CDN URL (`cdnjs.cloudflare.com`) proved unreliable when loaded from the DigitalOcean droplet in production — the script failed to load, causing "Konva is not defined" errors. PDF.js loads fine because browsers (not the server) fetch it; Konva was previously loaded server-side during SSR testing and also blocked in certain network paths.
+
+### Decision
+Vendor Konva.js locally at `static/js/konva.min.js`. Load it with a direct `<script src="/static/js/konva.min.js">` tag. PDF.js remains on CDN because it is always fetched by the browser, not the server.
+
+### Rationale
+- CDN unreliability from DigitalOcean is a known issue (certain outbound HTTP blocked)
+- Local serving is 100% reliable regardless of CDN availability or network path
+- File size (~171 KB) is acceptable for a single vendored dependency
+- Browser still loads PDF.js from CDN — zero server-side fetch involved
+
+### Consequences
+**Positive:**
+- Konva loads reliably on every page visit regardless of CDN status
+- No dependency on third-party CDN availability for core canvas functionality
+- Can pin exact version without CDN cache surprises
+
+**Negative:**
+- Repo is ~171 KB larger
+- Must manually update `konva.min.js` when upgrading Konva version
+
+**Neutral:**
+- PDF.js still via CDN (browser fetch — not affected by server network restrictions)
+- `static/uploads/` gitignored separately; only `static/js/` vendored files are committed
+
+**Related Files:** `static/js/konva.min.js`, `templates/takeoff/viewer.html`
+
+---
+
 ## 📝 ADR Template
 
 Use this template for new decisions:

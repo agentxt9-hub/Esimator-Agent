@@ -431,70 +431,77 @@ Sliding panel (fixed right, 400px wide) available on every app page. `Templates/
 
 ## Takeoff Module
 
-Added Session 18 (2026-04-06). Blueprint-based, registered at bottom of `app.py`.
+Added Session 18 (2026-04-06), migrated to Konva.js Session 19 (2026-04-07).
+Blueprint-based, registered at bottom of `app.py`.
 
 ### Architecture
 
 | Aspect | Detail |
 |--------|--------|
 | Blueprint | `takeoff_bp` in `routes_takeoff.py`, registered in `app.py` after all models |
-| Route prefix | `/project/<project_id>/takeoff/...` (no URL prefix on blueprint — full paths in routes) |
-| Template | `templates/takeoff/viewer.html` — extends `app_base.html`, overrides `.app-content` padding to 0 |
-| CSS | `static/css/takeoff.css` — three-panel layout using CSS vars, never hardcoded hex |
-| JS | `static/js/takeoff.js` — PDF viewer, pan/zoom, item CRUD, thumbnail generation |
+| Route prefix | `/project/<project_id>/takeoff` |
+| Route file | `routes_takeoff.py` |
+| Template | `templates/takeoff/viewer.html` — extends `app_base.html` |
+| CSS | `static/css/takeoff.css` — three-panel layout using CSS vars |
+| JS | `static/js/takeoff.js` — Konva stage, PDF viewer, pan/zoom, item CRUD, thumbnails |
 
 ### Database tables
 
 | Table | Purpose |
 |-------|---------|
-| `takeoff_plans` | One record per uploaded PDF; filename, original_filename, page_count, uploaded_by |
-| `takeoff_pages` | One record per PDF page; `thumbnail_path=None` always (thumbnails rendered client-side) |
+| `takeoff_plans` | Uploaded PDF plan sets; filename, original_filename, page_count; company_id isolated |
+| `takeoff_pages` | One record per page; `thumbnail_path=None` always (thumbnails rendered client-side) |
 | `takeoff_items` | Measurement type definitions: name, color, opacity, measurement_type, assembly_notes |
-| `takeoff_measurements` | Point coordinates (JSON) + calculated values; FK→item + page |
+| `takeoff_measurements` | Normalized point coords (JSON) + calculated values; FK→item + page |
 
-All cascade deletes handled in Python via SQLAlchemy `cascade='all, delete-orphan'` — no `ON DELETE CASCADE` in DB.
+All cascade deletes handled in Python — no `ON DELETE CASCADE` in DB.
 
 ### File storage
 
 | Asset | Location |
 |-------|----------|
 | Uploaded PDFs | `static/uploads/takeoff/<project_id>/<uuid>_<filename>.pdf` |
-| Thumbnails | **Not stored** — rendered client-side by PDF.js on each session load |
+| Thumbnails | **Not stored** — rendered client-side by PDF.js each session |
 
-### Key technical decisions
+`static/uploads/` is gitignored — never commit uploads.
 
-**PDF.js handles all rendering.** Server never processes pixel data. `PyMuPDF` (`fitz`) is called only once per upload to get `len(doc)` (page count), then immediately closed.
+### Canvas architecture
 
-**CSS transform pan/zoom.** All pan and zoom manipulates `transform` on a `#canvas-inner` wrapper div. PDF.js decodes the page once at `baseRenderScale: 2.0` (retina quality). Quality re-render fires only after 600 ms idle (offscreen canvas, then atomic swap via `requestAnimationFrame`).
+- **Konva.js 9.3.6** served locally at `static/js/konva.min.js` (CDN unreliable from DigitalOcean droplet)
+- **Three layers**: `pdfLayer` (Konva.Image), `measureLayer` (Session 2 shapes), `uiLayer` (handles/labels)
+- **PDF.js 3.11.174** via CDN — handles all PDF decoding in the browser
+- Thumbnails rendered client-side by PDF.js at `scale: 0.15`
+- `state.screenToPDF(x, y)` converts stage pointer coords → PDF-space coords (for Session 2 tools)
 
-**Smooth wheel zoom.** `Math.pow(0.999, e.deltaY)` gives continuous zoom factor — much smoother on trackpads than discrete 0.9/1.1 steps.
+### Key technical facts
 
-**Pan is RAF-batched.** `mousemove` accumulates deltas; `requestAnimationFrame` applies them — caps at 60fps regardless of mouse polling rate.
+- PyMuPDF (`fitz`) used **only** for page count on upload: `len(doc)` then `doc.close()`. No pixel data.
+- All image rendering is client-side — server never processes pixels
+- Konva pan/zoom is native: `stage.draggable: true` + wheel scale handler
+- PDF re-renders at 2× scale (`RENDER_SCALE = 2.0`) on page load via PDF.js offscreen canvas → `Konva.Image`
+- `loadPDF(planId)` loads the PDF.js document; `loadPage(pageId, pageNum, planId)` is the page navigation entry point
 
-**Auto zoom-to-fit on load.** `loadPDF()` calls `getViewport({scale: 1.0})` to get natural PDF dimensions before rendering, computes fit zoom, centers, then renders once at the correct zoom. No second render needed.
-
-### Dependencies added (Session 18)
+### Dependencies
 
 | Package | Use |
 |---------|-----|
-| `PyMuPDF>=1.24.0` | Page count only on upload (`fitz.open` → `len(doc)` → `doc.close()`) |
+| `PyMuPDF==1.24.0` | Page count only on upload |
+| Konva 9.3.6 (local `static/js/konva.min.js`) | Canvas stage, layers, pan/zoom, hit detection |
 | PDF.js 3.11.174 (CDN) | All PDF rendering — thumbnails + main canvas viewer |
-
-`pdf2image` and `Pillow` were evaluated and rejected (server OOM on large drawing sets — see ADR-013).
 
 ### Multi-tenant security
 
 Every takeoff route double-checks company ownership:
-- `get_project_or_403(project_id)` from `app.py` — project belongs to current user's company
+- `get_project_or_403(project_id)` — project belongs to current user's company
 - `_get_plan_or_403(plan_id)` — `plan.company_id == current_user.company_id`
 - `_get_item_or_403(item_id)` — `item.company_id == current_user.company_id`
 
-### Session 19 hooks (drawing tools — not yet built)
+### Session 2 hooks (drawing tools — not yet built)
 
-The following stubs exist for Session 19:
-- `renderOverlays()` — `// Session 19: draw measurements on current page here`
-- `saveScale()` — `// Session 19: persist to TakeoffPage via PATCH/PUT route`
-- `state.activeTool` — tracks active drawing tool; toolbar buttons wired; canvas operations not yet implemented
+- `state.activeTool` — tracks active drawing tool; toolbar buttons wired; canvas ops not yet implemented
+- `state.screenToPDF(x, y)` — coordinate converter exported on `state` for drawing tools to use
+- `measureLayer` — Konva layer ready to receive `Konva.Shape` objects for each measurement
+- `saveScale()` — stub; Session 2 will persist to `TakeoffPage` via API route
 
 ---
 
@@ -631,6 +638,7 @@ python app.py
 | 16 | 2026-03-18 | Fixed ZEN BID wordmark gap (flex issue). Navbar/login CTAs → Join Waitlist. Footer links de-linked (placeholder pages not yet built). Mobile responsive pass on base.html + landing.html. |
 | 17 | 2026-03-21 | NORTHSTAR.md updates, SECURITY.md framework added, Zenhub naming conventions, n8n webhook integration for waitlist. |
 | 18 | 2026-04-06 | **Takeoff module foundation**: 4 new DB tables, Blueprint (routes_takeoff.py), three-panel viewer (viewer.html), PDF upload with PyMuPDF page count, client-side thumbnails via PDF.js, CSS transform pan/zoom (offscreen RAF swap, continuous wheel factor, 600ms debounce), takeoff item CRUD, status bar, keyboard shortcuts, test_takeoff.py (31/31 passing). |
+| 19 | 2026-04-07 | **Konva.js migration + bug fixes**: Replaced raw canvas + CSS transforms with Konva.js 3-layer stage (`pdfLayer`, `measureLayer`, `uiLayer`). Fixed black canvas (loadPDF/loadPage separation), missing thumbnails (abort guard), plans disappearing on refresh (explicit TakeoffPage query, server-side sidebar pre-render). Konva vendored locally after CDN unreliable on DO. `static/uploads/` gitignored. |
 
 ---
 

@@ -80,42 +80,46 @@
 
 ## 📐 TAKEOFF MODULE
 
-### Session 18 — Foundation (2026-04-06) ✅ Complete
+### Session 1 — Foundation ✅ Complete
 
-- [x] PDF plan upload (instant, no server-side image processing)
+- [x] PDF plan upload (instant, any size)
 - [x] Multi-page PDF support
-- [x] Page thumbnail sidebar (client-side PDF.js rendering, pulse skeleton while loading)
-- [x] PDF viewer with pan/zoom (CSS transform, smooth 60fps, retina quality on zoom end)
-- [x] Three-panel layout (sheets sidebar, canvas, takeoffs sidebar)
-- [x] Takeoff item CRUD (create with color/opacity/type/notes, delete via modal)
-- [x] Status bar (live coordinates, zoom %, scale indicator)
-- [x] Keyboard shortcuts (F=fit, Space=pan, arrows=page nav, Esc=select tool)
-- [x] Auto zoom-to-fit on initial PDF load
-- [x] Touch support (single-finger pan, pinch-to-zoom)
-- [x] Integration test suite (test_takeoff.py — 31/31 passing)
+- [x] Client-side thumbnail generation (PDF.js)
+- [x] Konva.js canvas (smooth 60fps pan/zoom)
+- [x] Three-panel layout (sheets, canvas, takeoffs)
+- [x] Takeoff item CRUD
+- [x] Status bar with coordinates and zoom
+- [x] Keyboard shortcuts (F=fit, Space=pan, arrows=nav)
+- [x] Multi-tenant security (company_id isolation)
+- [x] Auto-load first page on viewer open
 
-### Session 19 — Drawing Tools (UP NEXT)
+### Session 2 — Drawing Tools (UP NEXT)
 
-- [ ] Scale calibration tool (click two points on drawing, enter known distance)
-- [ ] Linear measurement tool (polyline, returns LF)
-- [ ] Area measurement tool (polygon, returns SF)
-- [ ] Count tool (click to place markers, returns EA)
-- [ ] Segment tool (separate line segments)
-- [ ] Overlay rendering (colored shapes drawn on overlay canvas)
-- [ ] Scale persistence (PATCH /project/<id>/takeoff/page/<page_id>/scale)
-- [ ] Properties panel (slide-in, edit item color/opacity/notes inline)
-- [ ] Floating on-plan data table (totals by item for current page)
-- [ ] Contextual toolbar behavior (active tool state, undo last point)
+- [ ] Scale calibration tool (manual)
+- [ ] Linear measurement tool (LF)
+- [ ] Area measurement tool (SF)
+- [ ] Count tool
+- [ ] Overlay rendering on Konva measureLayer
+- [ ] Properties panel (slide-in)
+- [ ] Floating on-plan data table
+- [ ] Contextual toolbar
 
 ---
 
 ## ✅ SHIPPED (Recent Sessions)
 
+### Session 19 (2026-04-07)
+- ✅ Konva.js migration — 3-layer stage (pdfLayer, measureLayer, uiLayer)
+- ✅ Fixed black canvas: loadPDF/loadPage separation with null guards
+- ✅ Fixed missing thumbnails: abort guard on plan change mid-generation
+- ✅ Fixed plans disappearing on refresh: server-side sidebar pre-render, explicit TakeoffPage query
+- ✅ Konva vendored locally (static/js/konva.min.js) — CDN unreliable on DO
+- ✅ static/uploads/ gitignored
+
 ### Session 18 (2026-04-06)
 - ✅ Takeoff module foundation — 4 DB tables, Blueprint, three-panel viewer
 - ✅ PDF upload (instant, PyMuPDF page count only, no image processing)
 - ✅ Client-side thumbnails via PDF.js (zero server memory)
-- ✅ CSS transform pan/zoom — offscreen canvas swap, RAF pan, continuous wheel factor
 - ✅ Takeoff item CRUD (create/delete with color, opacity, measurement type)
 - ✅ test_takeoff.py — 31/31 integration tests passing
 
