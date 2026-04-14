@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
-**Last updated:** 2026-03-21
+**Last updated:** 2026-04-13
 
 > Full reference: see `Agent_MD.md` for complete architecture, routes, session history, and roadmap.
 
@@ -111,7 +111,9 @@ Zenhub — Internal growth and automation infrastructure. All services run via D
 
 ## Architecture
 
-Single-file Flask app (`app.py`, ~3450 lines) + Jinja2 templates in `templates/` (lowercase — required for Linux case-sensitivity). Vanilla JS + `fetch()`. No frontend framework. No test suite.
+Single-file Flask app (`app.py`, ~3500+ lines) + `routes_takeoff.py` (Takeoff Blueprint) + Jinja2 templates in `templates/` (lowercase — required for Linux case-sensitivity). Vanilla JS + `fetch()` for most surfaces. TanStack Table v8 (React via CDN + Babel Standalone) for the estimate grid.
+
+**Test suites:** `test_takeoff.py` (99/99), `tests/test_estimate_table.py` (29/29).
 
 **Two template bases:**
 - `templates/base.html` — marketing site (light theme, public)
@@ -124,17 +126,19 @@ Single-file Flask app (`app.py`, ~3450 lines) + Jinja2 templates in `templates/`
 - Marketing light (nav): mark with dark bars + `ZEN` dark + `BID` coral
 - Footer (dark bg): mark with light bars + `ZEN` white + `BID` coral
 
-**Key models** (all in `app.py`):
+**Key models** (all in `app.py` except Takeoff models in `routes_takeoff.py`):
 - `Company` / `User` — multi-tenant auth (Flask-Login); User has `reset_token` + `reset_token_expires`
 - `CSILevel1` / `CSILevel2` — read-only CSI hierarchy (seeded, never alter)
 - `Project` → `Assembly` → `LineItem` — core estimating hierarchy
+- `LineItem` — extended Session 22: `ai_generated`, `estimator_action`, `edit_delta`, `ai_status`, `ai_confidence`, `ai_note`, `is_deleted`, `company_id`, `phase`, `csi_division` (flywheel + TanStack fields)
 - `AssemblyComposition` — FK→assembly + library_item; formula-driven quantities
 - `LibraryItem` — company-scoped reusable item definitions
 - `Assembly.is_template = True` — marks assemblies as global templates
 - `WBSProperty` / `WBSValue` / `LineItemWBS` — project-scoped work breakdown structure
 - `ProductionRateStandard` — global (no company_id) reference rates; seeded at startup
 - `WaitlistEntry` — email + first name + created_at; unique email constraint
-- `WaitlistSurvey` — FK→WaitlistEntry; comma-separated response keys (speed/ai/pricing/structure/team)
+- `WaitlistSurvey` — FK→WaitlistEntry; comma-separated response keys
+- `TakeoffPlan` / `TakeoffPage` / `TakeoffItem` / `TakeoffMeasurement` — in `routes_takeoff.py`; company_id isolated
 
 **Schema migrations:** Always extend `run_migrations()` with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Never drop/recreate tables.
 
@@ -170,9 +174,9 @@ Parsed in JS: `JSON.parse(document.getElementById('my-data').textContent)` — X
 
 **Cascade delete:** Python only — no `ON DELETE CASCADE` in DB.
 
-**`CSI_COLORS` dict:** defined in `app.py` module level AND duplicated in `estimate.html` JS — keep both in sync.
+**`CSI_COLORS` dict:** defined in `app.py` module level AND duplicated in `estimate_table.js` — keep both in sync. (`estimate.html` is now orphaned; `estimate_table.js` is the canonical JS.)
 
-**No Jinja tags in `agentx_panel.html`** — pure HTML/JS partial.
+**No Jinja tags in `agentx_panel.html`** — pure HTML/JS partial. (Retirement planned in Pass 3.)
 
 **Datetime:** `datetime.now(timezone.utc)` — never `datetime.utcnow()`.
 
@@ -195,50 +199,54 @@ Parsed in JS: `JSON.parse(document.getElementById('my-data').textContent)` — X
 
 | Gap | Priority |
 |-----|----------|
-| Privacy Policy & Terms — placeholder routes needed | CRITICAL |
-| ANTHROPIC_API_KEY needs server verification | CRITICAL |
-| Smoke test waitlist flow + micro-survey on production (check DB entries) | High |
-| Welcome email on signup | High |
+| Privacy Policy & Terms — placeholder routes | CRITICAL |
+| ANTHROPIC_API_KEY startup validation missing | CRITICAL |
+| SSL certificate status unconfirmed | CRITICAL |
 | Proposal route not using `get_project_or_403()` | High |
+| Welcome email on signup | High |
 | Edit project fields UI (city/state/zip/type/sector) | High |
 | Viewer role not enforced on write routes | Medium |
-| WBS/rate features not live-tested post-deploy | Medium |
-| AgentX AI panel not live-tested post-deploy | Medium |
+| Legacy estimate table in `project.html` (deprecated, retire in Pass 3) | Medium |
+| `agentx_panel.html` still live (retire in Pass 3) | Low |
 
-## Next Session Queue (Session 17)
+## Next Sessions — Four-Pass Sequence
 
-1. **Smoke test waitlist** — check DB entries on server, confirm micro-survey saving
-2. **Welcome email** — add `mail.send()` in `/signup` route (flask-mail already wired)
-3. **Privacy Policy & Terms pages** — build minimal real pages (not plain text 404s)
-4. **Proposal route fix** — swap `Project.query.get()` → `get_project_or_403()`
-5. **Edit project fields UI** — add city/state/zip/type/sector to Edit Project modal
+Full scope: see `FEATURE_ROADMAP.md`.
+
+- **Pass 2:** 90-Second Confidence Study — zzTakeoff walkthrough, upload→scale→measurement punch list
+- **Pass 3:** Bridge + Table Migration — TanStack canonical, legacy retired, AgentX purged, measurement link, dual-costing expandable row, Tally stub hooks
+- **Pass 4:** Tally Intelligence Wiring — Passive/Reactive/Generative backend
 
 ---
 
 ## Session History (condensed)
 
+**Session 22 — 2026-04-07**
+- TanStack Table v8 estimate grid: `estimate_table.html`, `estimate_table.js`, `estimate_table.css`
+- LineItem model extended with flywheel fields + TanStack columns; 4 API routes; 29/29 tests
+- `/project/<id>/estimate` route now serves `estimate_table.html` (canonical); `estimate.html` orphaned
+- ADR-021 added; Tally footer banner rendered in grid
+
+**Session 21 — 2026-04-07**
+- Takeoff polish (Session 2 complete): ARCH_SCALES labels, ortho mode, close-polygon, Start button, Ortho/Snap toggles, page rename, area SF+FT panel; 99/99 tests
+
+**Session 20 — 2026-04-07**
+- Takeoff drawing tools: scale calibration, linear/area/count tools, renderMeasurements(), properties panel, project-level totals; 7 new API routes
+
+**Session 19 — 2026-04-07**
+- Konva.js migration: 3-layer stage (pdfLayer, measureLayer, uiLayer). Fixed black canvas, missing thumbnails, plans disappearing. Konva vendored locally.
+
+**Session 18 — 2026-04-06**
+- Takeoff module foundation: 4 DB tables, Blueprint (`routes_takeoff.py`), three-panel viewer, PDF upload (PyMuPDF page count only), client-side thumbnails, item CRUD; 31/31 tests
+
+**Session 17 — 2026-03-21**
+- NORTHSTAR.md updates, SECURITY.md framework added, Zenhub naming, n8n webhook for waitlist
+
 **Session 16 — 2026-03-18**
-- Fixed `ZENBID` wordmark gap: wrapped `ZEN<span>BID</span>` in outer `<span>` so flex `gap: 10px` only separates SVG mark from text, not ZEN from BID — fixed in 7 templates + CSS updated to `.bid-accent` class
-- Navbar "Join Waitlist" button white font fix: added `.navbar-links a.btn-primary { color: white }` to override `.navbar-links a` color
-- All "Start Free Trial" CTAs → "Join Waitlist" → `/waitlist` (navbar, landing hero, landing CTA section)
-- Login page "Sign up" link → "Join the waitlist" → `/waitlist`
-- Footer: removed `<a>` tags from 7 placeholder links (About/Blog/Careers/Contact/Privacy/Terms/Security) — text only until pages are built
-- Pushed previously uncommitted waitlist work: `app.py` routes + models, `waitlist.html`, `pricing.html` CTA updates
-- Mobile responsive pass on `base.html`: hamburger menu, footer 2-col on mobile, banner text wrap fix
-- Mobile responsive pass on `landing.html`: hero stacks, hide app mockup, features/testimonials/pricing 1-col, CTA buttons stack
+- Fixed ZENBID wordmark gap (flex issue). Navbar/login CTAs → "Join Waitlist". Footer links de-linked. Mobile responsive pass on base.html + landing.html.
 
 **Session 15 — 2026-03-18**
-- Logo wordmark updated to all-caps `ZENBID` (one word) across all 7 locations: sidebar, marketing nav, footer, login, signup, forgot password, reset password, landing hero mockup
-- Added dismissible waitlist banner to `base.html` (dark navy + coral, above navbar, localStorage dismiss)
-- Pricing page: all 3 tier CTA buttons → "Join Waitlist" → `/waitlist`
-- Built full waitlist flow: `GET/POST /waitlist`, `WaitlistEntry` model, `waitlist.html` (first name required + email)
-- Post-submit micro-survey: 5 checkbox options, stores to `WaitlistSurvey` via `POST /waitlist/survey` (fetch, non-blocking)
-- Both new DB tables auto-created via `run_migrations()` on deploy
-- Promotion readiness audit: identified 4 high-priority items for Session 16 (see Known Gaps)
+- ZENBID wordmark (all-caps) across 7 locations. Waitlist flow (WaitlistEntry + WaitlistSurvey). Dismissible waitlist banner. Pricing CTAs → Join Waitlist.
 
 **Session 14 — 2026-03-18**
-- Fixed `Templates/` → `templates/` case-sensitivity in git (Linux was seeing two separate dirs)
-- Fixed stale DB connections: added `pool_pre_ping=True` to SQLAlchemy config
-- Set up SendGrid: verified sender `thomas@zenbid.io`, `MAIL_USERNAME=apikey`, `MAIL_PORT=2525` (587 blocked by DO)
-- Forgot password + reset email flow confirmed working end-to-end
-- Concept C logo (SVG mark + ZENBID wordmark) deployed to production
+- `Templates/` → `templates/` case-sensitivity fix in git. `pool_pre_ping=True`. SendGrid confirmed working (MAIL_PORT=2525). Concept C logo deployed.

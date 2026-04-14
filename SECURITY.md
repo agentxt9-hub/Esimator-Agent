@@ -22,7 +22,7 @@ No single security control is sufficient. Layer authentication + authorization +
 A company's data must never be accessible by another company's users — not by accident, not by URL manipulation, not by any means. Every DB query that touches tenant data must include a `company_id` filter or go through an `_or_403()` helper. This is the single most important invariant in the system.
 
 ### 4. AI Actions Require Human Authorization
-The AI layer (AgentX / Claude API) may suggest, propose, and draft — but it must never autonomously modify estimate data, user records, or financial figures without an explicit user action. The `apply` step is mandatory and must never be bypassed.
+The AI layer (Tally / Claude API) may suggest, propose, and draft — but it must never autonomously modify estimate data, user records, or financial figures without an explicit user action. The `apply` step is mandatory and must never be bypassed.
 
 ### 5. Inputs Are Untrusted Until Validated
 All user input — form fields, URL parameters, JSON payloads, AI-generated content, file uploads — is untrusted until explicitly validated server-side. Client-side validation is UX convenience only. Never rely on it for security.
@@ -341,12 +341,14 @@ These rules govern how Claude Code is used to build Zenbid itself — separate f
 - Claude Code generated migrations must be tested in local dev before running on production.
 - The `CLAUDE.md` file must be kept current so Claude Code always has the correct security context.
 
-### Principles for AgentX (In-App AI Features)
-- AgentX may read project data to build context for responses.
-- AgentX may propose changes via `write_proposal` JSON blocks.
-- AgentX must never directly write to the database. All writes go through the `/ai/apply` route which validates company ownership before applying.
+### Principles for In-App AI Features (Tally / `/ai/*` routes)
+- The AI layer may read project data to build context for responses.
+- The AI layer may propose changes via `write_proposal` JSON blocks.
+- The AI layer must never directly write to the database. All writes go through the `/ai/apply` route which validates company ownership before applying.
 - The `allowed` fields whitelist in `/ai/apply` is a security control — it must be reviewed when new fields are added to models.
 - AI-generated content inserted into estimates must be treated as user input for XSS purposes (escaped by Jinja, not rendered as HTML).
+
+> **Note:** The "AgentX" panel UI is scheduled for retirement in Pass 3. The `/ai/*` routes and their security requirements are unchanged — only the UI entry point changes. This section governs the routes, not the panel name.
 
 ---
 
@@ -356,12 +358,14 @@ These are known issues pulled from the codebase audit. They are ordered by prior
 
 ### CRITICAL — Block on Beta Launch
 
-| # | Issue | Location | Remediation |
-|---|-------|----------|-------------|
-| C-1 | No HTTPS / SSL certificate | Nginx config, DigitalOcean | Install Let's Encrypt cert via Certbot; configure Nginx HTTP→HTTPS redirect |
-| C-2 | Privacy Policy route returns placeholder | `/privacy` route | Implement real Privacy Policy page before any paying user |
-| C-3 | Terms of Service route returns placeholder | `/terms` route | Implement real Terms of Service page before any paying user |
-| C-4 | `ANTHROPIC_API_KEY` not verified at startup | `app.py` | Add startup validation — fail fast with clear error if key is missing or default |
+> **Status as of 2026-04-13:** All four Critical items remain unresolved.
+
+| # | Issue | Location | Status | Remediation |
+|---|-------|----------|--------|-------------|
+| C-1 | No HTTPS / SSL certificate | Nginx config, DigitalOcean | ⚠️ Site operational but HTTPS unconfirmed | Install Let's Encrypt cert via Certbot; configure Nginx HTTP→HTTPS redirect |
+| C-2 | Privacy Policy route returns placeholder | `/privacy` route | ❌ Open | Implement real Privacy Policy page before any paying user |
+| C-3 | Terms of Service route returns placeholder | `/terms` route | ❌ Open | Implement real Terms of Service page before any paying user |
+| C-4 | `ANTHROPIC_API_KEY` not verified at startup | `app.py` | ❌ Open | Add startup validation — fail fast with clear error if key is missing or default |
 
 ### HIGH — Resolve Before First Paying Customer
 

@@ -1,55 +1,87 @@
 # Zenbid — Northstar Document
 **Purpose:** Foundational philosophy and feature architecture. Every design decision, feature build, and UI choice should be evaluated against this document.
 
+**Last updated:** 2026-04-13
+
+> Full AI intelligence specification: see `TALLY_VISION.md`.  
+> Architecture decisions with rationale: see `DECISIONS.md`.
+
 ---
 
 ## PART 1: PHILOSOPHY & ARCHITECTURE FRAMEWORK
 
 ### Problem Statement
 
-The construction estimating industry faces a generational divide. Experienced estimators possess deep domain knowledge but are locked into rigid Excel workflows and legacy software (Sage, Timberline, DESTINI) that enforce a single mental model. Newer estimators and less-seasoned staff lack institutional knowledge—they struggle to replicate complex templates, miss critical line items, and have no framework for thinking beyond the spreadsheet. Meanwhile, the industry's shift toward AI-native workflows creates an opportunity to serve both mindsets simultaneously.
+The construction estimating industry faces a generational divide. Experienced estimators possess deep domain knowledge but are locked into rigid Excel workflows and legacy software (Sage, Timberline, DESTINI) that enforce a single mental model. Newer estimators and less-seasoned staff lack institutional knowledge — they struggle to replicate complex templates, miss critical line items, and have no framework for thinking beyond the spreadsheet. Meanwhile, the industry's shift toward AI-native workflows creates an opportunity to serve both mindsets simultaneously.
 
 ### Strategic Positioning
 
-Zenbid bridges this gap by offering dual-natured estimating: a tool that is simultaneously rigid enough to feel familiar and flexible enough to accommodate different thinking styles, with an optional AI layer that augments human judgment rather than replacing it.
+Zenbid bridges this gap with a seamless **Takeoff → Estimate → Proposal** workflow. Takeoff is not a bolt-on module — it is the first impression. After the first 90 seconds on the canvas, Zenbid must diverge sharply from generic takeoff tools. The moat is direct measurement-to-line-item flow, Tally intelligence over the top, and dual costing in a single grid. No other construction estimating tool does this natively.
 
 ---
 
-### Core Philosophy
+### Core Product Principles
 
-**1. Flexibility Over Dogma**
-Users should never feel constrained by the tool's structure. You want your assemblies grouped by floor? Group by floor. You want to reorganize the estimate by trade instead of CSI? Do it. You want to manually build line items one-by-one like an Excel sheet? That option exists. The tool adapts to the user's mental model, not the reverse.
+**1. The Journey is Takeoff → Estimate → Proposal**
+Every feature decision is evaluated against whether it makes this journey faster, more confident, or more seamless. No seams. No context switches. All three surfaces feel like one product.
 
-**2. AI as Optional Augmentation, Not Required Intelligence**
-The AI layer (Ollama + local LLM) is always available but never mandatory. A user should be able to build a complete, professional estimate without asking the AI a single question. But when they do ask—"How many sheets of drywall in this wall?" or "What's typical for painting costs in this region?"—the AI handles the research, calculation, and reasoning behind the scenes, transparently. No formulas to maintain. No breakage.
+**2. The 90-Second Confidence Moment**
+Upload PDF, set scale, land first measurement. That is the product's first impression. Those 90 seconds must be flawless. After the first measurement lands, Zenbid diverges from zzTakeoff and similar tools — the moat is the direct measurement→estimate flow that their architectures cannot replicate.
 
-**3. Predictable Output, Unpredictable Process**
-No matter how flexibly a user navigates the tool—whether they build rigid assemblies, freestyle line items, or hybrid approaches—the backend delivers consistent, professional reports. Material totals, labor hours, CSI-grouped summaries, assembly breakdowns. The rigor is in the output, not the input process.
+**3. The Estimator Always Owns the Estimate — Tally is a Collaborator**
+Zenbid makes estimators more efficient and smarter about what's in a job. It builds confidence. It does not trigger AI fear. Tally handles quantification labor so the estimator focuses on judgment. The estimator always owns the estimate — AI is optional, never mandatory, and never silent. This is the message that converts seasoned estimators, who are the hardest conversion.
 
-**4. Institutional Knowledge at Your Fingertips**
-Younger or less-seasoned estimators often don't know what they don't know. AI recommendations ("You've got drywall but no paint. Standard practice?") or intelligent line item suggestions ("Typical assemblies for this wall type include...") level the playing field without condescension. Over time, machine learning can learn from project patterns and offer increasingly smart suggestions.
+**4. Pricing Flexibility Is a Flywheel Strategy**
+Two costing paradigms are equal, and both live in the same grid:
 
-**5. Generational Inclusivity**
-The tool must work for the 60-year-old estimator who thinks in Excel and wants predictability, and the 28-year-old who thinks in AI-assisted workflows and values flexibility. Same tool, different interfaces, same solid output.
+- **Unit cost** — `qty × unit_cost = line_total`. For trades that bid flat unit prices (doors, frames, hardware, fixtures, specialty items).
+- **Assembly build-up** — `qty + production_rate + labor_rate + material_rate → computed unit_cost → line_total`. For labor-heavy trades that think in production rates (drywall, framing, concrete, painting, flooring).
+
+Not primary/secondary. Not a mode switch. Both render in the same table, line by line. The grid validates a line as complete if **either** path resolves to a `line_total`.
+
+The causal chain: flexibility → trade breadth → real market data → GC-grade cost intelligence competitive with RSMeans. Unit-cost-only strands half the trades. Assembly-only strands the other half. Assembly build-up is also retention: an estimator who builds a burden-loaded assembly in Zenbid is not going back to Excel.
+
+**5. Takeoff↔Estimate Link: One-Way Source-of-Truth with Traceability**
+Measurement is the source of truth. Measurement qty flows into `line_item.qty` on link. `line_item.qty` can diverge (waste factor, rounding, estimator judgment). Editing a line item qty does **not** silently rewrite the measurement. The UI surfaces divergence so the estimator knows the grid and the drawing no longer match. No live bidirectional sync — ever.
+
+**6. Tally Wraps Every Surface**
+Tally is not a separate product. It is the intelligence layer of the product. Every surface — Takeoff, Estimate, Proposal — gets Tally entry points. Tally operates in three modes:
+- **Passive** — always watching, surfaces observations without interrupting
+- **Reactive** — on-demand Q&A and reports, scoped to current estimate data
+- **Generative** — natural-language line item creation, accessed from an explicit user action, never auto-triggered
+
+See `TALLY_VISION.md` for full specification. Every surface gets Tally stub hooks in Pass 3; intelligence is wired in Pass 4.
+
+**7. Flexibility Over Dogma**
+Users should never feel constrained by the tool's structure. Want assemblies grouped by floor? Fine. Reorganize by trade instead of CSI? Fine. Build line items one-by-one like an Excel sheet? That option always exists. The tool adapts to the user's mental model, not the reverse.
+
+**8. Institutional Knowledge at Your Fingertips**
+Junior or less-seasoned estimators often don't know what they don't know. Tally's Passive mode surfaces scope gaps, production rate deviations, and pricing drift automatically — without condescension. Over time, the flywheel accumulates real market data that becomes the foundation for a Cost Intelligence tier comparable to RSMeans but continuously updated.
+
+**9. Predictable Output, Unpredictable Process**
+No matter how flexibly a user navigates the tool — assembly builder, freestyle line items, or hybrid — the backend delivers consistent, professional reports: material totals, labor hours, CSI-grouped summaries, assembly breakdowns. The rigor is in the output, not the input process.
+
+**10. Generational Inclusivity**
+Works for the 60-year-old estimator who thinks in Excel and wants predictability, and the 28-year-old who thinks in AI-assisted workflows and values flexibility. Same tool, different interfaces, same solid output.
 
 ---
 
 ### Architectural Principles
 
 **1. Modularity**
-Assembly builder, estimate spreadsheet, line item library, reporting engine—each operates independently but flows seamlessly together.
+Assembly builder, estimate grid, takeoff canvas, reporting engine — each operates independently but flows seamlessly together.
 
 **2. Non-Destructive Flexibility**
 Users can reorganize, re-group, re-tag line items without losing source data or calculation integrity.
 
 **3. Transparent AI**
-When the AI provides an answer or recommendation, show the reasoning. "Paint recommendation: industry standard is 2 coats after drywall taping/finishing. Assuming 1 gallon per 350 SF."
+When Tally provides an answer or recommendation, show the reasoning. No magic numbers. No black boxes. Every generated row shows confidence and can be reviewed, edited, or rejected.
 
-**4. Offline-First**
-Ollama runs locally. No API calls, no usage limits, no surprises. Data never leaves the machine unless the user explicitly exports.
+**4. Data Flywheel by Design**
+Every interaction — accept, edit, reject, ignore — is a training signal captured from day one. Flywheel fields (`ai_generated`, `estimator_action`, `edit_delta`) are live on `LineItem`. The same fields will be added to `TakeoffMeasurement` (ADR-026), so non-AI users still contribute clean ground-truth data. Passive capture only — no forms asking estimators to categorize their own work.
 
 **5. Report Generation Agnostic**
-The same estimate data should feed multiple report formats—CSI-organized, assembly-organized, trade-organized, line-item detail, executive summary. The data is the source of truth.
+The same estimate data feeds multiple report formats: CSI-organized, assembly-organized, trade-organized, line-item detail, executive summary. The data is the source of truth.
 
 ---
 
@@ -61,147 +93,11 @@ The tool should feel like it's made of clay, not concrete.
 
 ---
 
-## PART 2: FEATURE VISION & SPECIFICATIONS
+## PART 2: THE THREE SURFACES
 
-### Vision
+### Current Architecture (2026-04)
 
-Build a dual-workflow estimating system that supports both assembly-based estimation (fast, reusable) and traditional line-by-line estimation. The core innovation is the Assembly Builder—a tool that lets estimators compose complex building systems (walls, footings, roofs) by selecting line items across multiple CSI divisions, measure once, and flow all costs into a flexible estimate view that can be reorganized by assembly, CSI division, or trade.
-
----
-
-### Phase 1: Line Item Library
-
-A searchable, filterable database of line items separate from any specific project. Library items are reusable across projects; project line items are project-specific.
-
-**Requirements:**
-- Search and filter by description, CSI code, or trade/labor category
-- Create new library items on the fly (description, CSI code, unit, production rate, default costs)
-- Display in a clean card or table view
-- Ability to pull a library item into a project assembly or directly into the estimate
-
-**Database:** `line_item_library` table — separate from `LineItem` (which is project-specific)
-
----
-
-### Phase 2: Assembly Builder Interface
-
-A multi-step wizard where users compose assemblies by selecting line items, setting measurement parameters, and saving the result to a project.
-
-**5-Step Workflow:**
-1. **Label & Name** — Set assembly label (A100, Wall-East) and name
-2. **Select Line Items** — Search/filter the line item library; checkbox or drag-and-drop to add items; color-coded by CSI division
-3. **Set Measurements** — Define assembly-level dimensions (e.g., LF + height for walls; LF + depth for footings). Multiple parameters allowed.
-4. **Review** — See all composed line items with calculated quantities in real time as measurements are adjusted
-5. **Save** — Save to project; optional "Save as Template" checkbox
-
-**Assembly Measurement Logic (User-Configurable, Not Hardcoded):**
-
-For each line item in the assembly, the user defines how its quantity derives from assembly measurements. The interface should allow expressions like:
-- "quantity = LF × height" → insulation (SF)
-- "quantity = (LF × height) ÷ 32" → drywall (sheets, 4×8 = 32 SF each)
-- "quantity = LF × depth × [density factor]" → rebar (lbs)
-- "quantity = LF" → top/bottom plate (linear feet)
-
-This logic is stored with the assembly composition so it recalculates if measurements change.
-
-**Assembly Builder Examples:**
-
-*Exterior Wall Assembly* — 500 LF × 12 ft high
-| Component | CSI | Quantity Formula | Result |
-|-----------|-----|-----------------|--------|
-| Drywall | 09 | (LF × H) ÷ 32 | 187.5 sheets |
-| Paint | 09 | LF × H (SF) | 6,000 SF |
-| Insulation | 07 | LF × H (SF) | 6,000 SF |
-| Studs/Framing | 06 | LF | 500 LF |
-| Top/Bottom Plate | 06 | LF × 2 | 1,000 LF |
-| Sheathing | 07 | LF × H (SF) | 6,000 SF |
-| Weather Barrier | 07 | LF × H (SF) | 6,000 SF |
-| Exterior Finish | 04 | LF × H (SF) | 6,000 SF |
-
-*Concrete Footing Assembly* — 50 LF × 2 ft deep
-| Component | CSI | Quantity Formula | Result |
-|-----------|-----|-----------------|--------|
-| Excavation | 31 | LF × D (CY) | ~3.7 CY |
-| Concrete | 03 | LF × D (CY) | ~3.7 CY |
-| Rebar | 03 | LF × D × factor (lbs) | variable |
-| Formwork | 03 | LF × D (SF) | 100 SF |
-
-**UI Specifics:**
-- Wizard-style or tabbed flow
-- Drag-and-drop or checkbox line item selection
-- Real-time quantity preview updates as measurements change
-- Color-coded rows by CSI division
-- Save button with confirmation message
-
----
-
-### Phase 3: Estimate Spreadsheet View
-
-A flexible, reorganizable spreadsheet-like view of the entire project estimate. Functions like DESTINI or Ediphi — data stays the same, presentation changes based on user's needs.
-
-**Columns:** Description | CSI Code | Qty | Unit | Labor Hours | Material Cost | Labor Cost | Equipment Cost | Total Cost
-
-**View Toggle (Critical):**
-- **Assembly View** — Group by assembly label (A100, B200); subtotals per assembly; overall total
-- **CSI View** — Group by CSI division (03, 04, 06...); subtotals per division; overall total
-- **Trade View** — Group by trade/labor category (framing, concrete, electrical...); subtotals per trade; overall total
-
-Three-button toggle at top of page. Data is identical; only grouping and presentation changes.
-
-**Flexibility Features (Non-Negotiable):**
-- Manual inline editing of qty, costs, notes — auto-save on change
-- Delete any line item without affecting assembly integrity
-- Add ad-hoc line items directly to the estimate without using the assembly builder (traditional workflow)
-- Drag-reorder line items within a view (optional but valuable)
-- Collapsible groups (expand/collapse assembly or CSI section)
-
-**UI Specifics:**
-- Sticky table header + sticky footer showing live totals (always visible while scrolling)
-- Color-coded rows by CSI division for visual clarity
-- Print-friendly styling (so users can print the estimate directly from browser)
-- Export to CSV or PDF — design for this now, build later
-- Sortable columns (click to sort by description, cost, hours, etc.)
-- Maintain dark navy/red color scheme with light borders for table structure
-
----
-
-### Phase 4: Assembly Templates
-
-Save assemblies as reusable templates and load them into any new project.
-
-**Saving:**
-- "Save as Template" checkbox on the Assembly Builder save step
-- Templates are global (not project-specific)
-
-**Browsing & Loading:**
-- Browse templates page or modal showing: template name, last used date, project count
-- One-click load: auto-populates composition, measurement parameters, and default costs into a new assembly
-- Duplication with modifications: load a template and edit before saving to project
-
-**Database:** `Assembly.is_template = True` flag + template scope global; or separate `AssemblyTemplate` table — decide at build time.
-
----
-
-### Traditional Line Item Entry (Always Available)
-
-The existing modal for manual line-by-line entry is never removed. Users who prefer Excel-style direct input can skip the assembly builder entirely and add line items one by one. This is not a workaround — it is a supported workflow.
-
----
-
-### AI-Assisted Recommendations (Design Now, Build in Phase 7)
-
-The architecture must accommodate AI injection at multiple points without breaking existing workflows:
-- **Completeness checks:** "You've added drywall but no paint. Standard practice?"
-- **Quantity suggestions:** "For 500 LF wall at 12 ft, typical drywall is ~188 sheets."
-- **Pricing research:** "Market rate for 5/8" Type X drywall in your region: $X/sheet."
-
-AI suggestions are always opt-in, always shown with reasoning, never required. Design hooks into the Assembly Builder and Estimate View for future AI panel or inline suggestion system.
-
----
-
-### Current Three-Surface Architecture (2026-04)
-
-The product has three core surfaces. All three must feel like one product — no seams, no context switches between them.
+The product has three core surfaces. All three must feel like one product — no seams, no context switches.
 
 | Surface | Implementation | Status |
 |---|---|---|
@@ -214,81 +110,81 @@ The product has three core surfaces. All three must feel like one product — no
 Takeoff (measure) → Estimate (price) → Proposal (deliver)
 ```
 
-Integration between **Takeoff → Estimate** is the next architectural priority (Session 23+): measurements from the Konva canvas flow directly into LineItem rows via `POST /api/projects/<id>/line_items`. This is the core product moat — no other construction estimating tool does this natively.
+The **Takeoff → Estimate bridge** (Pass 3) is the next architectural priority: measurements from the Konva canvas flow directly into LineItem rows. This is the core product moat — no other construction estimating tool does this natively.
 
 ---
 
-### Design Rules (All New Interfaces)
+### The Takeoff Surface
 
-- Dark navy (`#1a1a2e`) page bg, `#16213e` card bg, `#0f3460` panel/input, `#e94560` accent red — no exceptions
-- All templates consistent with existing `project.html` styling
-- Production rate calculations flow through automatically from assembly measurements
-- Cost and hours rollups update in real-time as items are added or changed
-- Users can always manually override, re-tag, or reorganize without losing data integrity
+Konva.js 3-layer canvas (`pdfLayer`, `measureLayer`, `uiLayer`) with PDF.js for all PDF rendering. Supports:
 
----
+- PDF plan upload (instant; PyMuPDF for page count only; no server-side pixel work)
+- Client-side thumbnails via PDF.js at `scale: 0.15`
+- Scale calibration (architectural ratio display: 1/4″=1′ etc.)
+- Linear, Linear with Width, Area, and Count measurement tools
+- Ortho mode (45° snap), close-polygon green indicator, status bar coordinates
+- Properties panel, project-level totals per item across all pages
 
-### Database Additions (Flag Before Implementing Any)
+The **90-second confidence moment** is the takeoff product standard: upload → scale → first measurement landed. This flow gets disproportionate attention in all polish and UX decisions.
 
-| Addition | Purpose | Phase |
-|----------|---------|-------|
-| `line_item_library` table | Reusable library items separate from project LineItems | 1 |
-| `LineItem.csi_level_1_id` / `csi_level_2_id` | Direct CSI FK on line items (needed for CSI view grouping) | 3 |
-| `LineItem.trade` / `labor_category` field | Trade grouping for Trade View | 3 |
-| `Assembly.is_template` (bool) | Mark assemblies as reusable templates | 4 |
-| `Assembly.measurement_params` (JSON) | Store assembly-level dimensions | 2 |
-| `Assembly.composition` (JSON) or `assembly_composition` junction table | Which library items + quantity formulas | 2 |
-| `production_rate_standards` table | Standard rate lookup library | Future |
-
-**Rule:** Never alter schema without flagging impact. Use `db.create_all()` for new tables.
+Tally stub hooks planned for Pass 3: "Verify this scale" action, passive idle-drawing badge, measurement-tool contextual help button.
 
 ---
 
-## PART 3: TECHNICAL SPEC & BUILD SEQUENCE
+### The Estimate Surface
 
-### Build Sequence
+TanStack Table v8 (headless, React via CDN + Babel Standalone) is the **canonical estimate surface**. The legacy project-page inline estimate table is deprecated — see ADR-024.
 
-Build phases in order. Test each phase before starting the next. Each phase output must feed the next phase's input — no orphaned features.
+**Dual costing in one grid:** every row resolves to a `line_total` via either the unit-cost or assembly build-up path (ADR-022). Both coexist line by line. The expandable row is the chosen UI direction for surfacing assembly detail without cluttering unit-cost rows — design spike in Pass 3.
 
-```
-Phase 1: Line Item Library       → feeds Phase 2 (library items selected in builder)
-Phase 2: Assembly Builder        → feeds Phase 3 (assemblies appear in estimate)
-Phase 3: Estimate Spreadsheet    → feeds Phase 4 (templates load into estimate)
-Phase 4: Assembly Templates      → completes the loop
-```
+**Formula column (Mode 3):** prototyped, deferred to premium tier as a cell-level option (ADR-023).
+
+**Tally integration:** flywheel fields (`ai_generated`, `estimator_action`, `edit_delta`, `ai_status`, `ai_confidence`, `ai_note`) are live on all LineItem writes. The Tally footer banner and AI status badges render in the grid. Intelligence layer wired in Pass 4.
 
 ---
 
-### New Flask Routes (Planned)
+### The Proposal Surface
 
-| Method | Route | Purpose |
-|--------|-------|---------|
-| GET | `/library` | Line item library browse page |
-| POST | `/library/item/new` | Create new library item |
-| POST | `/library/item/<id>/update` | Edit library item |
-| POST | `/library/item/<id>/delete` | Delete library item |
-| GET | `/project/<id>/estimate/data` | JSON data payload for dynamic view reorganization |
-| POST | `/project/<id>/assembly/save-template` | Save assembly as reusable template |
-| GET | `/templates` | Browse saved assembly templates |
-| POST | `/project/<id>/assembly/load-template/<template_id>` | Load template into new assembly |
-
-Existing routes unchanged. `/project/<id>/estimate` stays but gets enhanced with view toggle.
+Jinja template with print-to-PDF (light theme for printing). Pre-TanStack design — pending integration with the new estimate data model.
 
 ---
 
-### Frontend Guidance
+## PART 3: FEATURE DETAIL
 
-- **Default: Vanilla JS + fetch()** — consistent with existing codebase pattern
-- **Alpine.js:** Consider if reactive state management becomes complex (flag before adding any new JS dependency)
-- **View toggle logic:** JS-only, no page reload — fetch `/estimate/data` once, render client-side by grouping key
-- **Sorting/collapsing:** Client-side JS
-- **Inline editing:** Existing auto-save pattern reused (fetch POST on blur)
+### Assembly Builder
+
+Multi-step wizard (Label → Select Line Items → Set Measurements → Review → Save). User-configurable quantity formulas per line item (e.g., `LF × height`, `(LF × H) ÷ 32`). "Save as Template" for reuse across projects.
+
+Assembly build-up is the **assembly-mode costing path** — computes `unit_cost` upward from `labor_rate`, `production_rate`, `material_rate`. This path makes assembly work sticky: users who define burden-loaded assemblies are not going back to Excel.
+
+---
+
+### Line Item Library
+
+Searchable, filterable database of reusable line items. Company-scoped. Separate from project-specific `LineItem` records.
+
+---
+
+### Traditional Line Item Entry (Always Available)
+
+Manual line-by-line entry via modal is never removed. Skip the assembly builder entirely and add line items one by one. This is a supported first-class workflow, not a workaround.
+
+---
+
+### Key Database Models
+
+| Model | Notes |
+|-------|-------|
+| `LineItem` | assembly_id NULLABLE; all flywheel fields; unit-cost and assembly-build-up fields |
+| `Assembly` | is_template; measurement_params JSON; qty formulas per composition item |
+| `TakeoffMeasurement` | flywheel fields **to be added in Pass 3** (ADR-026): ai_generated, estimator_action, edit_delta |
+| `TakeoffItem` | assembly_notes; bridge to Estimate is Pass 3 priority |
+
+**Schema rule:** Always extend `run_migrations()` with `ALTER TABLE … ADD COLUMN IF NOT EXISTS`. Never drop/recreate tables.
 
 ---
 
 ### Calculation Logic Chain
-
-The full chain from assembly input to report output:
 
 ```
 Assembly measurements (LF, height, depth)
@@ -304,41 +200,49 @@ Line item total_cost
 Assembly subtotals → CSI subtotals → Trade subtotals → Project grand total
 ```
 
-Existing `labor_hours = quantity ÷ production_rate` logic is preserved and extended, not replaced.
+---
+
+## PART 4: DESIGN RULES
+
+### App (dark theme) — CSS variables in `app_base.html`
+
+Use CSS variables — **never hardcode hex values**. The old palette (`#1a1a2e`, `#16213e`, `#0f3460`, `#e94560`) is deprecated.
+
+| Token | Hex | Use |
+|-------|-----|-----|
+| `--app-bg` | `#0F1419` | Page background |
+| `--app-card` | `#1A1F26` | Card / panel background |
+| `--app-sidebar` | `#16181D` | Sidebar background |
+| `--app-input` | `#252B33` | Input field background |
+| `--primary-brand` | `#2D5BFF` | Buttons, links, active states |
+| `--accent-coral` | `#FF6B35` | CTAs, highlights, stat numbers |
+| `--error-bg` | `#3a0a12` | Error state background |
+| `--error` | `#EF4444` | Error text / destructive |
+
+### Marketing (light theme) — CSS variables in `base.html`
+- `--primary-brand: #2D5BFF` | `--accent-coral: #FF6B35` | `--marketing-bg: #FFFFFF`
+
+### CSI Division Colors
+Defined in `CSI_COLORS` dict in `app.py` AND duplicated in `estimate_table.js` — keep both in sync.
+
+### Typography
+System UI stack only: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif`. No external font imports.
 
 ---
 
-### Data Structure Decisions (Defer to Build Time)
+## PART 5: SUCCESS CRITERIA (Current)
 
-**Assembly composition storage:**
-- Option A: JSON column on `Assembly` — simpler, flexible, less queryable
-- Option B: `assembly_composition` junction table (assembly_id, library_item_id, qty_formula) — queryable, supports library item references
-- Recommendation: flag at Phase 2 build time; lean toward junction table if library integration is needed
+The three surfaces are complete when:
 
-**Line item CSI for grouping:**
-- Currently line items inherit CSI through their assembly FK
-- CSI View requires direct `csi_level_1_id` on `LineItem` — add this column in Phase 3 DB migration
-
-**Trade grouping:**
-- `LineItem.trade` or `labor_category` text field — add in Phase 3 DB migration alongside CSI field
-
----
-
-### Success Criteria
-
-The build phases are complete when all of the following are true:
-
-- [ ] Users can search, filter, and create line items in a global library
-- [ ] Users can compose assemblies via a multi-step builder with user-configurable measurement logic
-- [ ] Real-time quantity preview updates as assembly measurements change
-- [ ] Estimate view toggles between Assembly, CSI, and Trade groupings with live subtotals
-- [ ] Users can manually edit, add, or delete line items in the estimate without breaking calculations
-- [ ] Users can add ad-hoc line items directly to the estimate (no assembly builder required)
-- [ ] Users can save assemblies as templates and load them into new projects
-- [ ] Output reports (material totals, labor hours, CSI summaries) are consistent regardless of input method
-- [ ] UI is accessible to both rigid (Excel-minded) and flexible (AI-native) estimators
-- [ ] Codebase architecture accommodates AI injection in Phase 7 without structural changes
+- [ ] Upload → scale → first measurement lands in under 90 seconds for a new user
+- [ ] Measurement qty flows directly into a LineItem row via the bridge (Pass 3)
+- [ ] Unit-cost and assembly build-up coexist in the same grid row by row
+- [ ] Expandable row reveals assembly detail without a mode switch (Pass 3)
+- [ ] Tally stub hooks are present on both Takeoff and Estimate (Pass 3)
+- [ ] Tally Passive/Reactive/Generative intelligence is wired (Pass 4)
+- [ ] Proposal integrates with TanStack estimate data model
+- [ ] Output reports are consistent regardless of which costing path was used
 
 ---
 
-*Last updated: 2026-03-22
+*Last updated: 2026-04-13*

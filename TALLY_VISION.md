@@ -6,9 +6,15 @@
 
 ## What Tally Is
 
-Tally is Zenbid's integrated AI estimating collaborator. It is not a chatbot bolted onto the side of an estimate. It is not an audit tool that runs at the end of a workflow. It is a work executor — woven into the estimate surface itself — that handles quantification, analysis, and reporting work so the estimator can focus on judgment, not labor.
+Tally is Zenbid's integrated AI estimating collaborator. It is not a chatbot bolted onto the side of an estimate. It is not an audit tool that runs at the end of a workflow. It is a work executor — woven into every product surface — that handles quantification, analysis, and reporting work so the estimator can focus on judgment, not labor.
 
 Tally's name and identity (tape measure character, job-site aesthetic) are intentional. It reads as a tool, not a tech feature. Contractors trust tools.
+
+## The Anti-Replacement Principle
+
+> Zenbid makes estimators more efficient and smarter about what's in a job. It builds confidence. It does not trigger AI fear. Tally handles labor so the estimator focuses on judgment. **The estimator always owns the estimate — AI is optional, never mandatory, and never silent.**
+
+This principle is load-bearing for the hardest conversion: the seasoned estimator with 20+ years of domain knowledge who is skeptical of AI and has no reason to change tools unless the new tool is clearly and demonstrably better at the specific labor they hate. Tally earns trust by being useful, visible in its reasoning, and never overstepping.
 
 ---
 
@@ -130,6 +136,56 @@ Adding support for a new trade sector = loading a new configuration set. Not a n
 
 ---
 
+## Surface Mapping — Where Each Mode Lives
+
+Tally wraps every surface. Every surface gets entry points designed in Pass 3. Intelligence is wired in Pass 4. Below is the full map of surfaces, modes, and stub hooks.
+
+---
+
+### Takeoff Surface
+
+The Takeoff surface is not estimate-facing, but it generates the data that feeds the estimate. Tally's presence here is lighter and more contextual than on the Estimate surface — but it must be there.
+
+| Mode | Behavior | Pass 3 Stub Hook |
+|------|----------|-----------------|
+| **Passive** | Badge on a drawing that has been open N minutes with no measurements ("You have drawings open with no measurements yet") | Passive badge in the sheets sidebar, dismissible |
+| **Reactive** | "Verify this scale" — estimator can ask Tally to confirm the calibrated scale is reasonable given the drawing title block or known dimensions | "Verify scale" button next to the scale label in the status bar; stubs to a coming-soon state |
+| **Reactive** | Contextual help for the active measurement tool ("Best practices for measuring slab-on-grade area") | Tally icon button on each tool in the drawing toolbar; stubs to a coming-soon state |
+| **Generative** | Deferred — Takeoff generative mode is not in scope until the Takeoff→Estimate bridge is live and flywheel data has accumulated | Not stubbed in Pass 3 |
+
+**Flywheel contribution from Takeoff:**
+Every measurement is a data point: which trade, which drawing type, scale used, how many edits before final commit, whether AI assisted. The fields `ai_generated`, `estimator_action`, `edit_delta` will be added to `TakeoffMeasurement` in Pass 3 (ADR-026). Non-AI users drawing polygons manually contribute the highest-quality ground-truth data — cleaner than AI-assisted measurements.
+
+---
+
+### Estimate Surface
+
+The Estimate surface is Tally's primary domain. All three modes are designed around the TanStack grid.
+
+| Mode | Behavior | Pass 3 Stub Hook |
+|------|----------|-----------------|
+| **Passive** | Scope gap badges on rows and groups (framework live in `estimate_table.js`; intelligence not yet wired) | `ai_status` badge column — live; "AI Tip" / "Scope Gap" states visible; populates with defaults |
+| **Passive** | Production rate deviations vs. regional benchmarks | Badge states reserved on `ai_status`; intelligence wired in Pass 4 |
+| **Reactive** | On-demand Q&A about the current estimate | Tally toolbar button in estimate header — currently `href="#"`; Pass 3 connects to a stub panel |
+| **Reactive** | Division summaries, cost breakdowns, what-if analysis | Same button; stub panel with example output; intelligence in Pass 4 |
+| **Generative** | Natural-language line item creation | Explicit "Ask Tally to add items" action — never auto-triggered; Pass 3 places the button; Pass 4 wires it |
+
+**Flywheel contribution from Estimate:**
+- Accept → strong positive signal
+- Edit → partial signal (delta between AI output and ground truth)
+- Reject → negative signal
+- Scope gap flag acted on → positive signal
+- Scope gap flag ignored → neutral/negative (possible false positive)
+- Estimate marked Won/Lost → outcome signal on all contributing line items
+
+---
+
+### Proposal Surface
+
+Deferred. Tally's presence on the Proposal surface is named here so it is not designed around. Future: Tally generates executive summary language, flags cost categories that deviate from typical proposal structure, suggests value-engineering notes.
+
+---
+
 ## The Data Flywheel
 
 Every Tally interaction is a training signal. This is not a future consideration — it must be captured from day one.
@@ -144,15 +200,22 @@ Every Tally interaction is a training signal. This is not a future consideration
 | Estimate is marked Won | Strong positive on all contributing line items |
 | Estimate is marked Lost | Weak signal — may reflect pricing strategy, not accuracy |
 
-**Schema requirements (must be captured from day one):**
-- `ai_generated: boolean` on every line item
-- `ai_confidence: float` on every AI-touched line item
-- `estimator_action: enum(accepted, edited, rejected, ignored)` on every AI suggestion
-- `edit_delta: jsonb` capturing original vs. final values on edited rows
-- `estimate_outcome: enum(won, lost, pending, abandoned)` on every estimate
-- `location_tag` on every line item (for regional pricing intelligence)
+**Schema requirements (LineItem — live as of Session 22):**
+- `ai_generated: boolean` — ✅ live
+- `ai_confidence: float` — ✅ live
+- `estimator_action: enum(accepted, edited, rejected, ignored)` — ✅ live (set on PATCH and soft-delete)
+- `edit_delta: jsonb` — ✅ live (tracked on every PATCH)
+- `ai_status: string` — ✅ live (defaults to 'verified'; Passive mode will populate in Pass 4)
+- `ai_note: text` — ✅ live
+- `estimate_outcome: enum(won, lost, pending, abandoned)` — ❌ not yet added (future)
+- `location_tag` — ❌ not yet added (future, for regional pricing intelligence)
 
-This data accumulates into a proprietary cost intelligence dataset. At sufficient volume, it becomes the foundation for fine-tuning an open-source LLM (Mistral, LLaMA 3, or Qwen) on contractor-sourced cost data — the "Cost Intelligence" premium tier comparable to RSMeans but AI-enhanced and continuously updated.
+**Schema requirements (TakeoffMeasurement — to be added in Pass 3, ADR-026):**
+- `ai_generated: boolean` — ❌ not yet on model
+- `estimator_action: string` — ❌ not yet on model
+- `edit_delta: text` — ❌ not yet on model
+
+This data accumulates into a proprietary cost intelligence dataset. At sufficient volume, it becomes the foundation for fine-tuning an LLM on contractor-sourced cost data — the "Cost Intelligence" premium tier comparable to RSMeans but AI-enhanced and continuously updated.
 
 ---
 
@@ -187,16 +250,25 @@ Every Tally feature must pass these checks before shipping:
 
 ---
 
-## Roadmap Sequence
+## Implementation Sequence (aligned with four-pass roadmap)
 
-| Phase | Capability |
-|---|---|
-| 1 — Now | Passive mode: scope gap detection, confidence scoring, badge system |
-| 2 — Next | Reactive mode: on-demand report generation, division summaries |
-| 3 — Near | Generative mode: assembly generation from scope description |
-| 4 — Future | Cross-estimate intelligence: variance analysis, win/loss correlation |
-| 5 — Future | Fine-tuned model: Cost Intelligence tier on proprietary dataset |
+| Pass | Tally Work |
+|------|-----------|
+| **Pass 1 (this session)** | Realignment — Tally docs updated; no code |
+| **Pass 2** | 90-Second Confidence Study — Takeoff UX only; no Tally work |
+| **Pass 3** | Stub hooks placed on Takeoff and Estimate (see Surface Mapping above); Generative entry point button placed; Reactive Q&A stub panel built; flywheel fields added to TakeoffMeasurement |
+| **Pass 4** | Intelligence wired: Passive scope gap analysis backend; Reactive Q&A against estimate data; Generative assembly generation from scope description |
+| **Future** | Cross-estimate intelligence: variance analysis, win/loss correlation |
+| **Future** | Fine-tuned model: Cost Intelligence tier on proprietary dataset |
+
+> **Current state (2026-04-13):** Flywheel fields are live on LineItem. The Tally footer banner and AI status badge column render in `estimate_table.js`. Intelligence is not wired — all `ai_status` values default to `'verified'`, and the "Review All" button in the banner links to `href="#"`. Pass 3 and Pass 4 are the wiring sessions.
 
 ---
 
 *This document is the source of truth for all Tally-related product and engineering decisions. When a feature decision conflicts with this document, resolve it here first.*
+
+---
+
+> **Doc sprawl note (flagged for future pass):** TALLY_VISION.md and NORTHSTAR.md are increasingly overlapping — Tally is not separable from the product. Consider folding TALLY_VISION into NORTHSTAR in a future documentation pass once the intelligence layer is closer to live.
+
+*Last updated: 2026-04-13*
