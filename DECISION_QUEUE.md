@@ -6,23 +6,23 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 
 ## Pending
 
-### DEC-001: Beta pricing and capture model
+### ~~DEC-001: Beta pricing and capture model~~
 
 **Surfaced:** [program activation]
 **Surfaced by:** Orchestrator (initial program setup)
 
-**Context:** Foundation Sprint exit triggers beta capture activation. Need to lock the beta pricing model and the capture flow before Outreach Operator activates. The Pricing Strategist persona can be invoked on-demand to model unit economics if useful, but a quick founder call is enough to unblock the activation.
+**Original decision (2026-05-02):** Option 2 — Cheap paid beta ($29/mo for first 20 users for 6 months)
 
-**Options:**
+**Amended decision (2026-05-02):** 2-stage beta model.
 
-1. **Free time-limited beta** for first 10–20 users (e.g., 30 days), with post-beta conversion prompt at $49–$79/mo per `docs/00_FOUNDER_CONTEXT.md` Section 5 intuitions
-2. **Cheap paid beta** ($29/mo for first 20 users for 6 months) — lower friction than free if you can articulate value, gives commitment signal early
-3. **Invite-only beta** — founder hand-picks first 10–20 from warm network, completely free during testing, asks for feedback in lieu of payment
+- **Stage 1 (now):** Free reserved beta. Collect emails via `/waitlist`. Founder hand-curates first ~20 from warm network and inbound interest. Early users get free access during validation period in exchange for structured feedback. No charge.
+- **Stage 2 (when product validated):** Paid beta at $29/mo. Existing stage 1 users get conversion offer with grandfathered/discount pricing. Open public funnel.
 
-**Recommended call:** Option 1 (free time-limited beta) — fastest to fill, lowest friction, lets product earn the post-beta conversion. Option 3 is acceptable if you want tight control over who's in. Option 2 is acceptable if you want commitment signal but adds friction at a stage where you want volume.
+**Reasoning:** Selling $29/mo before the product is validated by real estimators on real bids burns trust faster than a careful free-then-paid sequence. Stage 1 generates validation signal. Stage 2 monetizes it.
 
-**Founder decision: Option 2
-**Decided on: 5/2/2026
+**Implication for copy:** No $29/mo language on the landing page or in outreach until stage 2 launches. CTA language: "Reserve beta access." Transition criteria governed by DEC-005.
+
+**Decided on:** 2026-05-02 (amended)
 
 ---
 
@@ -43,6 +43,26 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 
 ---
 
+### DEC-005: Stage 1 → Stage 2 transition criteria
+
+**Surfaced:** 2026-05-02
+**Surfaced by:** Founder (with DEC-001 amendment)
+
+**Context:** DEC-001 establishes a 2-stage beta model. Stage 1 is a free validation period. Stage 2 is paid ($29/mo). The question is what signal triggers the transition — and who decides when it's hit.
+
+**Options:**
+1. **(a) Calendar trigger** — e.g., 60 days of stage 1, then evaluate regardless of outcome
+2. **(b) Volume trigger** — 10 active stage 1 users using the product weekly
+3. **(c) Feedback trigger** — 3+ stage 1 users explicitly say "I would pay for this" (unprompted or in structured feedback)
+4. **(d) Founder discretion** — no fixed criteria; founder calls it when it feels right
+
+**Recommended call (founder's):** Option (c) — feedback trigger. Ties the gate to actual validation signal, not arbitrary milestones. Prevents premature monetization. Prevents indefinite free access. The question to stage 1 users: "Would you pay $29/mo for this?" If 3 say yes, the gate opens.
+
+**Founder decision:** *[to be confirmed]*
+**Decided on:** *[to be filled]*
+
+---
+
 ### DEC-002: Sprint One scope (drafted at Foundation closure)
 
 **Surfaced:** *[Will be surfaced when Foundation Sprint closes]*
@@ -60,5 +80,5 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 
 ### ~~DEC-001: Beta pricing and capture model~~
 
-**Decided:** Option 2 — Cheap paid beta ($29/mo for first 20 users for 6 months)
-**Decided on:** 2026-05-02
+**Final resolution:** 2-stage beta. Stage 1: free reserved access, founder-curated, validation in exchange for feedback. Stage 2: $29/mo paid beta when product validated. Transition criteria: DEC-005.
+**Decided on:** 2026-05-02 (amended same day from original Option 2)
