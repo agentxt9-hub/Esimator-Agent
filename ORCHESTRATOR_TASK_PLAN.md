@@ -44,8 +44,12 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 ### A.3 — Mono-repo restructure: pending
 *Depends on: A.1 complete (now unblocked).*
 
-### A.4 — Best-practices baseline: pending (P1 — must ship before beta users)
-*Centralized logging, Sentry wiring, Uptime Kuma, README update. Elevated to P1 after production 502 incident — no beta users until monitoring is live.*
+### A.4 — Monitoring + structured logging: CODE SHIPPED (`6c060d9`) — awaiting server verification
+*Reordered before C.1 by founder (2026-05-02). Code is on main. Requires two manual verifications on staging before marking COMPLETE:*
+- [ ] **Sentry test:** `curl https://staging.zenbid.io/_sentry-test` → confirm exception appears in Sentry dashboard within 30s. Requires `SENTRY_DSN` set in staging `.env` first.
+- [ ] **Uptime Kuma test:** `sudo systemctl stop zenbid-staging` → wait 2 min → confirm alert fires to thomas@zenbid.io. Requires Uptime Kuma installed + monitors configured per `docs/MONITORING.md`.
+- [ ] **Log check:** log in to staging app → `sudo journalctl -u zenbid-staging -f` → confirm `auth.login` entry appears.
+*C.1 (Playwright) unblocks after both verifications pass.*
 
 ---
 
@@ -72,7 +76,7 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Track C — Test Infrastructure (QA / Test Automation Engineer)
 
-### C.1 — Playwright setup: pending (starting next)
+### C.1 — Playwright setup: BLOCKED on A.4 server verification
 ### C.2 — API test suite: pending
 ### C.3 — Monitoring infrastructure: pending
 ### C.4 — Test documentation: pending
@@ -112,6 +116,7 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 | `db14ebf` | DEC-005: stage 1→2 feedback trigger locked |
 | `50cfde5` | ops: deploy script hardening — SECRET_KEY guard + systemd restart rate limits |
 | `d85be43` | data: D.1 — ai_call_log + log_ai_call() wired into all 5 AI routes |
+| `6c060d9` | ops: A.4 — Sentry + structured logging + auth event logging + error handlers |
 
 ## Blocked
 
@@ -119,9 +124,9 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Next up
 
-1. **Track B.1 production promotion** — founder runs `bash /var/www/zenbid/deploy/update.sh` on the production droplet
-2. **Track D.1** — `ai_call_log` table migration + `log_ai_call()` helper wired into all 5 AI routes (in progress)
-3. **Track C.1** — Playwright setup (parallel with D.1)
+1. **Track A.4 server verification** — founder action: set `SENTRY_DSN` in staging `.env`, run `pip install sentry-sdk[flask]`, restart staging, then run the two verification steps in `docs/MONITORING.md`. Mark complete when both pass.
+2. **Track C.1** — Playwright setup (unblocks after A.4 verified)
+3. **Track B.2** — In-app copy audit (can run in parallel with C.1)
 
 ## Backlog
 
