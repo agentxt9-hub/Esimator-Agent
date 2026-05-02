@@ -47,6 +47,10 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
   DEC-005 added to queue: define stage 1 → stage 2 transition criteria. Founder recommends option (c): 3+ stage 1 users say "I'd pay for this."
   Note for when outreach playbook is drafted: no $29/mo language in tier 1 or tier 2 outreach until stage 2 launches.
 
+- [2026-05-02] **Process feedback — stale task plan.** Orchestrator reported Track A.1 as "on founder" when staging was already live and landing page already verified. Fix: verify ORCHESTRATOR_TASK_PLAN.md against `git log` on every `/status` run before reporting. Don't report work as outstanding if commits show it shipped.
+
+- [2026-05-02] Staging landing page copy approved by founder. "Reserve beta access", "Early access is open — first estimators test free" confirmed in browser. No $29/mo references. Approving for production promotion.
+
 ### Routing decisions made today
 - Sprint Zero items (all 11) routed to Foundation Engineer → shipped in single session
 - DEC-001 amended (2026-05-02): 2-stage beta model. Stage 1 free validation → stage 2 paid $29/mo
