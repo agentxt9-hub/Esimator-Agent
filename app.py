@@ -39,8 +39,19 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'logo')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
+_secret_key = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
+_db_url = os.environ.get('DATABASE_URL')
+if os.environ.get('FLASK_ENV') == 'production' or os.environ.get('REQUIRE_SECURE_CONFIG'):
+    if _secret_key == 'dev-change-this-in-production-please' or len(_secret_key) < 32:
+        raise RuntimeError('SECRET_KEY is missing or insecure — set a strong SECRET_KEY environment variable')
+    if not _db_url:
+        raise RuntimeError('DATABASE_URL environment variable is required')
+
+app.config['SECRET_KEY'] = _secret_key
 app.config['WTF_CSRF_TIME_LIMIT'] = 3600  # 1 hour
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Mail config (SendGrid SMTP or any SMTP provider)
@@ -375,10 +386,11 @@ class TakeoffMeasurement(db.Model):
 # ─────────────────────────────────────────
 
 def admin_required(f):
-    """Restrict route to users with role='admin'."""
+    """Restrict route to platform superadmin (SUPERADMIN_EMAIL env var)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'admin':
+        superadmin_email = os.environ.get('SUPERADMIN_EMAIL', '')
+        if not current_user.is_authenticated or not superadmin_email or current_user.email != superadmin_email:
             abort(403)
         return f(*args, **kwargs)
     return decorated
@@ -436,6 +448,8 @@ def login():
         if user and user.check_password(password):
             login_user(user, remember=remember)
             next_page = request.args.get('next')
+            if next_page and not next_page.startswith('/'):
+                next_page = None
             return redirect(next_page or url_for('index'))
         return render_template('login.html', error='Invalid email or password', email=email)
     return render_template('login.html')
@@ -465,7 +479,7 @@ def signup():
             company_id=company.id,
             username=full_name,     # use full name as display username
             email=email,
-            role='admin',
+            role='estimator',
         )
         user.set_password(password)
         db.session.add(user)
@@ -1610,7 +1624,8 @@ def save_assembly_builder(project_id):
             material_cost_per_unit=mat_per, material_cost=mat_cost,
             labor_hours=lab_hrs, labor_cost_per_hour=lab_hr, labor_cost=lab_cost,
             equipment_hours=equ_hrs, equipment_cost_per_hour=equ_hr, equipment_cost=equ_cost,
-            total_cost=total
+            total_cost=total,
+            ai_generated=True,
         ))
 
     db.session.commit()
@@ -2725,7 +2740,8 @@ BULK UPDATE multiple line items at once (useful for recalculate-all operations):
     except anthropic.AuthenticationError:
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        app.logger.exception('AI chat error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Extract write proposal if present ───────────────────────────────
     write_proposal = None
@@ -2871,6 +2887,8 @@ def ai_apply():
             equipment_cost_per_unit=float(li_data.get('equipment_cost_per_unit', 0) or 0),
             trade=li_data.get('trade') or None,
             notes=li_data.get('notes') or None,
+            ai_generated=True,
+            estimator_action='accepted',
         )
         calculate_item_costs(item)
         db.session.add(item)
@@ -2996,7 +3014,8 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
     except anthropic.AuthenticationError:
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        app.logger.exception('AI build-assembly error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON from Claude ────────────────────────────────────────────
     # Strip any accidental markdown fences
@@ -3007,10 +3026,9 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI build-assembly: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     asm_data   = result.get('assembly', {})
     items_data = result.get('line_items', [])
@@ -3286,7 +3304,8 @@ Severity values must be one of: HIGH, MEDIUM, LOW"""
     except anthropic.AuthenticationError:
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        app.logger.exception('AI scope-gap error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON from Claude ─────────────────────────────────────────────
     json_text = raw_text
@@ -3296,10 +3315,9 @@ Severity values must be one of: HIGH, MEDIUM, LOW"""
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI scope-gap: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     # ── Sort gaps: HIGH → MEDIUM → LOW ────────────────────────────────────
     severity_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
@@ -3441,7 +3459,8 @@ REQUIRED JSON FORMAT:
     except anthropic.AuthenticationError:
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        app.logger.exception('AI generate-items error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON ────────────────────────────────────────────────────────
     json_text = raw_text
@@ -3451,10 +3470,9 @@ REQUIRED JSON FORMAT:
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI generate-items: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     return jsonify({'success': True, **result})
 
@@ -3552,7 +3570,8 @@ REQUIRED JSON FORMAT:
     except anthropic.AuthenticationError:
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        app.logger.exception('AI validate-rate error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON ────────────────────────────────────────────────────────
     json_text = raw_text
@@ -3562,10 +3581,9 @@ REQUIRED JSON FORMAT:
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI validate-rate: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     return jsonify({'success': True, **result})
 
@@ -3810,8 +3828,9 @@ def run_migrations():
             try:
                 db.session.execute(db.text(sql))
                 db.session.commit()
-            except Exception:
+            except Exception as e:
                 db.session.rollback()
+                print(f"Migration failed: {sql[:80]!r} — {e}")
 
 def seed_production_rates():
     """Seed default production rate standards if table is empty."""

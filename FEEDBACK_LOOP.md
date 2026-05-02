@@ -14,7 +14,7 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
 
 ---
 
-## [DATE OF FIRST ORCHESTRATOR RUN]
+## 2026-05-02 — Foundation Sprint Day 1
 
 ### From founder (workflow validation)
 *[empty — populates once founder uses staging.zenbid.io]*
@@ -23,10 +23,14 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
 *[empty — populates after Sprint One opens beta capture]*
 
 ### From QA automation
-*[empty — populates after QA stands up Playwright + monitoring]*
+- 39/39 TanStack + API tests passing
+- 99/99 Takeoff tests passing
+- `test_login_only.py` requires live server — not part of standard suite; deferred to staging
 
 ### From content performance
 *[empty — populates after Content Machine activates post-Foundation]*
 
 ### Routing decisions made today
-*[empty — Orchestrator populates as it routes feedback]*
+- Sprint Zero items (all 11) routed to Foundation Engineer → shipped in single session
+- DEC-001 already resolved by founder (paid beta, $29/mo); no routing action needed
+- `docs/00_FOUNDER_CONTEXT.md` missing from repo — noted as coverage gap, not blocking Foundation Sprint
