@@ -17,7 +17,18 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
 ## 2026-05-02 — Foundation Sprint Day 1
 
 ### From founder (workflow validation)
-*[empty — populates once founder uses staging.zenbid.io]*
+
+- [2026-05-02] Staging confirmed live at https://staging.zenbid.io — separate DB, user pool, SSL, port 8001. Smoke-test passed.
+
+- [2026-05-02] **HIGH — Landing page brand-coherence failures (5 specific items). Blocks outreach activation.**
+  1. Hero CTA says "early access is open" + "join the waitlist" — must say "Start beta — $29/mo" (DEC-001 locked paid beta)
+  2. Subhead "AI-powered construction estimating" — banned phrase (Section 7 voice rules). Needs estimator-native language ("catch what you miss", "your numbers backed up", etc.)
+  3. H1 "Build Smarter Estimates, Faster" — generic SaaS copy. Needs locked voice.
+  4. Mock dashboard shows fake customer data ("Welcome back, Alex!", "$2.4M est value", "Medical Office Bldg Chicago") — dishonest on a beta-launch page. Remove or replace with real screenshots.
+  5. "3x" and "100%" stats — unsubstantiated. Remove until real metrics exist.
+  → Founder: "this MUST ship before any outreach activates. do all changes against staging first, then promote to prod once founder approves."
+
+- [2026-05-02] **LOW — Backlog: deploy/staging-setup.sh has bugs (no postgres detection, nginx server block issues). Not urgent — fix before next staging rebuild.**
 
 ### From beta users
 *[empty — populates after Sprint One opens beta capture]*
