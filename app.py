@@ -20,6 +20,7 @@ import io
 import csv
 import re
 import secrets
+import time
 import anthropic
 from dotenv import load_dotenv
 
@@ -320,6 +321,43 @@ class LineItemWBS(db.Model):
     created_at      = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     __table_args__  = (db.UniqueConstraint('line_item_id', 'wbs_property_id',
                                            name='uq_lineitem_wbs_property'),)
+
+# ─────────────────────────────────────────
+# FLYWHEEL: AI CALL LOG
+# ─────────────────────────────────────────
+
+class AICallLog(db.Model):
+    __tablename__ = 'ai_call_log'
+    id           = db.Column(db.Integer, primary_key=True)
+    route        = db.Column(db.String(50), nullable=False)
+    user_id      = db.Column(db.Integer, db.ForeignKey('users.id'))
+    company_id   = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    project_id   = db.Column(db.Integer)
+    model        = db.Column(db.String(100))
+    input_tokens = db.Column(db.Integer)
+    output_tokens= db.Column(db.Integer)
+    latency_ms   = db.Column(db.Integer)
+    success      = db.Column(db.Boolean, default=True)
+    error_type   = db.Column(db.String(50))
+    created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+def log_ai_call(route, model, input_tokens, output_tokens, latency_ms,
+                project_id=None, success=True, error_type=None):
+    """Write one row to ai_call_log. Never raises — logging must not break the main flow."""
+    try:
+        uid = current_user.id if current_user and current_user.is_authenticated else None
+        cid = current_user.company_id if uid else None
+        db.session.add(AICallLog(
+            route=route, user_id=uid, company_id=cid, project_id=project_id,
+            model=model, input_tokens=input_tokens, output_tokens=output_tokens,
+            latency_ms=latency_ms, success=success, error_type=error_type,
+        ))
+        db.session.commit()
+    except Exception:
+        app.logger.exception('log_ai_call failed — swallowed')
+        db.session.rollback()
+
 
 # ─────────────────────────────────────────
 # TAKEOFF MODELS
@@ -2728,6 +2766,7 @@ BULK UPDATE multiple line items at once (useful for recalculate-all operations):
         system_prompt = """You are a knowledgeable construction industry assistant embedded in a project estimating tool. You help estimators with questions about materials, methods, costs, codes, and project management. Be concise and practical."""
 
     # ── Call Claude API ──────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -2737,9 +2776,16 @@ BULK UPDATE multiple line items at once (useful for recalculate-all operations):
             messages=[{'role': 'user', 'content': message}],
         )
         reply_text = response.content[0].text
+        log_ai_call('/ai/chat', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/chat', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
+        log_ai_call('/ai/chat', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
         app.logger.exception('AI chat error')
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
@@ -3002,6 +3048,7 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
 }}"""
 
     # ── Call Claude ───────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -3011,9 +3058,16 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
             messages=[{'role': 'user', 'content': description}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/build-assembly', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/build-assembly', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
+        log_ai_call('/ai/build-assembly', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
         app.logger.exception('AI build-assembly error')
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
@@ -3292,6 +3346,7 @@ Level values must be one of: MISSING_LINE_ITEM, MISSING_ASSEMBLY, MISSING_CSI_DI
 Severity values must be one of: HIGH, MEDIUM, LOW"""
 
     # ── Call Claude ────────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -3301,9 +3356,16 @@ Severity values must be one of: HIGH, MEDIUM, LOW"""
             messages=[{'role': 'user', 'content': 'Please review this estimate for scope gaps and missing items.'}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/scope-gap', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/scope-gap', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
+        log_ai_call('/ai/scope-gap', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
         app.logger.exception('AI scope-gap error')
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
@@ -3447,6 +3509,7 @@ REQUIRED JSON FORMAT:
     user_message = "\n\n".join(user_message_parts)
 
     # ── Call Claude ───────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -3456,9 +3519,16 @@ REQUIRED JSON FORMAT:
             messages=[{'role': 'user', 'content': user_message}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/production-rate', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/production-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
+        log_ai_call('/ai/production-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
         app.logger.exception('AI generate-items error')
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
@@ -3558,6 +3628,7 @@ REQUIRED JSON FORMAT:
     user_message = li_block + db_block
 
     # ── Call Claude ───────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -3567,9 +3638,16 @@ REQUIRED JSON FORMAT:
             messages=[{'role': 'user', 'content': user_message}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/validate-rate', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/validate-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
+        log_ai_call('/ai/validate-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
         app.logger.exception('AI validate-rate error')
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
@@ -3823,6 +3901,21 @@ def run_migrations():
             "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE",
             "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS estimator_action VARCHAR(20)",
             "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS edit_delta TEXT",
+            # D.1 — AI call log (flywheel telemetry)
+            """CREATE TABLE IF NOT EXISTS ai_call_log (
+                id SERIAL PRIMARY KEY,
+                route VARCHAR(50) NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                company_id INTEGER REFERENCES companies(id),
+                project_id INTEGER,
+                model VARCHAR(100),
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                latency_ms INTEGER,
+                success BOOLEAN DEFAULT TRUE,
+                error_type VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
         ]
         for sql in stmts:
             try:
