@@ -81,7 +81,8 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Track D — Data & AI Foundation (Data/AI Engineer)
 
-### D.1 — `ai_call_log` table + `log_ai_call()`: in progress
+### D.1 — `ai_call_log` table + `log_ai_call()`: COMPLETE ✓
+*Commit: `d85be43`. AICallLog model, migration, helper wired into all 5 AI routes.*
 ### D.2 — Flywheel field writes review: unblocked (A.2 shipped)
 ### D.3 — Prompt construction discipline audit: pending
 
@@ -109,6 +110,8 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 | `e25db7b` | Brand B.1: landing page coherence — 5 issues fixed |
 | `ff373a6` | Brand B.1: 2-stage beta — remove $29/mo from all copy |
 | `db14ebf` | DEC-005: stage 1→2 feedback trigger locked |
+| `50cfde5` | ops: deploy script hardening — SECRET_KEY guard + systemd restart rate limits |
+| `d85be43` | data: D.1 — ai_call_log + log_ai_call() wired into all 5 AI routes |
 
 ## Blocked
 
