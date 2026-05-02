@@ -95,6 +95,10 @@ All eleven items shipped in one session:
 3. **Track D.1** — `ai_call_log` table + `log_ai_call()` helper (starting now; pure code work, no staging dependency).
 4. **Track B.1** — Landing page audit (starting now; works against current code).
 
+## Backlog (not current sprint)
+
+- **deploy/staging-setup.sh bugs** (logged 2026-05-02): no postgres database detection before createdb call fails gracefully; nginx server block may not render correctly on some distros. Fix before next staging rebuild. Low urgency — staging is live and operational.
+
 ## Coverage gaps
 
 - `docs/00_FOUNDER_CONTEXT.md` referenced in multiple places but doesn't exist in `docs/` — file appears to be missing from the repo. Audits reference it as Section 5 (pricing intuitions) and Section 7 (brand voice). **Action needed**: if this file was never created, sections relevant to brand voice in `06_ENGAGEMENT_PLAN.md` and brand decisions in `FOUNDATION_SPRINT.md` cover the gaps adequately for now.
