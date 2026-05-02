@@ -17,6 +17,14 @@ echo "==> Installing any new dependencies..."
 source "$VENV_DIR/bin/activate"
 pip install -r requirements.txt
 
+echo "==> Checking SECRET_KEY strength before restart..."
+_sk=$(grep '^SECRET_KEY=' "$APP_DIR/.env" 2>/dev/null | cut -d'=' -f2-)
+if [ ${#_sk} -lt 32 ]; then
+    echo "ERROR: SECRET_KEY in $APP_DIR/.env is missing or too short (${#_sk} chars). Set a strong key (>= 32 chars) before deploying."
+    exit 1
+fi
+unset _sk
+
 echo "==> Restarting service..."
 systemctl restart zenbid
 

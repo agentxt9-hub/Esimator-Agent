@@ -44,8 +44,8 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 ### A.3 — Mono-repo restructure: pending
 *Depends on: A.1 complete (now unblocked).*
 
-### A.4 — Best-practices baseline: pending
-*Centralized logging, Sentry wiring, README update.*
+### A.4 — Best-practices baseline: pending (P1 — must ship before beta users)
+*Centralized logging, Sentry wiring, Uptime Kuma, README update. Elevated to P1 after production 502 incident — no beta users until monitoring is live.*
 
 ---
 
@@ -123,6 +123,14 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 ## Backlog
 
 - `deploy/staging-setup.sh` bugs: no postgres detection before createdb; nginx server block issues. Fix before next staging rebuild.
+
+### P1 — Sprint One (from 2026-05-02 production 502 post-incident)
+
+1. **Startup gate + key rotation atomicity** — Document the required ops sequence: rotate `SECRET_KEY` first, verify strong key in `.env`, THEN enable the startup gate and restart. Never ship the gate without rotating. Add to `docs/OPERATIONS.md` runbook before Sprint One opens.
+
+2. **systemd restart rate limit on live production service** — `deploy/setup.sh` and `deploy/staging-setup.sh` now have `StartLimitBurst=3 / StartLimitInterval=60s / Restart=on-failure / RestartSec=5` in the service template, but the **live production `/etc/systemd/system/zenbid.service`** needs these values applied manually. Founder action: SSH to production, edit the service file, run `systemctl daemon-reload`.
+
+3. **Sentry + Uptime Kuma before any beta users** — Production was down and we only caught it via `update.sh` failure. Wire Sentry error tracking and Uptime Kuma uptime alerting as part of A.4. This is a blocker for opening beta to any external users.
 
 ## Coverage gaps
 

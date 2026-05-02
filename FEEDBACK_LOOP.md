@@ -47,6 +47,13 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
   DEC-005 added to queue: define stage 1 → stage 2 transition criteria. Founder recommends option (c): 3+ stage 1 users say "I'd pay for this."
   Note for when outreach playbook is drafted: no $29/mo language in tier 1 or tier 2 outreach until stage 2 launches.
 
+- [2026-05-02] **HIGH — Production 502 post-incident: 3 process gaps identified.**
+  Root cause: Sprint Zero startup gate (`SECRET_KEY` strength check) enabled without rotating the existing weak key. Production went down on next service restart. Fixed: 64-char hex key generated, `.env` updated, service restored. Sessions invalidated as expected.
+  Gap 1: Startup gate + key rotation must be a single atomic operation. Gate enabled → key must be rotated in the same ops window. Never ship a gate without the rotation step.
+  Gap 2: systemd restart counter hit 2047 (tight loop, high CPU). Need `StartLimitBurst`/`StartLimitInterval` in the service unit so it gives up after N attempts and surfaces an alarm rather than infinite-looping.
+  Gap 3: No monitoring/alerting. Production was down and we only caught it via `update.sh` failure. Sentry + Uptime Kuma must be wired BEFORE any beta users hit the platform.
+  → All 3 logged as P1 backlog for Sprint One. `deploy/update.sh` guard added immediately.
+
 - [2026-05-02] **Process feedback — stale task plan.** Orchestrator reported Track A.1 as "on founder" when staging was already live and landing page already verified. Fix: verify ORCHESTRATOR_TASK_PLAN.md against `git log` on every `/status` run before reporting. Don't report work as outstanding if commits show it shipped.
 
 - [2026-05-02] Staging landing page copy approved by founder. "Reserve beta access", "Early access is open — first estimators test free" confirmed in browser. No $29/mo references. Approving for production promotion.
