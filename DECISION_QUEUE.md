@@ -16,13 +16,13 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 **Options:**
 
 1. **Free time-limited beta** for first 10–20 users (e.g., 30 days), with post-beta conversion prompt at $49–$79/mo per `docs/00_FOUNDER_CONTEXT.md` Section 5 intuitions
-2. **Cheap paid beta** ($9/mo for first 20 users) — lower friction than free if you can articulate value, gives commitment signal early
+2. **Cheap paid beta** ($29/mo for first 20 users for 6 months) — lower friction than free if you can articulate value, gives commitment signal early
 3. **Invite-only beta** — founder hand-picks first 10–20 from warm network, completely free during testing, asks for feedback in lieu of payment
 
 **Recommended call:** Option 1 (free time-limited beta) — fastest to fill, lowest friction, lets product earn the post-beta conversion. Option 3 is acceptable if you want tight control over who's in. Option 2 is acceptable if you want commitment signal but adds friction at a stage where you want volume.
 
-**Founder decision:** *[to be filled]*
-**Decided on:** *[to be filled]*
+**Founder decision: Option 2
+**Decided on: 5/2/2026
 
 ---
 
