@@ -58,6 +58,18 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
 
 - [2026-05-02] Staging landing page copy approved by founder. "Reserve beta access", "Early access is open — first estimators test free" confirmed in browser. No $29/mo references. Approving for production promotion.
 
+- [2026-05-02] **D.1 confirmed shipped.** AICallLog model + run_migrations CREATE TABLE + log_ai_call() wired across all 5 AI routes. Flywheel data capture now complete: ai_generated, estimator_action, ai_call_log all populating in production going forward.
+
+- [2026-05-02] **HIGH — A.4 scope locked + reorder: A.4 (monitoring) goes BEFORE C.1 (Playwright).** Today's 502 incident proved we're blind to production outages. A.4 scope:
+  1. Sentry SDK + Flask error handlers + DSN from environment. Verify test exception surfaces in Sentry dashboard within 30s.
+  2. Uptime Kuma monitors for zenbid.io + staging.zenbid.io — 60s checks, alert on 2 consecutive failures. Alerts to thomas@zenbid.io + optional Slack/Discord webhook.
+  3. Structured logging via Flask config — /var/log/zenbid/app.log in prod, stdout in dev. Log level from env, default INFO.
+  4. Specifically log: auth events (login/logout/signup/failed login), admin panel access, every 5xx response. AI calls already covered by log_ai_call().
+  5. .env.example updated with SENTRY_DSN, LOG_LEVEL.
+  6. docs/MONITORING.md — wiring overview, alert destinations, how to test.
+  Verification gate: deliberately raise exception on staging → confirm Sentry receives it within 30s. Stop staging gunicorn → confirm Uptime Kuma fires alert. Only then mark A.4 complete.
+  C.1 (Playwright) unblocks after A.4 is verified.
+
 ### Routing decisions made today
 - Sprint Zero items (all 11) routed to Foundation Engineer → shipped in single session
 - DEC-001 amended (2026-05-02): 2-stage beta model. Stage 1 free validation → stage 2 paid $29/mo

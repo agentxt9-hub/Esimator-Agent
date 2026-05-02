@@ -21,7 +21,11 @@ import csv
 import re
 import secrets
 import time
+import logging
+import logging.handlers
 import anthropic
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -72,6 +76,42 @@ login_manager.login_message = 'Please log in to access this page.'
 csrf    = CSRFProtect(app)
 limiter = Limiter(key_func=get_remote_address, app=app, default_limits=[], storage_uri='memory://')
 mail    = Mail(app)
+
+# ─────────────────────────────────────────
+# SENTRY + STRUCTURED LOGGING
+# ─────────────────────────────────────────
+
+_sentry_dsn = os.environ.get('SENTRY_DSN', '')
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.1,
+        environment=os.environ.get('FLASK_ENV', 'development'),
+        send_default_pii=False,
+    )
+
+def _configure_logging():
+    log_level_name = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    log_level      = getattr(logging, log_level_name, logging.INFO)
+    fmt = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+
+    root = logging.getLogger()
+    root.setLevel(log_level)
+
+    if os.environ.get('FLASK_ENV') == 'production':
+        log_dir = '/var/log/zenbid'
+        os.makedirs(log_dir, exist_ok=True)
+        fh = logging.handlers.TimedRotatingFileHandler(
+            f'{log_dir}/app.log', when='midnight', backupCount=14, encoding='utf-8')
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
+    else:
+        sh = logging.StreamHandler()
+        sh.setFormatter(fmt)
+        root.addHandler(sh)
+
+_configure_logging()
 
 # ─────────────────────────────────────────
 # DATABASE MODELS
@@ -485,10 +525,13 @@ def login():
             user = User.query.filter_by(username=email).first()
         if user and user.check_password(password):
             login_user(user, remember=remember)
+            app.logger.info('auth.login user_id=%s email=%s ip=%s',
+                            user.id, email, request.remote_addr)
             next_page = request.args.get('next')
             if next_page and not next_page.startswith('/'):
                 next_page = None
             return redirect(next_page or url_for('index'))
+        app.logger.warning('auth.login_failed email=%s ip=%s', email, request.remote_addr)
         return render_template('login.html', error='Invalid email or password', email=email)
     return render_template('login.html')
 
@@ -523,6 +566,8 @@ def signup():
         db.session.add(user)
         db.session.commit()
         login_user(user, remember=True)
+        app.logger.info('auth.signup user_id=%s email=%s company=%s ip=%s',
+                        user.id, email, company_name, request.remote_addr)
         flash('Account created! Welcome to Zenbid.', 'success')
         return redirect(url_for('index'))
     return render_template('signup.html')
@@ -530,6 +575,7 @@ def signup():
 @app.route('/logout')
 @login_required
 def logout():
+    app.logger.info('auth.logout user_id=%s ip=%s', current_user.id, request.remote_addr)
     logout_user()
     return redirect(url_for('login'))
 
@@ -541,6 +587,7 @@ def logout():
 @login_required
 @admin_required
 def admin_panel():
+    app.logger.info('admin.panel_access user_id=%s ip=%s', current_user.id, request.remote_addr)
     companies = Company.query.order_by(Company.company_name).all()
     all_users = User.query.order_by(User.company_id, User.username).all()
     return render_template('admin.html', companies=companies, all_users=all_users)
@@ -3958,6 +4005,47 @@ def seed_production_rates():
                 min_rate=min_r, typical_rate=typ_r, max_rate=max_r, source_notes=notes,
             ))
         db.session.commit()
+
+# ─────────────────────────────────────────
+# ERROR HANDLERS
+# ─────────────────────────────────────────
+
+@app.errorhandler(500)
+def internal_error(e):
+    app.logger.error('http.500 path=%s method=%s ip=%s',
+                     request.path, request.method, request.remote_addr)
+    return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.errorhandler(502)
+def bad_gateway(e):
+    app.logger.error('http.502 path=%s', request.path)
+    return jsonify({'success': False, 'error': 'Bad gateway'}), 502
+
+
+@app.errorhandler(503)
+def service_unavailable(e):
+    app.logger.error('http.503 path=%s', request.path)
+    return jsonify({'success': False, 'error': 'Service unavailable'}), 503
+
+
+# ─────────────────────────────────────────
+# DEBUG / HEALTH ROUTES (non-production only)
+# ─────────────────────────────────────────
+
+@app.route('/_health')
+def health_check():
+    """Lightweight health check for Uptime Kuma and load balancers."""
+    return jsonify({'status': 'ok'}), 200
+
+
+@app.route('/_sentry-test')
+def sentry_test():
+    """Deliberately raise an exception to verify Sentry wiring. Non-production only."""
+    if os.environ.get('FLASK_ENV') == 'production':
+        return jsonify({'error': 'not available in production'}), 404
+    raise RuntimeError('Sentry test exception — wiring verified')
+
 
 # ─────────────────────────────────────────
 # BLUEPRINT REGISTRATION
