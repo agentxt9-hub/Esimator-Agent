@@ -43,23 +43,19 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 
 ---
 
-### DEC-005: Stage 1 → Stage 2 transition criteria
+### ~~DEC-005: Stage 1 → Stage 2 transition criteria~~
 
 **Surfaced:** 2026-05-02
 **Surfaced by:** Founder (with DEC-001 amendment)
 
-**Context:** DEC-001 establishes a 2-stage beta model. Stage 1 is a free validation period. Stage 2 is paid ($29/mo). The question is what signal triggers the transition — and who decides when it's hit.
-
 **Options:**
-1. **(a) Calendar trigger** — e.g., 60 days of stage 1, then evaluate regardless of outcome
-2. **(b) Volume trigger** — 10 active stage 1 users using the product weekly
-3. **(c) Feedback trigger** — 3+ stage 1 users explicitly say "I would pay for this" (unprompted or in structured feedback)
-4. **(d) Founder discretion** — no fixed criteria; founder calls it when it feels right
+1. **(a)** Calendar trigger — 60 days, then evaluate
+2. **(b)** Volume trigger — 10 active weekly users
+3. **(c)** Feedback trigger — 3+ stage 1 users say "I would pay for this"
+4. **(d)** Founder discretion — no fixed criteria
 
-**Recommended call (founder's):** Option (c) — feedback trigger. Ties the gate to actual validation signal, not arbitrary milestones. Prevents premature monetization. Prevents indefinite free access. The question to stage 1 users: "Would you pay $29/mo for this?" If 3 say yes, the gate opens.
-
-**Founder decision:** *[to be confirmed]*
-**Decided on:** *[to be filled]*
+**Founder decision:** Option (c) — Feedback trigger. Gate opens when 3+ stage 1 users explicitly say "I would pay for this" (unprompted or via structured check-in). Founder calls the transition.
+**Decided on:** 2026-05-02
 
 ---
 
@@ -77,6 +73,13 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 ---
 
 ## Resolved
+
+### ~~DEC-005: Stage 1 → Stage 2 transition criteria~~
+
+**Decision:** Option (c) — Feedback trigger. 3+ stage 1 users say "I would pay for this." Founder calls the transition. $29/mo language returns to landing page and outreach at that point.
+**Decided on:** 2026-05-02
+
+---
 
 ### ~~DEC-001: Beta pricing and capture model~~
 
