@@ -30,12 +30,19 @@ All eleven items shipped in one session:
 - [x] `routes.py` deleted.
 - [x] Migration failure logging: `print(f"Migration failed: ...")` in except block.
 
-**Track A.1 — Staging environment** — *pending: next priority*
-- Provision staging droplet / staging app
-- Separate staging DB (`zenbid_staging`)
-- Staging domain (`staging.zenbid.io`) with SSL
-- Update deploy script for staging/production targets
-- Document in `docs/STAGING.md`
+**Track A.1 — Staging environment** — *scripts shipped; server provisioning pending founder action*
+- [x] DEC-003 resolved: same-droplet staging (2026-05-02)
+- [x] `deploy/staging-setup.sh` — one-time setup script for staging on the droplet
+- [x] `deploy/staging-update.sh` — code deploy script for staging
+- [x] `docs/STAGING.md` — full setup and ops documentation
+- [x] `.env.staging.example` — staging env template with all new vars
+- [x] `.env.example` updated with `SUPERADMIN_EMAIL`, `FLASK_ENV`, `REQUIRE_SECURE_CONFIG`
+- [ ] **Founder action required:** Run `bash /var/www/zenbid/deploy/staging-setup.sh` on the droplet
+- [ ] **Founder action required:** Edit `/var/www/zenbid-staging/.env` with staging secrets
+- [ ] **Founder action required:** Add DNS A record for `staging.zenbid.io` → droplet IP
+- [ ] **Founder action required:** `certbot --nginx -d staging.zenbid.io` for SSL
+- [ ] **Founder action required:** `systemctl start zenbid-staging`
+- [ ] Smoke-test after provisioning
 
 **Track A.3 — Mono-repo restructure** — *pending: after staging is up*
 **Track A.4 — Best-practices baseline** — *pending: after A.1*
@@ -83,10 +90,10 @@ All eleven items shipped in one session:
 
 ## Next up
 
-1. **Track A.1** — provision staging environment. Need: DigitalOcean access or clarification on where staging should live (same droplet, separate droplet, or Fly.io/Render). Will surface as DEC-003 if founder hasn't specified.
-2. **Track C.1** — Playwright setup (parallel with staging; can write tests against local env first).
-3. **Track B.1** — Landing page audit (parallel; works against current code).
-4. **Track D.1** — `ai_call_log` table + `log_ai_call()` helper (parallel; pure code work).
+1. **Track A.1** — staging server provisioning (founder runs `staging-setup.sh` on the droplet; scripts are ready).
+2. **Track C.1** — Playwright setup (starting now; writing tests against local env first, then re-run on staging).
+3. **Track D.1** — `ai_call_log` table + `log_ai_call()` helper (starting now; pure code work, no staging dependency).
+4. **Track B.1** — Landing page audit (starting now; works against current code).
 
 ## Coverage gaps
 

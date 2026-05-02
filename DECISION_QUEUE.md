@@ -26,6 +26,23 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 
 ---
 
+### ~~DEC-003: Staging environment location~~
+
+**Surfaced:** 2026-05-02
+**Surfaced by:** Orchestrator (Foundation Sprint Day 1)
+
+**Context:** Track A.1 requires a staging environment. Three options were identified: (1) same DigitalOcean droplet as production with separate app directory, (2) separate droplet, (3) managed platform (Fly.io/Render).
+
+**Options:**
+1. Same droplet — separate `/var/www/zenbid-staging` dir, separate DB, separate systemd service, separate subdomain. Cheapest; acceptable for beta scale.
+2. Separate droplet — full isolation; more expensive; better for production safety.
+3. Managed platform (Fly.io/Render) — easiest to provision; some config divergence from production.
+
+**Founder decision:** Option 1 — same-droplet staging
+**Decided on:** 2026-05-02
+
+---
+
 ### DEC-002: Sprint One scope (drafted at Foundation closure)
 
 **Surfaced:** *[Will be surfaced when Foundation Sprint closes]*
@@ -41,4 +58,7 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 
 ## Resolved
 
-*[empty until founder resolves a decision; resolved entries move here with strikethrough]*
+### ~~DEC-001: Beta pricing and capture model~~
+
+**Decided:** Option 2 — Cheap paid beta ($29/mo for first 20 users for 6 months)
+**Decided on:** 2026-05-02
