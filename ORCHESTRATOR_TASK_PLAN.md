@@ -13,10 +13,10 @@
 
 ## Pre-outreach gates (founder actions — must clear before F.1 begins)
 
-- [ ] **Gate 1 — B.1 production promotion:** Run `bash /var/www/zenbid/deploy/update.sh` on production server. Landing page must be live at zenbid.io.
-- [ ] **Gate 2 — A.4 alert verification:** Wire Discord/email webhook in Uptime Kuma → stop staging → confirm alert fires → mark A.4 fully complete.
-- [ ] **Gate 3 — SENTRY_DSN rotation:** Rotate via Sentry dashboard. Update both server `.env` files. Restart both services.
-- [ ] **Gate 4 — systemd restart rate limits on production service:** SSH to production, edit `/etc/systemd/system/zenbid.service` to add `StartLimitBurst=3`, `StartLimitInterval=60s`, `Restart=on-failure`, `RestartSec=5`. Run `systemctl daemon-reload`.
+- [x] **Gate 1 — B.1 production promotion:** COMPLETE 2026-05-03. `update.sh` ran, service confirmed healthy. Landing page live at zenbid.io.
+- [ ] **Gate 2 — A.4 alert verification:** EXPLICITLY PUNTED. Wire Discord/email webhook in Uptime Kuma → stop staging → confirm alert fires. Not blocking outreach; accept the risk that a staging outage goes unnoticed until wired.
+- [x] **Gate 3 — SENTRY_DSN rotation:** COMPLETE 2026-05-03. DSN rotated via Sentry dashboard, both server `.env` files updated, both services restarted.
+- [x] **Gate 4 — systemd restart rate limits:** COMPLETE 2026-05-03. `StartLimitBurst` and `StartLimitInterval` added to both `zenbid.service` and `zenbid-staging.service`, `daemon-reload` confirmed on both.
 
 ---
 
