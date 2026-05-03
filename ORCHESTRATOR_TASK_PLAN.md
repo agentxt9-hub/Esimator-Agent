@@ -44,13 +44,14 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 ### A.3 — Mono-repo restructure: pending
 *Depends on: A.1 complete (now unblocked).*
 
-### A.4 — Monitoring + structured logging: COMPLETE ✓
-*Commit: `6c060d9`. Server verified by founder 2026-05-02.*
-- [x] Sentry wired — exception in dashboard within 15s of `/_sentry-test`
+### A.4 — Monitoring + structured logging: CODE VERIFIED — notification gap pending closure
+*Commit: `6c060d9`. Most of A.4 verified. One gap remaining.*
+- [x] Sentry SDK verified via log: "Sentry is attempting to send 2 pending events" + "Waiting up to 2 seconds". Founder to confirm issue appears in sentry.io dashboard.
 - [x] Uptime Kuma at status.zenbid.io — both monitors green, 60s checks
-- [x] Alert verified — staging stop → red in 2 min, restart → green in 1 min
 - [x] Structured logging active — journalctl + /var/log/zenbid/app.log
 - [x] Auth events, admin access, 5xx handlers, `/_health` all wired
+- [ ] **GAP: Uptime Kuma notification channel not wired.** 30+ min staging outage went unnoticed. Founder to: wire Discord/email webhook in Uptime Kuma → stop staging → confirm alert fires end-to-end → mark A.4 COMPLETE.
+- [ ] **Founder action: rotate SENTRY_DSN** — exposed in session log. Update both server .env files, restart both services.
 
 ---
 

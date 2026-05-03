@@ -78,6 +78,18 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
   3. **LOW — Notification channels deferred**: Uptime Kuma + Sentry email sufficient for current stage. Discord/Slack/SMS wiring deferred to Sprint One+.
   4. **LOW — SENTRY_DSN rotation**: DSN was exposed in conversation log. Founder to rotate via Sentry dashboard and update both server .env files. No code change required.
 
+- [2026-05-02] **C.1 VERIFIED AGAINST STAGING — 25/25 passing in 31.2s.** baseURL log confirmed "[globalSetup] Using baseURL: https://staging.zenbid.io". All tests passed including cross-company isolation guard and brand assertions.
+
+- [2026-05-02] **Bug found + patched on droplet: global-setup.js baseURL propagation.** `config.use?.baseURL` does not propagate into Playwright globalSetup — must read `process.env.BASE_URL` directly. Patched on droplet; needs to be committed to repo. Fix: `const baseURL = process.env.BASE_URL || config.use?.baseURL || 'http://127.0.0.1:5000';` + console.log for visibility.
+
+- [2026-05-02] **A.4 Sentry SDK side verified via log evidence.** Staging journalctl showed "RuntimeError: Sentry test exception — wiring verified" + "Sentry is attempting to send 2 pending events" + "Waiting up to 2 seconds". SDK caught and shipped the exception. Founder to confirm issue visible in sentry.io browser dashboard.
+
+- [2026-05-02] **REAL GAP — A.4 Uptime Kuma alert notifications NOT verified.** Staging was stopped during Sentry test, not restarted, discovered after 30+ min outage via failed Playwright run. Kuma dashboard showed red but no notification fired (no channels wired). A.4 cannot be marked fully complete until: (1) Founder wires Discord webhook in Uptime Kuma, (2) Stop staging → confirm Discord/email alert fires end-to-end. Notification channel deferred status REVERSED — this is the gap that let a 30+ min outage go unnoticed.
+
+- [2026-05-02] **Revised priority confirmed:** (1) Founder: Sentry dashboard check, (2) Founder: wire Uptime Kuma notification channel, (3) Founder: rotate SENTRY_DSN. (4) Commit global-setup.js fix to repo. (5) B.2 in parallel. (6) Stop staging → verify end-to-end alert → A.4 fully closes. Tomorrow: B.3-B.5, A.3 (mono-repo last), engineering challenger pass, DEC-002 Sprint One scope.
+
+- [2026-05-02] **Day summary:** 6 tracks shipped (A.1, A.2, A.4 partial, B.1, C.1 verified, D.1) + survived 3 prod/staging incidents + stood up staging from scratch. Closing verification gaps tonight.
+
 ### Routing decisions made today
 - Sprint Zero items (all 11) routed to Foundation Engineer → shipped in single session
 - DEC-001 amended (2026-05-02): 2-stage beta model. Stage 1 free validation → stage 2 paid $29/mo

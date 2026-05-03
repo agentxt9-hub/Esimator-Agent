@@ -7,10 +7,11 @@ const path = require('path');
 const AUTH_STATE_PATH = path.join(__dirname, '..', '.auth-state.json');
 
 async function globalSetup(config) {
+  // process.env.BASE_URL takes priority — config.use?.baseURL doesn't propagate into globalSetup
+  const baseURL = process.env.BASE_URL || config.use?.baseURL || 'http://127.0.0.1:5000';
+  console.log(`[globalSetup] Using baseURL: ${baseURL}`);
   const browser = await chromium.launch();
-  const page = await browser.newPage({
-    baseURL: config.use?.baseURL || 'http://127.0.0.1:5000',
-  });
+  const page = await browser.newPage({ baseURL });
   await signupOrLogin(page);
   await page.context().storageState({ path: AUTH_STATE_PATH });
   await browser.close();
