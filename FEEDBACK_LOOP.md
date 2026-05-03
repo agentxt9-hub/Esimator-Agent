@@ -70,6 +70,14 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
   Verification gate: deliberately raise exception on staging → confirm Sentry receives it within 30s. Stop staging gunicorn → confirm Uptime Kuma fires alert. Only then mark A.4 complete.
   C.1 (Playwright) unblocks after A.4 is verified.
 
+- [2026-05-02] **A.4 FULLY VERIFIED — COMPLETE.** Uptime Kuma live at status.zenbid.io, both monitors green at 60s intervals. Sentry verified: curl /_sentry-test → exception in dashboard within 15s. Alert test: stopped zenbid-staging → monitor red in 2 min, green in 1 min after restart.
+
+- [2026-05-02] **Sprint One backlog items flagged:**
+  1. **HIGH — CI/CD pipeline**: A.4 code merged to main but neither prod nor staging auto-deployed — had to manually fire update.sh. GitHub Actions workflow on push-to-main needed.
+  2. **LOW — Growth-hub admin recovery runbook**: NPM password recovery wasted 30+ min. Document container names, DB locations, bcrypt reset SQL in docs/GROWTH_HUB_RECOVERY.md.
+  3. **LOW — Notification channels deferred**: Uptime Kuma + Sentry email sufficient for current stage. Discord/Slack/SMS wiring deferred to Sprint One+.
+  4. **LOW — SENTRY_DSN rotation**: DSN was exposed in conversation log. Founder to rotate via Sentry dashboard and update both server .env files. No code change required.
+
 ### Routing decisions made today
 - Sprint Zero items (all 11) routed to Foundation Engineer → shipped in single session
 - DEC-001 amended (2026-05-02): 2-stage beta model. Stage 1 free validation → stage 2 paid $29/mo

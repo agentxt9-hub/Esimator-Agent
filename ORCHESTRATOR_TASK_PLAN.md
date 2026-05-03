@@ -44,12 +44,13 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 ### A.3 — Mono-repo restructure: pending
 *Depends on: A.1 complete (now unblocked).*
 
-### A.4 — Monitoring + structured logging: CODE SHIPPED (`6c060d9`) — awaiting server verification
-*Reordered before C.1 by founder (2026-05-02). Code is on main. Requires two manual verifications on staging before marking COMPLETE:*
-- [ ] **Sentry test:** `curl https://staging.zenbid.io/_sentry-test` → confirm exception appears in Sentry dashboard within 30s. Requires `SENTRY_DSN` set in staging `.env` first.
-- [ ] **Uptime Kuma test:** `sudo systemctl stop zenbid-staging` → wait 2 min → confirm alert fires to thomas@zenbid.io. Requires Uptime Kuma installed + monitors configured per `docs/MONITORING.md`.
-- [ ] **Log check:** log in to staging app → `sudo journalctl -u zenbid-staging -f` → confirm `auth.login` entry appears.
-*C.1 (Playwright) unblocks after both verifications pass.*
+### A.4 — Monitoring + structured logging: COMPLETE ✓
+*Commit: `6c060d9`. Server verified by founder 2026-05-02.*
+- [x] Sentry wired — exception in dashboard within 15s of `/_sentry-test`
+- [x] Uptime Kuma at status.zenbid.io — both monitors green, 60s checks
+- [x] Alert verified — staging stop → red in 2 min, restart → green in 1 min
+- [x] Structured logging active — journalctl + /var/log/zenbid/app.log
+- [x] Auth events, admin access, 5xx handlers, `/_health` all wired
 
 ---
 
@@ -76,7 +77,7 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Track C — Test Infrastructure (QA / Test Automation Engineer)
 
-### C.1 — Playwright setup: BLOCKED on A.4 server verification
+### C.1 — Playwright E2E + API scaffolding: in progress
 ### C.2 — API test suite: pending
 ### C.3 — Monitoring infrastructure: pending
 ### C.4 — Test documentation: pending
@@ -124,13 +125,15 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Next up
 
-1. **Track A.4 server verification** — founder action: set `SENTRY_DSN` in staging `.env`, run `pip install sentry-sdk[flask]`, restart staging, then run the two verification steps in `docs/MONITORING.md`. Mark complete when both pass.
-2. **Track C.1** — Playwright setup (unblocks after A.4 verified)
-3. **Track B.2** — In-app copy audit (can run in parallel with C.1)
+1. **Track C.1** — Playwright E2E + API scaffolding (in progress)
+2. **Track B.2** — In-app copy audit (can run in parallel with C.1)
 
 ## Backlog
 
 - `deploy/staging-setup.sh` bugs: no postgres detection before createdb; nginx server block issues. Fix before next staging rebuild.
+- Growth-hub admin recovery runbook: NPM password recovery wasted 30+ min. Document container names, DB locations, bcrypt reset SQL in `docs/GROWTH_HUB_RECOVERY.md`.
+- Notification channels: Uptime Kuma + Sentry email sufficient now. Discord/Slack/SMS deferred to Sprint One+.
+- SENTRY_DSN: DSN was exposed in session log. Founder to rotate via Sentry dashboard, update both server .env files, restart both services.
 
 ### P1 — Sprint One (from 2026-05-02 production 502 post-incident)
 
@@ -138,7 +141,9 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 2. **systemd restart rate limit on live production service** — `deploy/setup.sh` and `deploy/staging-setup.sh` now have `StartLimitBurst=3 / StartLimitInterval=60s / Restart=on-failure / RestartSec=5` in the service template, but the **live production `/etc/systemd/system/zenbid.service`** needs these values applied manually. Founder action: SSH to production, edit the service file, run `systemctl daemon-reload`.
 
-3. **Sentry + Uptime Kuma before any beta users** — Production was down and we only caught it via `update.sh` failure. Wire Sentry error tracking and Uptime Kuma uptime alerting as part of A.4. This is a blocker for opening beta to any external users.
+3. ~~**Sentry + Uptime Kuma before any beta users**~~ — DONE: A.4 verified 2026-05-02.
+
+4. **CI/CD pipeline** — Code merged to main but neither prod nor staging auto-deployed; had to manually run update.sh. GitHub Actions workflow on push-to-main needed for Sprint One.
 
 ## Coverage gaps
 
