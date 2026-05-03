@@ -2677,13 +2677,13 @@ def ai_chat():
                 total_hours     += hrs
                 total_cost      += tot
                 item_rows.append(
-                    f"  - [{it.id}] {it.description} | {float(it.quantity or 0)} {it.unit} "
+                    f"  - [{it.id}] <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} "
                     f"| type={it.item_type} prod_base={it.prod_base} "
                     f"rate={float(it.production_rate or 0)} | "
                     f"mat=${mat:.2f} lab=${lab:.2f} equ=${equ:.2f} hrs={hrs:.1f} total=${tot:.2f}"
                 )
             asm_blocks.append(
-                f"Assembly [id={asm.id}] {asm.assembly_label}: {asm.assembly_name} "
+                f"Assembly [id={asm.id}] {asm.assembly_label}: <assembly_name>{asm.assembly_name}</assembly_name> "
                 f"[CSI: {csi1_map.get(asm.csi_level_1_id, 'none')} / {csi2_map.get(asm.csi_level_2_id, 'none')}]\n"
                 + ("\n".join(item_rows) if item_rows else "  (no line items)")
             )
@@ -2704,7 +2704,7 @@ def ai_chat():
                 total_hours     += hrs
                 total_cost      += tot
                 direct_rows.append(
-                    f"  - [{it.id}] {it.description} | {float(it.quantity or 0)} {it.unit} "
+                    f"  - [{it.id}] <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} "
                     f"| total=${tot:.2f}"
                 )
             asm_blocks.append("Direct Line Items (no assembly):\n" + "\n".join(direct_rows))
@@ -2726,12 +2726,12 @@ def ai_chat():
 
 PROJECT CONTEXT
 ---------------
-Name:        {project.project_name}
+Name:        <project_name>{project.project_name}</project_name>
 Number:      {project.project_number or 'N/A'}
 Location:    {project.city or ''} {project.state or ''} {project.zip_code or ''}
 Type:        {props_map.get(project.project_type_id, 'N/A')}
 Sector:      {props_map.get(project.market_sector_id, 'N/A')}
-Description: {project.description or 'N/A'}
+Description: <description>{project.description or 'N/A'}</description>
 
 LIVE TOTALS
 -----------
@@ -3059,7 +3059,7 @@ Your task is to build a fully-costed assembly for the described scope of work.
 
 PROJECT CONTEXT
 ---------------
-Name:     {project.project_name}
+Name:     <project_name>{project.project_name}</project_name>
 Number:   {project.project_number or 'N/A'}
 Location: {project.city or ''} {project.state or ''} {project.zip_code or ''}
 Type:     {props_map.get(project.project_type_id, 'N/A')}
@@ -3291,12 +3291,12 @@ def ai_scope_gap():
             total_hours     += hrs
             total_cost      += tot
             item_rows.append(
-                f"    - {it.description} | {float(it.quantity or 0)} {it.unit} "
+                f"    - <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} "
                 f"| trade={it.trade or 'N/A'} | mat=${mat:.2f} lab=${lab:.2f} equ=${equ:.2f} total=${tot:.2f}"
             )
 
         asm_blocks.append(
-            f"  [{asm.assembly_label}] {asm.assembly_name}"
+            f"  [{asm.assembly_label}] <assembly_name>{asm.assembly_name}</assembly_name>"
             f" [CSI: {csi1_map.get(asm.csi_level_1_id, 'none')} / {csi2_map.get(asm.csi_level_2_id, 'none')}]\n"
             + ("\n".join(item_rows) if item_rows else "    (no line items)")
         )
@@ -3315,7 +3315,7 @@ def ai_scope_gap():
             total_equipment += equ
             total_cost      += tot
             direct_rows.append(
-                f"    - {it.description} | {float(it.quantity or 0)} {it.unit} | total=${tot:.2f}"
+                f"    - <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} | total=${tot:.2f}"
             )
         asm_blocks.append("  [Direct Line Items — no assembly]\n" + "\n".join(direct_rows))
 
@@ -3338,12 +3338,12 @@ Your job is to identify gaps, omissions, and missing scope — not to reprice it
 
 PROJECT DETAILS
 ---------------
-Name:        {project.project_name}
+Name:        <project_name>{project.project_name}</project_name>
 Number:      {project.project_number or 'N/A'}
 Location:    {project.city or ''} {project.state or ''} {project.zip_code or ''}
 Type:        {props_map.get(project.project_type_id, 'N/A')}
 Sector:      {props_map.get(project.market_sector_id, 'N/A')}
-Description: {project.description or 'N/A'}
+Description: <description>{project.description or 'N/A'}</description>
 
 LIVE ESTIMATE TOTALS
 --------------------
@@ -3386,7 +3386,7 @@ HIGH   — likely to cause a significant cost miss if submitted as-is
 MEDIUM — should be resolved before bid day
 LOW    — minor item or optional scope, flag for estimator awareness
 
-Also note regional considerations for {project.city or 'the project location'}, {project.state or ''} — permits, prevailing wage, specific trade requirements, or weather-related scope that may be missing.
+Also note regional considerations for <project_location>{project.city or 'the project location'}, {project.state or ''}</project_location> — permits, prevailing wage, specific trade requirements, or weather-related scope that may be missing.
 
 RESPONSE FORMAT
 ---------------
@@ -3569,7 +3569,7 @@ REQUIRED JSON FORMAT:
 }"""
 
     # ── User message ──────────────────────────────────────────────────────
-    user_message_parts = [f"QUESTION: {query}"]
+    user_message_parts = [f"QUESTION: <query>{query}</query>"]
     if location_context:
         user_message_parts.append(f"PROJECT LOCATION: {location_context}")
     user_message_parts.append(f"COMPANY TRADES ON FILE: {trades_text}")
@@ -3684,7 +3684,7 @@ REQUIRED JSON FORMAT:
     # ── User message ──────────────────────────────────────────────────────
     li_block = (
         f"LINE ITEM TO VALIDATE:\n"
-        f"  Description: {item.description}\n"
+        f"  Description: <line_item>{item.description}</line_item>\n"
         f"  Quantity: {float(item.quantity or 0)} {item.unit or ''}\n"
         f"  Production rate: {current_rate} {item.unit or 'units'}/hr\n"
         f"  Item type: {item.item_type or 'labor_material'}\n"
