@@ -102,3 +102,39 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
 - DEC-005 added: stage 1 → stage 2 transition criteria (founder-recommended: feedback trigger)
 - Landing page $29/mo copy routed to Track B → fixing now
 - `docs/00_FOUNDER_CONTEXT.md` missing from repo — noted as coverage gap, not blocking Foundation Sprint
+
+---
+
+## 2026-05-03 — E.1/E.2 Founder Walkthrough (Sprint One)
+
+*Founder doing a fresh-user walkthrough on staging.zenbid.io as a real estimator. Log every friction point, confusion, missing feature, copy mismatch, or clunk below. No filter — if it bothered you for even a second, log it.*
+
+### E.1 — Fresh-user friction log
+
+**Step 1 — Landing page**
+*(no entries yet)*
+
+**Step 2 — Signup flow**
+*(no entries yet)*
+
+**Step 3 — Welcome email**
+*(no entries yet)*
+
+**Step 4 — Create first project**
+*(no entries yet)*
+
+**Step 5 — Manual line items**
+*(no entries yet)*
+
+**Step 6 — Assembly Builder**
+*(no entries yet)*
+
+**Step 7 — Tally (AI co-estimator)**
+*(no entries yet)*
+
+**Step 8 — Proposal view**
+*(no entries yet)*
+
+### E.2 — Workflow correctness notes (25-year estimator perspective)
+*(Does this workflow match how you'd actually estimate a job? What's wrong with the model? Log here.)*
+*(no entries yet)*
