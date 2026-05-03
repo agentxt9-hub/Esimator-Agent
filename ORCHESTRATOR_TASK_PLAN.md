@@ -38,29 +38,42 @@
 
 ---
 
-## Sprint One carry-over from Foundation Sprint
+## Track D — Data & AI (Data/AI Engineer)
 
-### D.3 — Prompt construction discipline audit: P0
-*CLAUDE.md hard constraint violation — bare user-input interpolation may exist in production.*
-- [ ] Audit all AI routes for bare user input in prompts
-- [ ] Wrap inputs in delimiters (`<project_name>`, `<description>`, `<line_item>`)
-- [ ] Document pattern in `docs/AI_PROMPT_PATTERNS.md`
-
-### E.1/E.2 — Founder walkthrough + workflow validation: P1
-*Foundation Sprint exit criteria not met. Required before beta users arrive.*
-- [ ] Fresh-user signup on staging
-- [ ] Receive and review welcome email from clean state
-- [ ] Build a project, add line items, use Tally, use Assembly Builder
-- [ ] Log every friction point to FEEDBACK_LOOP.md
-- [ ] Validate workflow as 25-year estimator
-
-### C.2 — API security tests: P1
-- [ ] Auth/cross-tenant tests at the API layer (401/403 on unauth, 403 on cross-company)
-- [ ] Regression coverage for A.2 multi-tenancy fix
+### D.3 — Prompt injection audit: P0 — GATE ON OUTREACH
+*CLAUDE.md hard constraint: AI prompts must wrap user input in delimiters. Bare interpolation = prompt injection risk. Must close before F.1 outreach begins.*
+- [ ] Audit `/ai/chat` — identify every user-supplied variable interpolated into the prompt; wrap in delimiters
+- [ ] Audit `/ai/build-assembly` — same
+- [ ] Audit `/ai/scope-gap` — same
+- [ ] Audit `/ai/production-rate` — same
+- [ ] Audit `/ai/validate-rate` — same
+- [ ] Fix all violations in place (no refactor; surgical delimiter wraps)
+- [ ] Document the pattern in `docs/AI_PROMPT_PATTERNS.md` (what delimiters, why, how to add a new AI route)
+- [ ] Commit + tests still green
 
 ### D.2 — Flywheel field writes tests: P2
 - [ ] Tests confirming `ai_generated=True` sets when AI creates data
 - [ ] Tests confirming `estimator_action` captures correctly
+
+---
+
+## Track E — Founder Onboarding (Founder)
+
+### E.1/E.2 — Walkthrough + workflow validation: P1 — before beta users arrive
+*Foundation Sprint exit criteria not met.*
+- [ ] Fresh-user signup on staging
+- [ ] Receive and review welcome email from clean state
+- [ ] Build a project, add line items, use Tally, use Assembly Builder
+- [ ] Log every friction point to FEEDBACK_LOOP.md
+- [ ] Validate workflow as 25-year estimator — document gaps
+
+---
+
+## Track C — Test Infrastructure (QA Engineer)
+
+### C.2 — API security tests: P1
+- [ ] Auth/cross-tenant tests at the API layer (401/403 on unauth, 403 on cross-company)
+- [ ] Regression coverage for A.2 multi-tenancy fix
 
 ### C.3 — CI/CD GitHub Actions pipeline: P2
 - [ ] Workflow on push-to-main: run pytest + test_takeoff.py + Playwright
@@ -68,6 +81,10 @@
 
 ### C.4 — Test documentation: P3
 - [ ] `tests/README.md` updated with structure, run instructions, how to add a test
+
+---
+
+## Track A — Infrastructure (Foundation Engineer)
 
 ### A.3 — Mono-repo restructure: P4 (last)
 *Low urgency. No user-visible impact.*
