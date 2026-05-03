@@ -24,6 +24,8 @@ cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Zenbid Gunicorn App
 After=network.target postgresql.service
+StartLimitBurst=3
+StartLimitInterval=60s
 
 [Service]
 User=www-data
@@ -31,8 +33,8 @@ Group=www-data
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
 ExecStart=$VENV_DIR/bin/gunicorn app:app --config $APP_DIR/gunicorn.conf.py
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

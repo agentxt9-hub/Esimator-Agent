@@ -9,4 +9,6 @@ anthropic>=0.40,<1.0
 python-dotenv>=1.0,<2.0
 werkzeug>=3.0,<4.0
 gunicorn>=21.0,<23.0
-PyMuPDF>=1.24.0  # pure Python — no poppler/system deps needed
+PyMuPDF>=1.24.0  # page count on upload only; thumbnails render client-side via PDF.js
+requests>=2.31,<3.0
+sentry-sdk[flask]>=2.0,<3.0

@@ -869,7 +869,7 @@
 <div id="ax-toast"></div>
 
 <!-- Tab trigger -->
-<button id="agentx-tab" onclick="axToggle()">🤖 AgentX</button>
+<button id="agentx-tab" onclick="axToggle()">🤖 Tally</button>
 
 <!-- Overlay -->
 <div id="agentx-overlay" onclick="axClose()"></div>
@@ -878,7 +878,7 @@
 <div id="agentx-panel">
     <div class="ax-header">
         <div class="ax-header-row">
-            <span class="ax-title">🤖 AgentX</span>
+            <span class="ax-title">🤖 Tally</span>
             <div style="display:flex;gap:6px;align-items:center;">
                 <button id="ax-rates-btn" onclick="axToggleRates()" title="Production Rate & Pricing Assistant">📊 Rates</button>
                 <button id="ax-scope-btn" onclick="axRunScopeGap()" title="Scope Gap Detector" disabled>🔍 Check Scope</button>
@@ -919,7 +919,7 @@
                 <button class="ax-builder-generate-btn" id="ax-builder-gen-btn" onclick="axGenerateAssembly()">⚡ Generate Assembly</button>
             </div>
             <div id="ax-builder-loading" class="ax-builder-loading" style="display:none;">
-                <span class="ax-spin">⚙</span>AgentX is building your assembly…
+                <span class="ax-spin">⚙</span>Tally is building your assembly…
             </div>
             <div id="ax-builder-preview"></div>
         </div>
@@ -931,14 +931,14 @@
     </div>
 
     <div class="ax-messages" id="ax-messages">
-        <div class="ax-bubble assistant" id="ax-welcome-bubble">Hi! I'm AgentX. Use Research mode for construction knowledge, or Chat for general questions. Open a project to unlock Estimate mode.</div>
+        <div class="ax-bubble assistant" id="ax-welcome-bubble">Hi! I'm Tally. Use Research mode for construction knowledge, or Chat for general questions. Open a project to unlock Estimate mode.</div>
     </div>
 
     <div id="ax-voice-status">
         <span class="ax-voice-dot"></span>Listening…
     </div>
     <div class="ax-input-area">
-        <textarea id="ax-input" rows="2" placeholder="Ask AgentX…"></textarea>
+        <textarea id="ax-input" rows="2" placeholder="Ask Tally…"></textarea>
         <button id="ax-mic" title="Voice input">🎤</button>
         <button id="ax-send" onclick="axSend()">Send</button>
     </div>
@@ -1004,7 +1004,7 @@
     }
 
     function axShowLoading() {
-        axLoadingEl = axAppendBubble('AgentX is thinking…', 'loading');
+        axLoadingEl = axAppendBubble('Tally is thinking…', 'loading');
     }
     function axRemoveLoading() {
         if (axLoadingEl) { axLoadingEl.remove(); axLoadingEl = null; }
@@ -1023,11 +1023,11 @@
     }
 
     const AX_TOAST_MESSAGES = {
-        add_line_items:   '✓ Assembly added by AgentX',
-        update_line_item: '✓ Line item updated by AgentX',
-        update_assembly:  '✓ Assembly updated by AgentX',
-        delete_line_item: '✓ Line item removed by AgentX',
-        bulk_update:      '✓ Estimate recalculated by AgentX',
+        add_line_items:   '✓ Assembly added by Tally',
+        update_line_item: '✓ Line item updated by Tally',
+        update_assembly:  '✓ Assembly updated by Tally',
+        delete_line_item: '✓ Line item removed by Tally',
+        bulk_update:      '✓ Estimate recalculated by Tally',
     };
 
     // ── Live estimate refresh ────────────────────────────────────────
@@ -1063,17 +1063,17 @@
             const rows = (proposal.line_items || []).map(li =>
                 `<div class="ax-proposal-item-row">• ${_axEsc(li.description)} — ${li.quantity} ${_axEsc(li.unit)}</div>`
             ).join('');
-            headerHtml  = 'AgentX wants to add to your estimate';
+            headerHtml  = 'Tally wants to add to your estimate';
             bodyHtml    = asmLine + `<div class="ax-proposal-items">${rows || '<em>No items</em>'}</div>`;
             applyLabel  = '✓ Apply to Estimate';
 
         } else if (action === 'update_line_item' || action === 'update_assembly') {
-            headerHtml  = 'AgentX wants to update your estimate';
+            headerHtml  = 'Tally wants to update your estimate';
             bodyHtml    = `<div style="color:#ccc;font-size:12px;margin-bottom:8px;">${_axEsc(proposal.description || '')}</div>`;
             applyLabel  = '✓ Apply Update';
 
         } else if (action === 'delete_line_item') {
-            headerHtml  = '⚠ AgentX wants to remove an item';
+            headerHtml  = '⚠ Tally wants to remove an item';
             bodyHtml    = `<div style="color:#ccc;font-size:12px;margin-bottom:4px;">${_axEsc(proposal.item_name || 'Unknown item')}</div>
                            <div style="color:#e74c3c;font-size:11px;margin-bottom:8px;">This cannot be undone</div>`;
             applyLabel  = '✓ Remove Item';
@@ -1082,13 +1082,13 @@
 
         } else if (action === 'bulk_update') {
             const count = (proposal.line_items || []).length;
-            headerHtml  = 'AgentX wants to recalculate your estimate';
+            headerHtml  = 'Tally wants to recalculate your estimate';
             bodyHtml    = `<div style="color:#ccc;font-size:12px;margin-bottom:8px;">${_axEsc(proposal.description || '')}</div>
                            <div style="color:#aaa;font-size:11px;margin-bottom:8px;">${count} item(s) will be updated</div>`;
             applyLabel  = '✓ Apply All Updates';
 
         } else {
-            headerHtml = 'AgentX proposal';
+            headerHtml = 'Tally proposal';
             bodyHtml   = `<pre style="font-size:11px;color:#aaa;">${_axEsc(JSON.stringify(proposal, null, 2))}</pre>`;
             applyLabel = '✓ Apply';
         }
@@ -1126,7 +1126,7 @@
             const data = await res.json();
             if (data.success) {
                 card.innerHTML = `<div style="color:#4caf93;font-size:13px;padding:4px 0;">✓ Applied successfully.</div>`;
-                axShowToast(AX_TOAST_MESSAGES[action] || '✓ Applied by AgentX');
+                axShowToast(AX_TOAST_MESSAGES[action] || '✓ Applied by Tally');
                 await refreshEstimateView();
             } else {
                 btn.disabled    = false;
@@ -1272,7 +1272,7 @@
             isListening = false;
             micBtn.classList.remove('listening');
             statusBar.classList.remove('active');
-            inputEl.placeholder = 'Ask AgentX…';
+            inputEl.placeholder = 'Ask Tally…';
             inputEl.focus();
         });
 
@@ -1281,7 +1281,7 @@
             isListening = false;
             micBtn.classList.remove('listening');
             statusBar.classList.remove('active');
-            inputEl.placeholder = 'Ask AgentX…';
+            inputEl.placeholder = 'Ask Tally…';
             if (e.error !== 'aborted' && e.error !== 'no-speech') {
                 axAppendBubble('Mic error: ' + e.error, 'assistant');
             }
@@ -1340,7 +1340,7 @@
                 genBtn.disabled = false;
                 preview.style.display = 'block';
                 preview.innerHTML = `<div style="color:#e74c3c;font-size:12px;padding:10px;">
-                    AgentX couldn't build that assembly. Try describing the work in more detail.</div>`;
+                    Tally couldn't build that assembly. Try describing the work in more detail.</div>`;
                 return;
             }
 
@@ -1354,7 +1354,7 @@
             genBtn.disabled         = false;
             preview.style.display   = 'block';
             preview.innerHTML = `<div style="color:#e74c3c;font-size:12px;padding:10px;">
-                AgentX couldn't build that assembly. Try describing the work in more detail.</div>`;
+                Tally couldn't build that assembly. Try describing the work in more detail.</div>`;
         }
     }
 
@@ -1442,7 +1442,7 @@
             const data = await res.json();
 
             if (data.success) {
-                axShowToast('✓ Assembly built and added by AgentX');
+                axShowToast('✓ Assembly built and added by Tally');
                 await refreshEstimateView();
                 // Close builder, clear textarea
                 document.getElementById('ax-builder').classList.remove('open');
@@ -1484,7 +1484,7 @@
         axOpen();
 
         const loadingEl = axAppendBubble(
-            '🔍 AgentX is reviewing your estimate for scope gaps…\nThis may take a few seconds.',
+            '🔍 Tally is reviewing your estimate for scope gaps…\nThis may take a few seconds.',
             'loading'
         );
 
@@ -1500,7 +1500,7 @@
             if (!data.success) {
                 const msg = (data.error || '').toLowerCase().includes('no assembl')
                     ? 'No assemblies found. Add some work to your estimate first and then run the scope gap check.'
-                    : 'AgentX couldn\'t complete the scope review. Make sure your estimate has at least one assembly before running a gap check.';
+                    : 'Tally couldn\'t complete the scope review. Make sure your estimate has at least one assembly before running a gap check.';
                 axAppendBubble(msg, 'assistant');
                 return;
             }
@@ -1517,7 +1517,7 @@
 
         } catch (err) {
             loadingEl.remove();
-            axAppendBubble('AgentX couldn\'t complete the scope review. Make sure your estimate has at least one assembly before running a gap check.', 'assistant');
+            axAppendBubble('Tally couldn\'t complete the scope review. Make sure your estimate has at least one assembly before running a gap check.', 'assistant');
         }
     }
 
@@ -1844,7 +1844,7 @@
             document.getElementById('ax-scope-btn').disabled  = false;
             axSetMode('estimate');
             document.getElementById('ax-welcome-bubble').textContent =
-                'Hi! I\'m AgentX. I can see your full project estimate. Ask me anything — costs, quantities, missing items, or say "suggest concrete items" to get a write proposal.';
+                'Hi! I\'m Tally. I can see your full project estimate. Ask me anything — costs, quantities, missing items, or say "suggest concrete items" to get a write proposal.';
         } else {
             // Not on a project page — disable Estimate mode and project buttons
             estimateBtn.disabled = true;

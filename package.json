@@ -1,0 +1,31 @@
+{
+  "name": "estimator-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "konva.min.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test e2e/smoke.spec.js",
+    "test:e2e:auth": "playwright test e2e/auth.spec.js",
+    "test:e2e:report": "playwright show-report e2e/reports/html"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentxt9-hub/Esimator-Agent.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/agentxt9-hub/Esimator-Agent/issues"
+  },
+  "homepage": "https://github.com/agentxt9-hub/Esimator-Agent#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

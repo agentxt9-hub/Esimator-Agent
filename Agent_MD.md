@@ -1,6 +1,18 @@
 # Zenbid — Master Reference Document
-**Last updated:** 2026-03-17 | **Current session:** 13
-**Live at:** zenbid.io ✅ (back online as of 2026-03-17)
+**Last updated:** 2026-04-13 | **Current session:** 22
+**Live at:** zenbid.io ✅ (fully operational)
+
+## Session Opening Protocol
+
+Read these documents in order at the start of every session. Do not begin any work until all are read:
+
+1. `NORTHSTAR.md` — product philosophy, principles, three-surface architecture
+2. `Agent_MD.md` (this file) — current state, routes, models, session history
+3. `DECISIONS.md` — architecture decision records; check for decisions relevant to the task
+4. `TALLY_VISION.md` — Tally intelligence layer specification
+5. Task-specific references (e.g., `SECURITY.md` before any route/model work)
+
+**Doc sprawl note (flagged for future pass):** `TALLY_VISION.md` increasingly overlaps with `NORTHSTAR.md`. Tally is not separable from the product. Consider folding TALLY_VISION into NORTHSTAR once the intelligence layer is closer to live.
 
 ---
 
@@ -21,7 +33,35 @@ Construction estimating is split between rigid Excel/legacy-software estimators 
 
 ---
 
-## Current State (Session 12 — 2026-03-15)
+## Current State (Session 22 — 2026-04-07)
+
+### Session 22 — Estimate Table UI (TanStack Table v8)
+**Type:** BUILD | **Status:** COMPLETE — deployed to production
+
+**Built:**
+- `templates/estimate_table.html`, `static/js/estimate_table.js`, `static/css/estimate_table.css`
+- `LineItem` model extended: `company_id`, `phase`, `csi_division`, `ai_status`, `ai_confidence`, `ai_note`, `is_deleted`, `ai_generated`, `estimator_action`, `edit_delta` (data flywheel per TALLY_VISION.md)
+- 4 API routes: `GET/POST /api/projects/<id>/line_items`, `PATCH/DELETE /api/line_items/<id>`
+- All endpoints enforce company_id isolation via `get_project_or_403()` / `get_lineitem_or_403()`
+- Full grid features: sort, search/filter, column reorder (drag), column resize, show/hide, group by any column with collapsible headers + division color bars, inline cell edit (double-click → optimistic PATCH → rollback on error), AI status badges with hover tooltips, grand total row, Tally footer banner, CSV+Excel export (SheetJS), Add Item slide-in panel, row selection with count badge, column state persisted to localStorage
+- `run_migrations()` extended with 10 idempotent ALTER TABLE statements
+- ADR-021 added to DECISIONS.md (TanStack Table decision)
+
+**Tests:** 29/29 passing — API auth, company isolation (403), CSRF, line_total computation, soft delete, data flywheel fields
+
+**Key architectural note:** Session 22 built the new `/estimate` route as a parallel surface alongside the existing project page estimate view. These two views are not yet reconciled. The new TanStack table is the target architecture. Reconciliation with the existing view (merging Prod Rate, Labor Hrs, Labor $ columns) is queued for Session 23+.
+
+**Data flywheel:** `ai_generated`, `estimator_action`, `edit_delta` are now captured on all LineItem writes — ahead of any ML work, as required by TALLY_VISION.md.
+
+**Deployed:** `git push origin main` — commit `d19ba7f`. Production server updated.
+
+**Commits:**
+- `c022c8f` — docs: session 22 docs (Agent_MD, DECISIONS, FEATURE_ROADMAP)
+- `d19ba7f` — feat: estimate table — TanStack Table with full grid interactions
+
+---
+
+## Previous State (Session 12 — 2026-03-15)
 
 ### What's working (code-complete, locally tested)
 - Full multi-tenant auth: Company → User (admin/estimator/viewer), Flask-Login, email+username login
@@ -50,7 +90,9 @@ Construction estimating is split between rigid Excel/legacy-software estimators 
 
 ## Architecture
 
-Single-file Flask app (`app.py`, ~3450 lines) with Jinja2 templates in `Templates/`. No frontend framework — vanilla JS + `fetch()` throughout. No test suite.
+Single-file Flask app (`app.py`, ~3500+ lines) with Jinja2 templates in `templates/` (lowercase — required for Linux). Vanilla JS + `fetch()` for most surfaces. TanStack Table v8 (React via CDN + Babel Standalone) for the estimate grid.
+
+**Test suites:** `test_takeoff.py` (99/99 passing, Sessions 18–21), `tests/test_estimate_table.py` (29/29 passing, Session 22).
 
 ### Stack
 | Layer | Tool |
@@ -82,28 +124,48 @@ Assembly measurements (user input)
 ### File structure
 ```
 Estimator Agent/
-├── app.py                      ← ~3450 lines; all routes + models
+├── app.py                      ← ~3500+ lines; all routes + models
+├── routes_takeoff.py           ← Takeoff Blueprint (Session 18)
 ├── requirements.txt
 ├── Procfile                    ← gunicorn app:app
 ├── gunicorn.conf.py            ← runs migrations + seeding on_starting()
+├── test_takeoff.py             ← Takeoff integration tests (99/99 passing)
 ├── .env                        ← local dev (gitignored)
-├── NORTHSTAR.md                ← philosophy reference
+├── NORTHSTAR.md                ← product philosophy + principles
 ├── CLAUDE.md                   ← Claude Code project instructions
 ├── Agent_MD.md                 ← This file — master reference
+├── DECISIONS.md                ← Architecture Decision Records
+├── TALLY_VISION.md             ← Tally AI layer specification
+├── FEATURE_ROADMAP.md          ← Strategic roadmap (four-pass sequence)
+├── SECURITY.md                 ← Security framework + gap backlog
 ├── seed_csi.py                 ← Already run — DO NOT run again
 ├── deploy/
 │   ├── setup.sh
 │   └── update.sh               ← `bash /var/www/zenbid/deploy/update.sh`
-└── Templates/
+├── static/
+│   ├── css/
+│   │   ├── takeoff.css         ← Takeoff three-panel layout
+│   │   └── estimate_table.css  ← TanStack estimate grid styles
+│   ├── js/
+│   │   ├── konva.min.js        ← Konva 9.3.6 vendored locally (CDN unreliable on DO)
+│   │   ├── takeoff.js          ← Konva stage, PDF viewer, measurement tools
+│   │   └── estimate_table.js   ← TanStack Table v8 + React, Tally banner
+│   └── uploads/
+│       └── takeoff/
+│           └── <project_id>/   ← Uploaded PDFs stored here (gitignored)
+├── tests/
+│   └── test_estimate_table.py  ← 29/29 passing (Session 22)
+└── templates/                  ← Lowercase — required for Linux
     ├── base.html               ← Marketing base (light theme)
     ├── app_base.html           ← App base (dark theme, CSS vars, CSRF fetch patch)
-    ├── login.html              ← /login
-    ├── signup.html             ← /signup
-    ├── forgot_password.html    ← /forgot-password  ← NEW Session 12
-    ├── reset_password.html     ← /reset-password/<token>  ← NEW Session 12
+    ├── login.html
+    ├── signup.html
+    ├── forgot_password.html
+    ├── reset_password.html
     ├── index.html              ← Dashboard (app)
     ├── new_project.html
-    ├── project.html            ← Project detail + inline estimate table + WBS
+    ├── project.html            ← Project detail + inline estimate table (DEPRECATED — Pass 3)
+    ├── estimate_table.html     ← TanStack estimate surface (CANONICAL — Session 22)
     ├── settings.html
     ├── library.html
     ├── assembly_builder.html
@@ -113,9 +175,14 @@ Estimator Agent/
     ├── profile.html
     ├── admin.html
     ├── summary.html
-    ├── estimate.html           ← Legacy full-estimate route (still exists)
+    ├── estimate.html           ← ORPHANED — no route; reference only until Pass 3 cleanup
     ├── csi_report.html
-    └── agentx_panel.html       ← AI panel partial, no Jinja tags
+    ├── agentx_panel.html       ← AI panel partial (TO BE RETIRED in Pass 3; no Jinja tags)
+    ├── waitlist.html
+    ├── pricing.html
+    ├── landing.html
+    └── takeoff/
+        └── viewer.html         ← Three-panel takeoff viewer
 ```
 
 ---
@@ -139,6 +206,10 @@ Estimator Agent/
 | `WBSProperty` | `wbs_properties` | project_id FK; property_type, display_order |
 | `WBSValue` | `wbs_values` | wbs_property_id FK; value_name, value_code, display_order |
 | `LineItemWBS` | `line_item_wbs` | FK→line_item + wbs_property + wbs_value |
+| `TakeoffPlan` | `takeoff_plans` | project_id + company_id FK; filename, original_filename, page_count, uploaded_by |
+| `TakeoffPage` | `takeoff_pages` | plan_id FK; page_number, page_name, thumbnail_path=None, scale_pixels_per_foot, scale_method |
+| `TakeoffItem` | `takeoff_items` | project_id + company_id FK; name, measurement_type, color, opacity, width_ft, assembly_notes |
+| `TakeoffMeasurement` | `takeoff_measurements` | item_id + page_id FK; points_json, calculated_value, calculated_secondary |
 
 ### Cost calculation logic (`calculate_item_costs()`)
 ```
@@ -236,6 +307,18 @@ AI routes additionally have `@limiter.limit('20 per minute')` (scope-gap: 10/min
 | POST | `/project/<id>/wbs/value/reorder` | Reorder WBS values |
 | DELETE | `/project/<id>/wbs/value/<id>` | Delete WBS value |
 | POST | `/line-item/<id>/wbs` | Assign WBS value to line item |
+| GET | `/project/<id>/takeoff` | Takeoff viewer (three-panel) |
+| POST | `/project/<id>/takeoff/upload` | Upload PDF plan set |
+| GET | `/project/<id>/takeoff/plan/<plan_id>/pdf` | Serve raw PDF to PDF.js |
+| GET | `/project/<id>/takeoff/items` | List takeoff items + project-level totals (JSON) |
+| POST | `/project/<id>/takeoff/item` | Create takeoff item |
+| DELETE | `/project/<id>/takeoff/item/<item_id>` | Delete takeoff item + measurements |
+| POST | `/project/<id>/takeoff/page/<page_id>/scale` | Save calibrated scale (pixels_per_foot) |
+| POST | `/project/<id>/takeoff/measurement` | Save measurement (points_json + calculated values) |
+| DELETE | `/project/<id>/takeoff/measurement/<meas_id>` | Delete measurement |
+| PATCH | `/project/<id>/takeoff/item/<item_id>` | Edit item properties (name/color/opacity/width_ft) |
+| PUT | `/project/<id>/takeoff/page/<page_id>/name` | Rename page |
+| GET | `/project/<id>/takeoff/page/<page_id>/measurements` | Get measurements + scale for a page |
 
 ---
 
@@ -378,10 +461,14 @@ Defined in `CSI_COLORS` dict at module level in `app.py` AND duplicated in `esti
 
 ---
 
-## AgentX AI Panel
+## AI Panel (AgentX — to be retired in Pass 3)
+
+> **Retirement plan (ADR-024):** `agentx_panel.html` and the "AgentX" UI label will be removed in Pass 3. The AI routes (`/ai/chat`, `/ai/apply`, etc.) remain; only the side-panel UI entry point and the "AgentX" brand name are retired. Tally replaces AgentX as the AI layer identity.
 
 ### Overview
-Sliding panel (fixed right, 400px wide) available on every app page. `Templates/agentx_panel.html` — pure HTML/JS, no Jinja. Included via `{% include 'agentx_panel.html' %}` before `</body>` in all app templates except `proposal.html`.
+Sliding panel (fixed right, 400px wide) on legacy app pages. `templates/agentx_panel.html` — pure HTML/JS, no Jinja tags (Jinja processes `{% %}` even in HTML comments — caused a RecursionError in the past; do not add Jinja to this file). Included via `{% include 'agentx_panel.html' %}` in `admin.html` and `estimate.html` (orphaned).
+
+The new `estimate_table.html` (TanStack surface) does NOT include `agentx_panel.html` — Tally hooks on the new surface are built natively.
 
 ### Three modes
 | Mode | Behavior |
@@ -391,19 +478,150 @@ Sliding panel (fixed right, 400px wide) available on every app page. `Templates/
 | **Chat** | General assistant. Always available |
 
 ### Panel features
-- **Scope Gap Check** (`🔍 Check Scope`) — calls `POST /ai/scope-gap`; renders gap report card with severity sorting (HIGH/MEDIUM/LOW), completeness score bar, "Fix Gaps" trigger
-- **Rate Lookup** (`📊 Rates`) — calls `POST /ai/production-rate`; returns min/typ/max table; "→ Use" pre-populates chat
+- **Scope Gap Check** (`🔍 Check Scope`) — calls `POST /ai/scope-gap`; renders gap report card with severity sorting (HIGH/MEDIUM/LOW), completeness score bar
+- **Rate Lookup** (`📊 Rates`) — calls `POST /ai/production-rate`; returns min/typ/max table
 - **Validate Rate** — right-click context menu on estimate table rows; calls `POST /ai/validate-rate`; renders ✓/⚠ badge with 10s auto-dismiss
-- **Write Proposals** — Claude returns fenced JSON block; frontend renders proposal card with Apply/Dismiss; Apply creates assembly + line items
-- **Body push layout** — `body.ax-panel-open { padding-right: 410px }` — content shifts, no overlay blocking estimate table
+- **Write Proposals** — Claude returns fenced JSON block; frontend renders proposal card with Apply/Dismiss
 
-### Key AI routes
+### Key AI routes (stable — not affected by panel retirement)
 - `/ai/chat` — multi-mode, builds context from project data + production rate standards
 - `/ai/apply` — creates/updates assembly + inserts line items via `calculate_item_costs()`
 - `/ai/build-assembly` — auto-builds assembly from plain English description
 - `/ai/scope-gap` — project completeness analysis, JSON-only Claude response
 - `/ai/production-rate` — RS Means-style rate lookup with regional context
 - `/ai/validate-rate` — compares line item rate vs industry benchmarks
+
+---
+
+## Takeoff Module
+
+Added Session 18 (2026-04-06), migrated to Konva.js Session 19 (2026-04-07).
+Blueprint-based, registered at bottom of `app.py`.
+
+### Architecture
+
+| Aspect | Detail |
+|--------|--------|
+| Blueprint | `takeoff_bp` in `routes_takeoff.py`, registered in `app.py` after all models |
+| Route prefix | `/project/<project_id>/takeoff` |
+| Route file | `routes_takeoff.py` |
+| Template | `templates/takeoff/viewer.html` — extends `app_base.html` |
+| CSS | `static/css/takeoff.css` — three-panel layout using CSS vars |
+| JS | `static/js/takeoff.js` — Konva stage, PDF viewer, pan/zoom, item CRUD, thumbnails |
+
+### Database tables
+
+| Table | Purpose |
+|-------|---------|
+| `takeoff_plans` | Uploaded PDF plan sets; filename, original_filename, page_count; company_id isolated |
+| `takeoff_pages` | One record per page; `thumbnail_path=None` always (thumbnails rendered client-side) |
+| `takeoff_items` | Measurement type definitions: name, color, opacity, measurement_type, assembly_notes |
+| `takeoff_measurements` | Normalized point coords (JSON) + calculated values; FK→item + page |
+
+All cascade deletes handled in Python — no `ON DELETE CASCADE` in DB.
+
+### File storage
+
+| Asset | Location |
+|-------|----------|
+| Uploaded PDFs | `static/uploads/takeoff/<project_id>/<uuid>_<filename>.pdf` |
+| Thumbnails | **Not stored** — rendered client-side by PDF.js each session |
+
+`static/uploads/` is gitignored — never commit uploads.
+
+### Canvas architecture
+
+- **Konva.js 9.3.6** served locally at `static/js/konva.min.js` (CDN unreliable from DigitalOcean droplet)
+- **Three layers**: `pdfLayer` (Konva.Image), `measureLayer` (Session 2 shapes), `uiLayer` (handles/labels)
+- **PDF.js 3.11.174** via CDN — handles all PDF decoding in the browser
+- Thumbnails rendered client-side by PDF.js at `scale: 0.15`
+- `state.screenToPDF(x, y)` converts stage pointer coords → PDF-space coords (for Session 2 tools)
+
+### Key technical facts
+
+- PyMuPDF (`fitz`) used **only** for page count on upload: `len(doc)` then `doc.close()`. No pixel data.
+- All image rendering is client-side — server never processes pixels
+- Konva pan/zoom is native: `stage.draggable: true` + wheel scale handler
+- PDF re-renders at 2× scale (`RENDER_SCALE = 2.0`) on page load via PDF.js offscreen canvas → `Konva.Image`
+- `loadPDF(planId)` loads the PDF.js document; `loadPage(pageId, pageNum, planId)` is the page navigation entry point
+
+### Dependencies
+
+| Package | Use |
+|---------|-----|
+| `PyMuPDF==1.24.0` | Page count only on upload |
+| Konva 9.3.6 (local `static/js/konva.min.js`) | Canvas stage, layers, pan/zoom, hit detection |
+| PDF.js 3.11.174 (CDN) | All PDF rendering — thumbnails + main canvas viewer |
+
+### Multi-tenant security
+
+Every takeoff route double-checks company ownership:
+- `get_project_or_403(project_id)` — project belongs to current user's company
+- `_get_plan_or_403(plan_id)` — `plan.company_id == current_user.company_id`
+- `_get_item_or_403(item_id)` — `item.company_id == current_user.company_id`
+
+### Measurement Tools (Session 2 — complete as of Session 21)
+
+**Scale System**
+- Two-click calibration: user clicks two known points, enters real-world distance; `pixels_per_foot` saved via `POST /page/<id>/scale`
+- `ARCH_SCALES` lookup table maps ppf to architectural notation (e.g., 48 ppf → `1/4″=1′`) with 1.5% tolerance
+- Status bar shows architectural ratio label (or "Custom"); badge turns blue when scale is set
+- Coordinates display in real-world feet (e.g., `X: 42.3′  Y: 18.7′`) when scale is set; raw px otherwise
+
+**Drawing Tools**
+- **Linear** (`linear`) — polyline; stores point array; result in LF
+- **Linear with Width** (`linear_with_width`) — same polyline but rendered as a filled band using `item.width_ft × ppf` for stroke width; result in LF, band fills the corridor
+- **Area** (`area`) — closed polygon; double-click or click-first-vertex to close; result in SF + perimeter in FT stored as `calculated_secondary`
+- **Count** (`count`) — single click per point; result in EA
+- **Ortho mode** — constrains vertex placement to 45° increments (`atan2` → round to `π/4`); applied to both click points and live preview line; toggled via status bar
+- **Close-polygon indicator** — green circle appears on first vertex when cursor is within 15 screen-px; cursor changes to `cell`
+- All measurement points stored in normalized 0–1 PDF-space coords (`state.screenToPDF(x,y)`)
+
+**Overlay Rendering**
+- `renderMeasurements(items, measurements, ppf)` draws all shapes onto `measureLayer`
+- Linear: `Konva.Line` with item color + opacity; dashed for `linear_with_width`
+- Area: `Konva.Line` closed with fill at item opacity
+- Count: `Konva.Circle` per point
+- `linear_with_width`: dynamic `strokeWidth = item.width_ft × ppf` for visual band
+- Labels: `Konva.Text` anchored to centroid/midpoint of each measurement
+
+**Properties Panel**
+- Slide-in right panel (`#props-panel`) opens on item click
+- Shows: item name (editable), color swatch, opacity slider, measurement type badge
+- Measurement list: each entry shows type + value; Area shows both SF and FT perimeter on separate rows (perimeter row styled italic/muted via `.pp-meas-secondary`)
+- Delete individual measurements from list
+
+**Contextual Toolbar**
+- Start button (▶) — visible only when an item is active (`state.activeItemId` set); clicking activates the matching drawing tool for that item's `measurement_type`
+- Props button — opens properties panel for active item
+
+**Page Features**
+- Double-click page name in sidebar → inline `<input>` rename; commits on blur/Enter, cancels on Escape
+- Hover on page name shows dotted underline as rename affordance
+- PUT `/project/<id>/takeoff/page/<page_id>/name` persists rename; toast confirms
+
+**Status Bar**
+- XY coordinates in feet (or px when no scale)
+- Scale label (architectural ratio or "Custom / unset")
+- `Ortho: Off/On` — clickable toggle; green when active
+- `Snap: Off/On` — clickable toggle; visual only (functional snapping planned Session 3)
+
+**Project-Level Totals (right sidebar)**
+- `GET /project/<id>/takeoff/items` returns `total` field = sum of `calculated_value` across ALL pages for that item
+- Right sidebar "Takeoff" card shows per-item totals regardless of active page
+
+**Routes (added Sessions 20–21)**
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| POST | `/project/<id>/takeoff/page/<page_id>/scale` | Save calibrated scale to TakeoffPage |
+| POST | `/project/<id>/takeoff/measurement` | Save measurement (points_json, calculated_value, calculated_secondary) |
+| DELETE | `/project/<id>/takeoff/measurement/<meas_id>` | Delete measurement; returns updated item total |
+| PATCH | `/project/<id>/takeoff/item/<item_id>` | Edit item name/color/opacity/width_ft/notes/division |
+| PUT | `/project/<id>/takeoff/page/<page_id>/name` | Rename page |
+| GET | `/project/<id>/takeoff/page/<page_id>/measurements` | Measurements for one page + scale |
+
+**Test Coverage:** `test_takeoff.py` — 99/99 passing (Sessions 18–21)
 
 ---
 
@@ -435,10 +653,10 @@ DATABASE_URL=postgresql://...
 ANTHROPIC_API_KEY=sk-ant-...
 FLASK_DEBUG=false
 MAIL_SERVER=smtp.sendgrid.net
-MAIL_PORT=587
+MAIL_PORT=2525
 MAIL_USERNAME=apikey
 MAIL_PASSWORD=<sendgrid-api-key>
-MAIL_DEFAULT_SENDER=noreply@zenbid.io
+MAIL_DEFAULT_SENDER=thomas@zenbid.io
 ```
 
 ### Local dev
@@ -454,50 +672,36 @@ python app.py
 
 ## Strategic Roadmap
 
+> Full roadmap with four-pass sequence: see `FEATURE_ROADMAP.md`.
+
 ### CRITICAL — must resolve before beta users
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Password reset | ✅ Done Session 12 | Needs MAIL_PASSWORD on server to send |
+| Privacy Policy & Terms | ❌ Open | Placeholder routes return plain text |
+| ANTHROPIC_API_KEY startup validation | ❌ Open | No startup check; app starts silently with missing key |
+| SSL certificate | ⚠️ Unconfirmed | Site operational; HTTPS status not confirmed |
+| Password reset | ✅ Done Session 12 | Working end-to-end via SendGrid |
 | CSRF protection | ✅ Done Session 12 | HTML forms + fetch monkey-patch |
 | Rate limiting on AI routes | ✅ Done Session 12 | flask-limiter, in-memory |
-| Privacy Policy & Terms | ❌ Open | Placeholder routes return plain text |
-| ANTHROPIC_API_KEY on server | ⚠️ Config | Needs verification after DO is back up |
 
-### HIGH PRIORITY — MVP for paying users
+### HIGH PRIORITY — pre-first-paying-user
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Edit project fields UI | ⚠️ Partial | `POST /project/<id>/update` route exists; Edit Project modal missing city/state/zip/type/sector fields |
-| Welcome email on signup | ⚠️ Easy now | flask-mail wired; just add `mail.send()` in `/signup` route |
+| Edit project fields UI | ⚠️ Partial | Route exists; modal missing city/state/zip/type/sector fields |
+| Welcome email on signup | ❌ Open | flask-mail wired; just needs `mail.send()` in `/signup` |
 | Contact page | ❌ Open | Placeholder |
 | Viewer role enforcement | ❌ Open | Role checked only for `/admin`; viewers can currently write data |
-| Proposal PDF export | ❌ Open | Print-to-PDF only; server-side PDF needs weasyprint or headless Chrome |
-| Proposal route isolation | ❌ Open | `GET /project/<id>/proposal` uses bare `Project.query.get()` not `get_project_or_403()` |
+| Proposal route isolation | ❌ Open | `GET /project/<id>/proposal` uses bare `Project.query.get_or_404()` not `get_project_or_403()` |
 
-### MEDIUM PRIORITY — core SaaS features
+### FOUR-PASS SEQUENCE (Sessions 23+)
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Subscription / billing | ❌ | Stripe Checkout + webhook |
-| Free trial gate | ❌ | Limit projects/features for new signups |
-| In-app onboarding | ❌ | Empty state CTAs, first-time guide |
-| About / Blog / Careers pages | ❌ | Footer links return plain text |
-| Delete buttons in estimate table | ❌ | Must go to project page to delete line items |
-
-### FUTURE — post-launch
-
-| Item | Notes |
+| Pass | Scope |
 |------|-------|
-| Audit logging | Enterprise compliance, debug support |
-| Subcontractor bid requests | Send line items to subs, receive quotes |
-| Takeoff file import | PDF/DWG → auto-populate assemblies |
-| Public API | Webhook / REST for firm integrations |
-| Mobile-responsive estimate view | Currently desktop-only |
-| Streaming AI responses | Token-by-token output, SSE |
-| AgentX conversation memory | `axHistory[]` array; multi-turn context |
-| Quick-action chips | Zero-backend prompt shortcuts in AgentX |
-| Bulk import for production rates | CSV upload to populate standards table |
+| Pass 2 | 90-Second Confidence Study — zzTakeoff walkthrough, upload→scale→measurement punch list |
+| Pass 3 | Bridge + Table Migration — TanStack canonical, legacy retired, AgentX purged, measurement link, dual-costing row, Tally stub hooks |
+| Pass 4 | Tally Intelligence Wiring — Passive/Reactive/Generative backend wired |
 
 ---
 
@@ -507,12 +711,12 @@ python app.py
 |-----|----------|-------|
 | Proposal route not using `get_project_or_403()` | High | Any logged-in user can view any project's proposal |
 | Viewer role not enforced on write routes | Medium | Low risk until teams are a feature |
-| `estimate.html` route still exists | Low | Legacy `/project/<id>/estimate` alongside inline `project.html` table |
+| `estimate.html` is orphaned (no route) | Low | No route points to it; reference only until Pass 3 cleanup |
+| Legacy inline estimate table in `project.html` | Low | Two estimate UIs in parallel until Pass 3 migration |
 | `equipment_hours` always 0 | Low | Deprecated by item_type logic; harmless |
-| No CSRF on `/forgot-password` form | Low | It's a public unauthenticated route — lower risk, but should add |
+| No CSRF on `/forgot-password` form | Low | Public unauthenticated route — lower risk, but should add |
 | Rate limiter is in-memory | Low | Resets on server restart; fine for now, swap to Redis for multi-worker |
-| WBS `area` → `location_1` migration | Low | Old projects with `wbs_area` type auto-normalize on first project page load |
-| Existing projects may have NULL company_id | Low | Fixed at deploy by UPDATE statements |
+| WBS `area` → `location_1` migration | Low | Old projects auto-normalize on first project page load |
 
 ---
 
@@ -534,7 +738,16 @@ python app.py
 | 11b | 2026-03-14 | WBS value inline editing + drag-to-reorder, AI rate lookup panel, validate-rate, requirements.txt |
 | 11c | 2026-03-14 | Marketing site + dark theme re-skin (CSS vars), production deployment to zenbid.io (Gunicorn+Nginx+systemd), login via email, /signup route |
 | 12 | 2026-03-15 | **CSRF** (flask-wtf, meta tag, fetch monkey-patch, hidden fields on 3 forms) + **rate limiting** (flask-limiter on login + 5 AI routes) + **password reset** (flask-mail, /forgot-password, /reset-password/<token>, 2 new templates) |
-| 13 | 2026-03-17 | **Production deployment**: zenbid.io back online after DO outage. Fixed landing route (was redirecting to signup), templates case-sensitivity on Linux (Templates/ → templates/ in git), pool_pre_ping for stale DB connections, SendGrid SMTP setup (port 2525, verified sender thomas@zenbid.io). Full smoke test passed. **Concept C logo**: SVG mark + zen/bid wordmark applied across all templates (sidebar, marketing nav, footer, all auth pages). |
+| 13 | 2026-03-17 | **Production deployment**: zenbid.io back online after DO outage. Fixed landing route, templates case-sensitivity on Linux (Templates/ → templates/), pool_pre_ping for stale DB connections, SendGrid SMTP setup (port 2525). **Concept C logo**: SVG mark + ZENBID wordmark across all templates. |
+| 14 | 2026-03-18 | templates/ case-sensitivity fix in git, pool_pre_ping, SendGrid confirmed working, forgot-password e2e tested, Concept C logo deployed. |
+| 15 | 2026-03-18 | Logo wordmark → all-caps ZENBID across 7 locations. Waitlist flow (GET/POST /waitlist, WaitlistEntry model, micro-survey WaitlistSurvey). Dismissible waitlist banner. Pricing CTAs → Join Waitlist. |
+| 16 | 2026-03-18 | Fixed ZEN BID wordmark gap (flex issue). Navbar/login CTAs → Join Waitlist. Footer links de-linked (placeholder pages not yet built). Mobile responsive pass on base.html + landing.html. |
+| 17 | 2026-03-21 | NORTHSTAR.md updates, SECURITY.md framework added, Zenhub naming conventions, n8n webhook integration for waitlist. |
+| 18 | 2026-04-06 | **Takeoff module foundation**: 4 new DB tables, Blueprint (routes_takeoff.py), three-panel viewer (viewer.html), PDF upload with PyMuPDF page count, client-side thumbnails via PDF.js, CSS transform pan/zoom (offscreen RAF swap, continuous wheel factor, 600ms debounce), takeoff item CRUD, status bar, keyboard shortcuts, test_takeoff.py (31/31 passing). |
+| 19 | 2026-04-07 | **Konva.js migration + bug fixes**: Replaced raw canvas + CSS transforms with Konva.js 3-layer stage (`pdfLayer`, `measureLayer`, `uiLayer`). Fixed black canvas (loadPDF/loadPage separation), missing thumbnails (abort guard), plans disappearing on refresh (explicit TakeoffPage query, server-side sidebar pre-render). Konva vendored locally after CDN unreliable on DO. `static/uploads/` gitignored. |
+| 20 | 2026-04-07 | **Takeoff drawing tools (Session 2 core)**: Scale calibration (two-click + distance entry, `POST /page/<id>/scale`). Linear, linear_with_width, area, count measurement tools. `renderMeasurements()` draws all overlays onto measureLayer. Area stores SF + FT perimeter as `calculated_secondary`. Properties panel with measurement list. Project-level totals aggregated in `list_items`. `PATCH /item/<id>` for inline edits. 7 new API routes. test_takeoff.py expanded to 95/95. |
+| 21 | 2026-04-07 | **Takeoff polish (Session 2 complete)**: `ARCH_SCALES` lookup → architectural ratio labels (1/4″=1′ etc.). Real-world feet coordinates in status bar when scale set. Ortho mode (45° snap, `_orthoConstrain()`). Close-polygon green indicator + `cell` cursor at 15px threshold. Start (▶) button in contextual toolbar. Area properties panel shows both SF area and FT perimeter. Ortho/Snap toggles in status bar (clickable). Page inline rename (dblclick → input → `PUT /page/<id>/name`). 4 new tests → 99/99 passing. |
+| 22 | 2026-04-07 | **Estimate Table — TanStack Table v8**: `templates/estimate_table.html`, `static/js/estimate_table.js`, `static/css/estimate_table.css`. LineItem model extended with `company_id`, `phase`, `csi_division`, `ai_status`, `ai_confidence`, `ai_note`, `is_deleted`, `ai_generated`, `estimator_action`, `edit_delta` (flywheel fields per TALLY_VISION.md). 4 API routes: GET/POST `/api/projects/<id>/line_items`, PATCH/DELETE `/api/line_items/<id>`. Full grid: sort, filter, column reorder/resize/show-hide, group by any column, inline cell edit (optimistic PATCH + rollback), AI status badges, Tally footer banner, grand total row, CSV+Excel export (SheetJS), Add Item slide-in panel, row selection. Column state persisted to localStorage. ADR-021 added. 29/29 tests. Deployed: `d19ba7f`. |
 
 ---
 

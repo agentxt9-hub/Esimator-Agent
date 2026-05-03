@@ -1,0 +1,117 @@
+{% extends "app_base.html" %}
+{% block title %}Estimate — {{ project.project_name }} — Zenbid{% endblock %}
+
+{% block extra_css %}
+<!-- IBM Plex Sans + IBM Plex Mono -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/estimate_table.css') }}">
+<style>
+    /* ── CSS design tokens that map to Zenbid spec ── */
+    :root {
+        --zb-bg:     #0F1419;
+        --zb-card:   #1A1F26;
+        --zb-input:  #252B33;
+        --zb-sidebar:#16181D;
+        --zb-blue:   #2D5BFF;
+        --zb-coral:  #FF6B35;
+        --zb-text:   #E8EAED;
+        --zb-muted:  #6B7280;
+        --zb-border: #2A3040;
+        --zb-success:#22C55E;
+        --zb-warn:   #F59E0B;
+        --zb-danger: #EF4444;
+    }
+
+    body { font-family: 'IBM Plex Sans', -apple-system, sans-serif; }
+
+    .et-page { padding: 0 0 24px 0; }
+
+    .et-breadcrumb      { color: var(--text-secondary); margin-bottom: 14px; font-size: 13px; }
+    .et-breadcrumb a    { color: var(--accent-coral); text-decoration: none; }
+
+    .et-header          { display: flex; justify-content: space-between; align-items: flex-start;
+                          margin-bottom: 18px; padding-bottom: 14px;
+                          border-bottom: 1px solid var(--app-border); }
+    .et-header h1       { color: var(--accent-coral); font-size: 22px; margin-bottom: 3px; }
+    .et-header-meta     { color: var(--text-secondary); font-size: 13px; }
+    .et-header-actions  { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .btn-outline {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 7px 14px; background: var(--app-input);
+        color: var(--text-secondary); font-size: 13px;
+        border: 1px solid var(--app-border); border-radius: 4px;
+        cursor: pointer; text-decoration: none;
+        font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .btn-outline:hover { background: var(--app-hover); color: var(--text-primary); }
+
+    /* Loading state for whole page */
+    #estimate-root:empty::after {
+        content: 'Loading estimate table…';
+        display: block;
+        padding: 60px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="et-page">
+
+    <!-- Breadcrumb -->
+    <div class="et-breadcrumb">
+        <a href="/">Home</a> &rsaquo;
+        <a href="/project/{{ project.id }}">{{ project.project_name }}</a> &rsaquo;
+        Estimate
+    </div>
+
+    <!-- Page header -->
+    <div class="et-header">
+        <div>
+            <h1>{{ project.project_name }} — Estimate</h1>
+            <p class="et-header-meta">
+                Project&nbsp;#:&nbsp;{{ project.project_number or 'N/A' }}
+                &nbsp;|&nbsp;
+                {{ project.city or '' }}{% if project.city and project.state %}, {% endif %}{{ project.state or '' }}
+            </p>
+        </div>
+        <div class="et-header-actions">
+            <a href="/project/{{ project.id }}" class="btn-outline">← Project</a>
+            <a href="/project/{{ project.id }}/report" class="btn-outline">Summary</a>
+            <a href="/project/{{ project.id }}/report/csi" class="btn-outline">CSI Report</a>
+        </div>
+    </div>
+
+    <!-- React mount point -->
+    <div id="estimate-root"
+         data-project-id="{{ project.id }}"
+         data-project-name="{{ project.project_name | e }}">
+    </div>
+
+</div>
+
+<!-- Embed CSI data for potential future use by panels -->
+<script id="csi1-data" type="application/json">{{ csi1_json | safe }}</script>
+<script id="csi2-data" type="application/json">{{ csi2_json | safe }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<!-- React 18 -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+<!-- TanStack Table v8 (headless grid logic) -->
+<script src="https://unpkg.com/@tanstack/react-table@8/build/umd/index.production.js" crossorigin></script>
+
+<!-- SheetJS — CSV + Excel export -->
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+<!-- Babel Standalone — JSX transpilation in browser -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- Main React component (transpiled by Babel standalone) -->
+<script type="text/babel" src="{{ url_for('static', filename='js/estimate_table.js') }}" data-presets="react"></script>
+{% endblock %}

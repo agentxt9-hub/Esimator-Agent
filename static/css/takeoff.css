@@ -88,6 +88,8 @@
 
 .tool-btn-danger { color: var(--error) !important; }
 .tool-btn-danger:hover { background: var(--error-bg) !important; }
+.tool-btn-start { color: #10B981 !important; }
+.tool-btn-start:hover { background: rgba(16,185,129,0.12) !important; }
 
 .tool-sep {
     width: 1px;
@@ -268,6 +270,18 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.page-thumb-name:hover { text-decoration: underline dotted; cursor: text; }
+
+.tk-inline-rename {
+    font-size: 12px;
+    background: var(--app-input);
+    border: 1px solid var(--primary-brand);
+    border-radius: 3px;
+    color: var(--text-primary);
+    padding: 1px 4px;
+    width: 120px;
+    outline: none;
+}
 
 /* Bookmarks section */
 .tk-bookmarks-section {
@@ -317,18 +331,18 @@
     overflow: hidden;
     background: var(--app-bg);
     min-width: 0;
+    cursor: grab;
 }
 
-#pdf-canvas,
-#overlay-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
+/* Konva mounts its own <canvas> elements inside this container */
+#konva-container {
+    width: 100%;
+    height: 100%;
+}
+
+#konva-container canvas {
     display: block;
 }
-
-#pdf-canvas    { z-index: 1; }
-#overlay-canvas { z-index: 2; }
 
 /* Empty state */
 #tk-empty-state {
@@ -538,6 +552,14 @@
 #tk-status-scale { text-align: center; white-space: nowrap; }
 #tk-status-right { white-space: nowrap; text-align: right; }
 
+.tk-status-toggle {
+    cursor: pointer;
+    transition: color 0.15s;
+    user-select: none;
+}
+.tk-status-toggle:hover { color: var(--text-primary); }
+.tk-status-toggle.active { color: var(--primary-brand); font-weight: 600; }
+
 /* ── Modals ────────────────────────────────────────────────────────────────── */
 .tk-modal-overlay {
     position: fixed;
@@ -729,3 +751,210 @@ input[type="range"].tk-input {
     width: 0%;
 }
 #upload-status-msg { font-size: 12px; color: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SESSION 2 — Measurement tools, properties panel, toasts
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Toolbar hint text ────────────────────────────────────────────────────── */
+#tk-tool-hint {
+    display: none;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 0 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+}
+
+/* ── Status bar draw running total ──────────────────────────────────────── */
+#tk-status-draw {
+    color: var(--primary-brand);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ── Item list aggregate totals footer ──────────────────────────────────── */
+.tk-item-totals {
+    display: flex;
+    gap: 10px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--app-border);
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.tk-item-totals span { white-space: nowrap; }
+
+/* active item row background */
+.takeoff-item-row.active {
+    border-left-color: var(--primary-brand);
+    background: rgba(45,91,255,0.08);
+}
+
+/* ── Properties panel (slide-in from right) ──────────────────────────────── */
+#tk-props-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 288px;
+    background: var(--app-card);
+    border-left: 1px solid var(--app-border);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    z-index: 50;
+    overflow-y: auto;
+}
+#tk-props-panel.open { transform: translateX(0); }
+
+.pp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--app-border);
+    flex-shrink: 0;
+}
+.pp-header h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+.pp-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 2px;
+    transition: color 0.15s;
+}
+.pp-close-btn:hover { color: var(--text-primary); }
+
+.pp-body {
+    flex: 1;
+    padding: 14px;
+    overflow-y: auto;
+}
+.pp-body .form-group { margin-bottom: 12px; }
+.pp-body .form-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+}
+
+/* Collapsible sections in props panel */
+.pp-section {
+    border-top: 1px solid var(--app-border);
+    padding-top: 10px;
+    margin-top: 10px;
+}
+.pp-section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    padding-bottom: 6px;
+}
+.pp-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+.pp-section-chevron {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+}
+.pp-section-toggle.collapsed .pp-section-chevron { transform: rotate(-90deg); }
+.pp-section-body.collapsed { display: none; }
+
+/* Measurement rows inside panel */
+.pp-meas-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.pp-meas-val { color: var(--primary-brand); font-weight: 600; }
+.pp-meas-empty { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.pp-meas-secondary { color: var(--text-muted); font-style: italic; }
+
+/* Width fields row */
+.pp-dim-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.pp-dim-row input { width: 56px; }
+.pp-dim-sep { color: var(--text-muted); font-size: 12px; padding: 0 2px; }
+
+.pp-footer {
+    padding: 12px 14px;
+    border-top: 1px solid var(--app-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* ── Toast notifications ─────────────────────────────────────────────────── */
+#tk-toast {
+    position: absolute;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-primary);
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    white-space: nowrap;
+}
+#tk-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+.tk-toast-warn  { border-color: #F59E0B; color: #F59E0B; }
+.tk-toast-ok    { border-color: #10B981; color: #10B981; }
+.tk-toast-error { border-color: var(--error); color: var(--error); }
+
+/* ── Scale modal dimension-entry mode ────────────────────────────────────── */
+#scale-dim-mode {
+    display: none;
+}
+.scale-dim-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+.scale-dim-row input {
+    width: 64px;
+}
+.scale-dim-sep {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.scale-px-info {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}

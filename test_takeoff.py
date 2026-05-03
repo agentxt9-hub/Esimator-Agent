@@ -184,19 +184,12 @@ with app.app_context():
         check("TakeoffPage records created", len(db_pages) == plan.page_count,
               f"{len(db_pages)} pages in DB")
 
-# 5. Thumbnail files
-print("\n-- 5. Thumbnail files --")
-has_thumbs = any(pg.get('thumbnail_url') for pg in pages)
-if has_thumbs:
-    for pg in pages:
-        url = pg.get('thumbnail_url') or ''
-        if url.startswith('/static/'):
-            rel  = url[len('/static/'):]
-            full = os.path.join(BASE_DIR, 'static', rel.replace('/', os.sep))
-            check(f"Thumbnail exists: {os.path.basename(full)}", os.path.isfile(full))
-else:
-    print("  [SKIP] Thumbnail generation skipped (poppler not installed on Windows dev machine).")
-    print("         Install poppler on the DigitalOcean droplet for production thumbnails.")
+# 5. Thumbnail generation (client-side)
+print("\n-- 5. Thumbnail generation (client-side) --")
+# Upload returns thumbnail_url=None; PDF.js renders thumbnails in the browser
+check("All pages have thumbnail_url=None (client renders via PDF.js)",
+      all(pg.get('thumbnail_url') is None for pg in pages),
+      str([pg.get('thumbnail_url') for pg in pages]))
 
 # 6. Serve PDF
 print("\n-- 6. Serve PDF --")
@@ -264,7 +257,472 @@ check("GET /takeoff -> HTTP 200", resp.status_code == 200,
 check("Response contains takeoff-app", b'takeoff-app' in resp.data)
 check("Response contains pdf.js script", b'pdf.min.js' in resp.data)
 
-# Summary
+# ============================================================
+# SESSION 2 TESTS — Scale, Measurements, Item PATCH, Security
+# ============================================================
+
+# Create a fresh item for Session 2 tests
+print("\n-- S2.0: Create Session 2 test item --")
+resp = client.post(
+    f'/project/{PROJECT_ID}/takeoff/item',
+    json={'name': 'S2-Wall-Test', 'measurement_type': 'linear', 'color': '#10B981', 'opacity': 0.6},
+    content_type='application/json',
+)
+S2_ITEM_ID = None
+try:
+    s2_item_data = json.loads(resp.data)
+    check("S2 item created", s2_item_data.get('success'))
+    S2_ITEM_ID = (s2_item_data.get('item') or {}).get('id')
+    check("S2 item id returned", S2_ITEM_ID is not None, str(S2_ITEM_ID))
+except Exception as e:
+    check("S2 item create parseable", False, str(e))
+
+# Grab first page_id for measurement tests
+PAGE_ID = pages[0]['id'] if pages else None
+
+# S2.1 — Scale calibration
+print("\n-- S2.1: Scale calibration --")
+if PAGE_ID:
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/scale',
+        json={'pixels_per_foot': 48.0, 'method': 'manual'},
+        content_type='application/json',
+    )
+    check("POST /page/<id>/scale -> HTTP 200", resp.status_code == 200,
+          f"status={resp.status_code}")
+    scale_data = json.loads(resp.data)
+    check("Scale response success=True", scale_data.get('success'), str(scale_data))
+    check("Scale pixels_per_foot returned", scale_data.get('pixels_per_foot') == 48.0,
+          str(scale_data.get('pixels_per_foot')))
+
+    # Verify DB updated
+    with app.app_context():
+        from app import TakeoffPage
+        pg = TakeoffPage.query.get(PAGE_ID)
+        check("DB scale_pixels_per_foot saved", pg and pg.scale_pixels_per_foot == 48.0,
+              str(pg.scale_pixels_per_foot if pg else None))
+        check("DB scale_method saved", pg and pg.scale_method == 'manual',
+              str(pg.scale_method if pg else None))
+
+# S2.2 — Invalid scale rejected
+print("\n-- S2.2: Invalid scale rejected --")
+if PAGE_ID:
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/scale',
+        json={'pixels_per_foot': -5.0},
+        content_type='application/json',
+    )
+    check("POST scale with negative ppf -> 400", resp.status_code == 400,
+          f"status={resp.status_code}")
+
+# S2.3 — Linear measurement
+print("\n-- S2.3: Linear measurement --")
+S2_MEAS_ID = None
+if S2_ITEM_ID and PAGE_ID:
+    pts = [{'x': 0.1, 'y': 0.2}, {'x': 0.5, 'y': 0.2}, {'x': 0.5, 'y': 0.6}]
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/measurement',
+        json={
+            'item_id':          S2_ITEM_ID,
+            'page_id':          PAGE_ID,
+            'points_json':      json.dumps(pts),
+            'calculated_value': 24.5,
+            'measurement_type': 'linear',
+        },
+        content_type='application/json',
+    )
+    check("POST /measurement linear -> HTTP 201", resp.status_code == 201,
+          f"status={resp.status_code}")
+    meas_data = json.loads(resp.data)
+    check("Measurement success=True", meas_data.get('success'), str(meas_data))
+    check("measurement_id returned", 'measurement_id' in meas_data,
+          str(meas_data.get('measurement_id')))
+    check("item_totals returned", 'item_totals' in meas_data)
+    S2_MEAS_ID = meas_data.get('measurement_id')
+
+# S2.4 — GET page measurements returns linear measurement
+print("\n-- S2.4: GET page measurements --")
+if PAGE_ID and S2_MEAS_ID:
+    resp = client.get(f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/measurements')
+    check("GET /page/<id>/measurements -> HTTP 200", resp.status_code == 200)
+    pg_meas_data = json.loads(resp.data)
+    check("Response has measurements key", 'measurements' in pg_meas_data)
+    check("Response has scale_pixels_per_foot", 'scale_pixels_per_foot' in pg_meas_data,
+          str(pg_meas_data.get('scale_pixels_per_foot')))
+    check("scale_pixels_per_foot is 48.0", pg_meas_data.get('scale_pixels_per_foot') == 48.0)
+    meas_list = pg_meas_data.get('measurements', [])
+    check("Linear measurement in list", any(m['id'] == S2_MEAS_ID for m in meas_list),
+          f"count={len(meas_list)}")
+    if meas_list:
+        m = next((m for m in meas_list if m['id'] == S2_MEAS_ID), None)
+        if m:
+            check("measurement has item_name", 'item_name' in m)
+            check("measurement has item_color", 'item_color' in m)
+            check("measurement_type == linear", m.get('measurement_type') == 'linear',
+                  str(m.get('measurement_type')))
+            check("calculated_value == 24.5", m.get('calculated_value') == 24.5,
+                  str(m.get('calculated_value')))
+
+# S2.5 — Area measurement
+print("\n-- S2.5: Area measurement --")
+S2_AREA_MEAS_ID = None
+if S2_ITEM_ID and PAGE_ID:
+    area_pts = [
+        {'x': 0.1, 'y': 0.1}, {'x': 0.4, 'y': 0.1},
+        {'x': 0.4, 'y': 0.4}, {'x': 0.1, 'y': 0.4},
+    ]
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/measurement',
+        json={
+            'item_id':              S2_ITEM_ID,
+            'page_id':              PAGE_ID,
+            'points_json':          json.dumps(area_pts),
+            'calculated_value':     144.0,
+            'calculated_secondary': 48.0,
+            'measurement_type':     'area',
+        },
+        content_type='application/json',
+    )
+    check("POST /measurement area -> HTTP 201", resp.status_code == 201,
+          f"status={resp.status_code}")
+    area_data = json.loads(resp.data)
+    check("Area measurement success", area_data.get('success'))
+    S2_AREA_MEAS_ID = area_data.get('measurement_id')
+
+    # Verify DB
+    with app.app_context():
+        from app import TakeoffMeasurement
+        am = TakeoffMeasurement.query.get(S2_AREA_MEAS_ID) if S2_AREA_MEAS_ID else None
+        check("Area calculated_value == 144.0", am and am.calculated_value == 144.0,
+              str(am.calculated_value if am else None))
+        check("Area calculated_secondary == 48.0", am and am.calculated_secondary == 48.0,
+              str(am.calculated_secondary if am else None))
+        check("Area measurement_type == area", am and am.measurement_type == 'area',
+              str(am.measurement_type if am else None))
+
+# S2.6 — Count measurements
+print("\n-- S2.6: Count measurements (3 placed) --")
+S2_COUNT_IDS = []
+if PAGE_ID:
+    # Create a count-type item
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/item',
+        json={'name': 'S2-Count-Item', 'measurement_type': 'count', 'color': '#F59E0B', 'opacity': 0.8},
+        content_type='application/json',
+    )
+    count_item_data = json.loads(resp.data)
+    COUNT_ITEM_ID = (count_item_data.get('item') or {}).get('id')
+
+    if COUNT_ITEM_ID:
+        for pt in [{'x': 0.2, 'y': 0.2}, {'x': 0.5, 'y': 0.5}, {'x': 0.8, 'y': 0.3}]:
+            r = client.post(
+                f'/project/{PROJECT_ID}/takeoff/measurement',
+                json={
+                    'item_id':          COUNT_ITEM_ID,
+                    'page_id':          PAGE_ID,
+                    'points_json':      json.dumps([pt]),
+                    'calculated_value': 1,
+                    'measurement_type': 'count',
+                },
+                content_type='application/json',
+            )
+            d = json.loads(r.data)
+            if d.get('success'):
+                S2_COUNT_IDS.append(d['measurement_id'])
+
+        check("3 count measurements created", len(S2_COUNT_IDS) == 3,
+              f"count={len(S2_COUNT_IDS)}")
+
+        # Verify totals via GET items
+        resp2 = client.get(f'/project/{PROJECT_ID}/takeoff/items')
+        items2 = json.loads(resp2.data)
+        cnt_item = next((i for i in items2 if i['id'] == COUNT_ITEM_ID), None)
+        check("Count item total == 3.0", cnt_item and cnt_item['total'] == 3.0,
+              str(cnt_item['total'] if cnt_item else None))
+
+# S2.7 — Measurement DELETE
+print("\n-- S2.7: Measurement delete --")
+if S2_MEAS_ID:
+    resp = client.delete(f'/project/{PROJECT_ID}/takeoff/measurement/{S2_MEAS_ID}')
+    check("DELETE /measurement/<id> -> HTTP 200", resp.status_code == 200,
+          f"status={resp.status_code}")
+    del_data = json.loads(resp.data)
+    check("Delete measurement success=True", del_data.get('success'))
+    check("item_totals returned after delete", 'item_totals' in del_data)
+
+    # Verify measurement no longer in page list
+    resp2 = client.get(f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/measurements')
+    pg_data = json.loads(resp2.data)
+    remaining_ids = [m['id'] for m in pg_data.get('measurements', [])]
+    check("Deleted measurement absent from page", S2_MEAS_ID not in remaining_ids)
+
+# S2.8 — Item PATCH
+print("\n-- S2.8: Item PATCH --")
+if S2_ITEM_ID:
+    resp = client.patch(
+        f'/project/{PROJECT_ID}/takeoff/item/{S2_ITEM_ID}',
+        json={
+            'name':           'WT-B Updated',
+            'color':          '#EF4444',
+            'opacity':        0.75,
+            'assembly_notes': 'Updated spec notes',
+            'division':       '09',
+        },
+        content_type='application/json',
+    )
+    check("PATCH /item/<id> -> HTTP 200", resp.status_code == 200,
+          f"status={resp.status_code}")
+    patch_data = json.loads(resp.data)
+    check("PATCH success=True", patch_data.get('success'))
+    item_out = patch_data.get('item', {})
+    check("item name updated", item_out.get('name') == 'WT-B Updated',
+          str(item_out.get('name')))
+    check("item color updated", item_out.get('color') == '#EF4444',
+          str(item_out.get('color')))
+    check("item opacity updated", item_out.get('opacity') == 0.75,
+          str(item_out.get('opacity')))
+    check("item division updated", item_out.get('division') == '09',
+          str(item_out.get('division')))
+
+    # Verify DB
+    with app.app_context():
+        from app import TakeoffItem
+        it = TakeoffItem.query.get(S2_ITEM_ID)
+        check("DB name updated", it and it.name == 'WT-B Updated',
+              str(it.name if it else None))
+        check("DB color updated", it and it.color == '#EF4444',
+              str(it.color if it else None))
+
+# S2.9 — Security: measurement POST for cross-company project → 403
+print("\n-- S2.9: Cross-company security --")
+with app.app_context():
+    from app import Company, User, Project
+    other_co = Company.query.filter_by(company_name='OtherCompanyS2').first()
+    if not other_co:
+        other_co = Company(company_name='OtherCompanyS2')
+        db.session.add(other_co)
+        db.session.flush()
+        other_user = User(
+            company_id=other_co.id,
+            username='other_s2_admin',
+            email='other_s2@zenbid.io',
+            role='admin',
+        )
+        other_user.set_password('TestPass123!')
+        db.session.add(other_user)
+        other_proj = Project(
+            company_id=other_co.id,
+            project_name='Other S2 Project',
+            project_number='OTH-S2-001',
+        )
+        db.session.add(other_proj)
+        db.session.commit()
+    else:
+        other_proj = (Project.query
+                      .filter_by(company_id=other_co.id)
+                      .first())
+
+    if other_proj and S2_ITEM_ID and PAGE_ID:
+        OTHER_PROJECT_ID = other_proj.id
+
+# Test that our user can't create measurements on other company's project
+if S2_ITEM_ID and PAGE_ID:
+    with app.app_context():
+        other_proj2 = (Project.query
+                       .filter(Project.company_id != COMPANY_ID)
+                       .first())
+    if other_proj2:
+        resp = client.post(
+            f'/project/{other_proj2.id}/takeoff/measurement',
+            json={
+                'item_id':          S2_ITEM_ID,
+                'page_id':          PAGE_ID,
+                'points_json':      '[]',
+                'calculated_value': 1.0,
+                'measurement_type': 'count',
+            },
+            content_type='application/json',
+        )
+        check("Cross-company measurement POST -> 403", resp.status_code == 403,
+              f"status={resp.status_code}")
+    else:
+        check("Cross-company security (skipped — no other project)", True, "skipped")
+
+# S2.10 — Scale route 403 on wrong project
+print("\n-- S2.10: Scale route 403 on wrong project --")
+if PAGE_ID:
+    with app.app_context():
+        other_proj3 = (Project.query
+                       .filter(Project.company_id != COMPANY_ID)
+                       .first())
+    if other_proj3:
+        resp = client.post(
+            f'/project/{other_proj3.id}/takeoff/page/{PAGE_ID}/scale',
+            json={'pixels_per_foot': 48.0},
+            content_type='application/json',
+        )
+        check("Cross-company scale POST -> 403", resp.status_code == 403,
+              f"status={resp.status_code}")
+    else:
+        check("Scale 403 cross-company (skipped)", True, "skipped")
+
+# S2.11 — measurement_type stored correctly
+print("\n-- S2.11: measurement_type column --")
+with app.app_context():
+    from app import TakeoffMeasurement
+    if S2_AREA_MEAS_ID:
+        m2 = TakeoffMeasurement.query.get(S2_AREA_MEAS_ID)
+        check("TakeoffMeasurement has measurement_type attr", hasattr(m2, 'measurement_type'))
+        check("Area measurement_type == 'area'", m2 and m2.measurement_type == 'area',
+              str(m2.measurement_type if m2 else None))
+
+# S2.12 — PATCH with empty name rejected gracefully
+print("\n-- S2.12: PATCH empty name rejected --")
+if S2_ITEM_ID:
+    resp = client.patch(
+        f'/project/{PROJECT_ID}/takeoff/item/{S2_ITEM_ID}',
+        json={'name': '   '},
+        content_type='application/json',
+    )
+    # Either 200 with name unchanged OR 400 — just should not crash
+    check("PATCH empty name does not 500", resp.status_code in (200, 400),
+          f"status={resp.status_code}")
+
+# S2.13 — GET page measurements returns scale_pixels_per_foot
+print("\n-- S2.13: GET page measurements returns scale --")
+if PAGE_ID:
+    resp = client.get(f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/measurements')
+    check("GET measurements -> 200", resp.status_code == 200)
+    d = json.loads(resp.data)
+    check("scale_pixels_per_foot present", 'scale_pixels_per_foot' in d)
+    check("scale_pixels_per_foot is numeric", isinstance(d.get('scale_pixels_per_foot'), (int, float)),
+          str(type(d.get('scale_pixels_per_foot'))))
+
+# S2.14 — DELETE non-existent measurement → 404
+print("\n-- S2.14: DELETE non-existent measurement -> 404 --")
+resp = client.delete(f'/project/{PROJECT_ID}/takeoff/measurement/999999999')
+check("DELETE non-existent measurement -> 404", resp.status_code == 404,
+      f"status={resp.status_code}")
+
+# S2.15 — item_totals update after measurement delete
+print("\n-- S2.15: item_totals update after delete --")
+if S2_ITEM_ID and PAGE_ID:
+    # Add a measurement so we can check totals
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/measurement',
+        json={
+            'item_id': S2_ITEM_ID, 'page_id': PAGE_ID,
+            'points_json': json.dumps([{'x': 0.1, 'y': 0.1}, {'x': 0.9, 'y': 0.9}]),
+            'calculated_value': 10.0, 'measurement_type': 'linear',
+        },
+        content_type='application/json',
+    )
+    add_data = json.loads(resp.data)
+    new_meas_id = add_data.get('measurement_id')
+    check("Temp measurement created", add_data.get('success'))
+
+    if new_meas_id:
+        resp2 = client.delete(f'/project/{PROJECT_ID}/takeoff/measurement/{new_meas_id}')
+        d2 = json.loads(resp2.data)
+        check("Delete returns item_totals", 'item_totals' in d2)
+        totals = d2.get('item_totals', {})
+        check("item_id in item_totals", 'item_id' in totals)
+        check("total is numeric", isinstance(totals.get('total'), (int, float)),
+              str(totals.get('total')))
+
+# ============================================================
+# SESSION 3 TESTS — Polish fixes
+# ============================================================
+
+# S3.1 — GET /items aggregated project totals across pages
+print("\n-- S3.1: GET /items project totals (all pages) --")
+if S2_ITEM_ID and PAGE_ID:
+    # Use second page if available to test cross-page aggregation
+    second_page_id = pages[1]['id'] if len(pages) >= 2 else PAGE_ID
+    # Add a measurement on page 2 (or same page if only 1)
+    resp = client.post(
+        f'/project/{PROJECT_ID}/takeoff/measurement',
+        json={
+            'item_id': S2_ITEM_ID, 'page_id': second_page_id,
+            'points_json': json.dumps([{'x': 0.0, 'y': 0.0}, {'x': 1.0, 'y': 0.0}]),
+            'calculated_value': 55.5, 'measurement_type': 'linear',
+        },
+        content_type='application/json',
+    )
+    p2_data = json.loads(resp.data)
+    check("S3.1 page-2 measurement created", p2_data.get('success'))
+
+    resp2 = client.get(f'/project/{PROJECT_ID}/takeoff/items')
+    check("S3.1 GET /items -> 200", resp2.status_code == 200)
+    items_s3 = json.loads(resp2.data)
+    it_s3 = next((i for i in items_s3 if i['id'] == S2_ITEM_ID), None)
+    check("S3.1 item found in list", it_s3 is not None)
+    check("S3.1 total field present", it_s3 is not None and 'total' in it_s3)
+    check("S3.1 total is numeric", it_s3 is not None and isinstance(it_s3.get('total'), (int, float)),
+          str(it_s3.get('total') if it_s3 else None))
+    # total should include page-2 measurement (55.5 + area measurement on page 1)
+    check("S3.1 total >= 55.5 (cross-page sum)", it_s3 is not None and it_s3.get('total', 0) >= 55.5,
+          str(it_s3.get('total') if it_s3 else None))
+
+# S3.2 — PUT /page/<id>/name (page rename)
+print("\n-- S3.2: Page name rename --")
+if PAGE_ID:
+    resp = client.put(
+        f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/name',
+        json={'page_name': 'A1.0 - Floor Plan'},
+        content_type='application/json',
+    )
+    check("S3.2 PUT /page/<id>/name -> 200", resp.status_code == 200,
+          f"status={resp.status_code}")
+    ren_data = json.loads(resp.data)
+    check("S3.2 rename success=True", ren_data.get('success'))
+    check("S3.2 page_name returned", ren_data.get('page_name') == 'A1.0 - Floor Plan',
+          str(ren_data.get('page_name')))
+
+    with app.app_context():
+        from app import TakeoffPage
+        pg_ren = TakeoffPage.query.get(PAGE_ID)
+        check("S3.2 DB page_name updated",
+              pg_ren and pg_ren.page_name == 'A1.0 - Floor Plan',
+              str(pg_ren.page_name if pg_ren else None))
+
+    # Empty name rejected
+    resp2 = client.put(
+        f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/name',
+        json={'page_name': '   '},
+        content_type='application/json',
+    )
+    check("S3.2 empty name -> 400", resp2.status_code == 400,
+          f"status={resp2.status_code}")
+
+# S3.3 — GET /page/<id>/measurements returns scale_pixels_per_foot (regression)
+print("\n-- S3.3: GET measurements returns scale (regression) --")
+if PAGE_ID:
+    resp = client.get(f'/project/{PROJECT_ID}/takeoff/page/{PAGE_ID}/measurements')
+    check("S3.3 GET measurements -> 200", resp.status_code == 200)
+    s3_data = json.loads(resp.data)
+    check("S3.3 scale_pixels_per_foot present", 'scale_pixels_per_foot' in s3_data)
+    check("S3.3 scale == 48.0 (set in S2.1)",
+          s3_data.get('scale_pixels_per_foot') == 48.0,
+          str(s3_data.get('scale_pixels_per_foot')))
+
+# S3.4 — Cross-company page rename blocked
+print("\n-- S3.4: Cross-company page rename blocked --")
+if PAGE_ID:
+    with app.app_context():
+        xco_proj = (Project.query.filter(Project.company_id != COMPANY_ID).first())
+    if xco_proj:
+        resp = client.put(
+            f'/project/{xco_proj.id}/takeoff/page/{PAGE_ID}/name',
+            json={'page_name': 'Hacked'},
+            content_type='application/json',
+        )
+        check("S3.4 cross-company rename -> 403", resp.status_code == 403,
+              f"status={resp.status_code}")
+    else:
+        check("S3.4 cross-company rename (skipped)", True, "skipped")
+
+# ── Final summary ─────────────────────────────────────────────────────────────
 print("\n" + "=" * 50)
 passed = sum(1 for _, ok, _ in results if ok)
 total  = len(results)

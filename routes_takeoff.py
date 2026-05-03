@@ -37,11 +37,6 @@ def _plan_dir(project_id):
     return base
 
 
-def _thumb_dir(project_id):
-    d = os.path.join(_plan_dir(project_id), 'thumbs')
-    os.makedirs(d, exist_ok=True)
-    return d
-
 
 def _get_plan_or_403(plan_id):
     plan = TakeoffPlan.query.get_or_404(plan_id)
@@ -70,19 +65,21 @@ def viewer(project_id):
 
     plans_data = []
     for plan in plans:
+        # Explicit query (not plan.pages relationship) to guarantee correct results
+        pages = (TakeoffPage.query
+                 .filter_by(plan_id=plan.id)
+                 .order_by(TakeoffPage.page_number)
+                 .all())
         pages_data = [
             {
                 'id': p.id,
                 'page_number': p.page_number,
                 'page_name': p.page_name,
-                'thumbnail_url': (
-                    '/static/' + p.thumbnail_path.replace('\\', '/')
-                    if p.thumbnail_path else None
-                ),
+                'thumbnail_url': None,   # always None — rendered client-side by PDF.js
                 'scale_set': p.scale_pixels_per_foot is not None,
                 'scale_method': p.scale_method,
             }
-            for p in plan.pages
+            for p in pages
         ]
         plans_data.append({
             'id': plan.id,
@@ -94,8 +91,7 @@ def viewer(project_id):
     return render_template(
         'takeoff/viewer.html',
         project=project,
-        plans=plans_data,
-        plans_json=json.dumps(plans_data),
+        plans_data=plans_data,
     )
 
 
@@ -139,76 +135,39 @@ def upload_pdf(project_id):
         db.session.add(plan)
         db.session.flush()  # get plan.id before commit
 
-        # Generate thumbnails and count pages using PyMuPDF (pure Python, no poppler)
+        # Count pages with PyMuPDF — thumbnails render client-side via PDF.js
         pages_data = []
         try:
-            import fitz  # PyMuPDF
+            import fitz
             doc = fitz.open(pdf_path)
             total_pages = len(doc)
-            plan.page_count = total_pages
-            thumb_dir = _thumb_dir(project_id)
-
-            for idx in range(total_pages):
-                page = doc[idx]
-                # zoom 1.0 = 72 DPI — low res thumbnail, fast, small memory
-                pix = page.get_pixmap(matrix=fitz.Matrix(1.0, 1.0))
-                thumb_name = f'p{plan.id}_{idx + 1}.jpg'
-                thumb_path = os.path.join(thumb_dir, thumb_name)
-                pix.save(thumb_path)
-                del pix  # free immediately
-
-                rel_path = os.path.join('uploads', 'takeoff', str(project_id),
-                                        'thumbs', thumb_name)
-                current_app.logger.info(
-                    f'Thumbnail {idx + 1}/{total_pages} saved')
-
-                page_record = TakeoffPage(
-                    plan_id=plan.id,
-                    page_number=idx + 1,
-                    page_name=f'Page {idx + 1}',
-                    thumbnail_path=rel_path,
-                )
-                db.session.add(page_record)
-                db.session.flush()
-                pages_data.append({
-                    'id': page_record.id,
-                    'page_number': idx + 1,
-                    'page_name': page_record.page_name,
-                    'thumbnail_url': '/static/' + rel_path.replace('\\', '/'),
-                })
-
             doc.close()
+        except Exception:
+            total_pages = 1  # last-resort fallback
 
-        except Exception as e:
-            # PyMuPDF unavailable — create page records without thumbnails
-            current_app.logger.warning(f'Thumbnail generation failed: {e}')
-            try:
-                import fitz
-                doc = fitz.open(pdf_path)
-                plan.page_count = len(doc)
-                doc.close()
-            except Exception:
-                plan.page_count = 1  # last-resort fallback
+        plan.page_count = total_pages
 
-            for idx in range(1, plan.page_count + 1):
-                page = TakeoffPage(
-                    plan_id=plan.id,
-                    page_number=idx,
-                    page_name=f'Page {idx}',
-                )
-                db.session.add(page)
-                db.session.flush()
-                pages_data.append({
-                    'id': page.id,
-                    'page_number': idx,
-                    'page_name': page.page_name,
-                    'thumbnail_url': None,
-                })
+        for idx in range(1, total_pages + 1):
+            page_record = TakeoffPage(
+                plan_id=plan.id,
+                page_number=idx,
+                page_name=f'Page {idx}',
+                thumbnail_path=None,
+            )
+            db.session.add(page_record)
+            db.session.flush()
+            pages_data.append({
+                'id': page_record.id,
+                'page_number': idx,
+                'page_name': page_record.page_name,
+                'thumbnail_url': None,  # rendered client-side
+            })
 
         db.session.commit()
         return jsonify({
             'success': True,
             'plan_id': plan.id,
+            'original_filename': plan.original_filename,
             'page_count': plan.page_count,
             'pages': pages_data,
         })
@@ -343,3 +302,195 @@ def delete_item(project_id, item_id):
     db.session.delete(item)
     db.session.commit()
     return jsonify({'success': True})
+
+
+# ── Session 2: scale, measurements, item patch ───────────────────────────────
+
+def _get_page_or_403(page_id, project_id):
+    """Verify TakeoffPage belongs to this project + company, abort 403 if not."""
+    page = TakeoffPage.query.get_or_404(page_id)
+    plan = TakeoffPlan.query.get(page.plan_id)
+    if (not plan or plan.project_id != project_id
+            or plan.company_id != current_user.company_id):
+        abort(403)
+    return page
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/page/<int:page_id>/scale',
+                  methods=['POST'])
+@login_required
+def set_page_scale(project_id, page_id):
+    get_project_or_403(project_id)
+    page = _get_page_or_403(page_id, project_id)
+
+    data = request.get_json(silent=True) or {}
+    try:
+        ppf = float(data.get('pixels_per_foot', 0))
+    except (TypeError, ValueError):
+        ppf = 0
+    if ppf <= 0:
+        return jsonify({'success': False, 'error': 'Invalid pixels_per_foot'}), 400
+
+    page.scale_pixels_per_foot = ppf
+    page.scale_method = data.get('method', 'manual')
+    db.session.commit()
+    return jsonify({'success': True, 'pixels_per_foot': ppf})
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/measurement', methods=['POST'])
+@login_required
+def create_measurement(project_id):
+    get_project_or_403(project_id)
+    data = request.get_json(silent=True) or {}
+
+    item_id = data.get('item_id')
+    page_id = data.get('page_id')
+    if not item_id or not page_id:
+        return jsonify({'success': False, 'error': 'item_id and page_id required'}), 400
+
+    item = _get_item_or_403(item_id)
+    _get_page_or_403(page_id, project_id)
+
+    try:
+        calc_val = float(data.get('calculated_value', 0))
+    except (TypeError, ValueError):
+        calc_val = 0.0
+    calc_sec = None
+    if data.get('calculated_secondary') is not None:
+        try:
+            calc_sec = float(data['calculated_secondary'])
+        except (TypeError, ValueError):
+            calc_sec = None
+
+    m = TakeoffMeasurement(
+        item_id=item_id,
+        page_id=page_id,
+        points_json=data.get('points_json', '[]'),
+        calculated_value=calc_val,
+        calculated_secondary=calc_sec,
+        measurement_type=data.get('measurement_type', 'linear'),
+    )
+    db.session.add(m)
+    db.session.commit()
+
+    item_total = sum(x.calculated_value or 0 for x in item.measurements)
+    return jsonify({
+        'success': True,
+        'measurement_id': m.id,
+        'item_totals': {'item_id': item_id, 'total': round(item_total, 2)},
+    }), 201
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/measurement/<int:meas_id>',
+                  methods=['DELETE'])
+@login_required
+def delete_measurement(project_id, meas_id):
+    get_project_or_403(project_id)
+    m = TakeoffMeasurement.query.get_or_404(meas_id)
+    item = _get_item_or_403(m.item_id)
+
+    db.session.delete(m)
+    db.session.commit()
+
+    item_total = sum(x.calculated_value or 0 for x in item.measurements)
+    return jsonify({
+        'success': True,
+        'item_totals': {'item_id': m.item_id, 'total': round(item_total, 2)},
+    })
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/item/<int:item_id>',
+                  methods=['PATCH'])
+@login_required
+def update_item(project_id, item_id):
+    get_project_or_403(project_id)
+    item = _get_item_or_403(item_id)
+    data = request.get_json(silent=True) or {}
+
+    if 'name' in data:
+        name = str(data['name']).strip()
+        if name:
+            item.name = name
+    if 'color' in data:
+        item.color = str(data['color'])
+    if 'opacity' in data:
+        try:
+            item.opacity = float(data['opacity'])
+        except (TypeError, ValueError):
+            pass
+    if 'width_ft' in data:
+        item.width_ft = float(data['width_ft']) if data['width_ft'] else None
+    if 'side_of_line' in data:
+        item.side_of_line = str(data['side_of_line'])
+    if 'assembly_notes' in data:
+        item.assembly_notes = str(data['assembly_notes'])
+    if 'division' in data:
+        item.division = str(data['division'])
+
+    db.session.commit()
+
+    total = sum(x.calculated_value or 0 for x in item.measurements)
+    return jsonify({
+        'success': True,
+        'item': {
+            'id': item.id,
+            'name': item.name,
+            'measurement_type': item.measurement_type,
+            'color': item.color,
+            'opacity': item.opacity,
+            'width_ft': item.width_ft,
+            'side_of_line': item.side_of_line,
+            'assembly_notes': item.assembly_notes,
+            'division': item.division,
+            'total': round(total, 2),
+            'measurement_count': len(item.measurements),
+        },
+    })
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/page/<int:page_id>/name',
+                  methods=['PUT'])
+@login_required
+def rename_page(project_id, page_id):
+    get_project_or_403(project_id)
+    page = _get_page_or_403(page_id, project_id)
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('page_name', '')).strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'Name required'}), 400
+    page.page_name = name
+    db.session.commit()
+    return jsonify({'success': True, 'page_name': name})
+
+
+@takeoff_bp.route('/project/<int:project_id>/takeoff/page/<int:page_id>/measurements')
+@login_required
+def page_measurements(project_id, page_id):
+    get_project_or_403(project_id)
+    page = _get_page_or_403(page_id, project_id)
+
+    measurements = (TakeoffMeasurement.query
+                    .filter_by(page_id=page_id)
+                    .order_by(TakeoffMeasurement.created_at)
+                    .all())
+    result = []
+    for m in measurements:
+        item = TakeoffItem.query.get(m.item_id)
+        if item and item.company_id == current_user.company_id:
+            result.append({
+                'id': m.id,
+                'item_id': item.id,
+                'item_name': item.name,
+                'item_color': item.color,
+                'item_opacity': item.opacity,
+                'item_width_ft': item.width_ft,
+                'measurement_type': m.measurement_type,
+                'points_json': m.points_json,
+                'calculated_value': m.calculated_value,
+                'calculated_secondary': m.calculated_secondary,
+            })
+
+    return jsonify({
+        'measurements': result,
+        'scale_pixels_per_foot': page.scale_pixels_per_foot,
+    })

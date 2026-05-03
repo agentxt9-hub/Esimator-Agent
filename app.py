@@ -20,12 +20,18 @@ import io
 import csv
 import re
 import secrets
+import time
+import logging
+import logging.handlers
 import anthropic
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB
 
 # ─────────────────────────────────────────
 # CONFIG
@@ -38,8 +44,19 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'logo')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
+_secret_key = os.environ.get('SECRET_KEY', 'dev-change-this-in-production-please')
+_db_url = os.environ.get('DATABASE_URL')
+if os.environ.get('FLASK_ENV') == 'production' or os.environ.get('REQUIRE_SECURE_CONFIG'):
+    if _secret_key == 'dev-change-this-in-production-please' or len(_secret_key) < 32:
+        raise RuntimeError('SECRET_KEY is missing or insecure — set a strong SECRET_KEY environment variable')
+    if not _db_url:
+        raise RuntimeError('DATABASE_URL environment variable is required')
+
+app.config['SECRET_KEY'] = _secret_key
 app.config['WTF_CSRF_TIME_LIMIT'] = 3600  # 1 hour
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Mail config (SendGrid SMTP or any SMTP provider)
@@ -59,6 +76,42 @@ login_manager.login_message = 'Please log in to access this page.'
 csrf    = CSRFProtect(app)
 limiter = Limiter(key_func=get_remote_address, app=app, default_limits=[], storage_uri='memory://')
 mail    = Mail(app)
+
+# ─────────────────────────────────────────
+# SENTRY + STRUCTURED LOGGING
+# ─────────────────────────────────────────
+
+_sentry_dsn = os.environ.get('SENTRY_DSN', '')
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.1,
+        environment=os.environ.get('FLASK_ENV', 'development'),
+        send_default_pii=False,
+    )
+
+def _configure_logging():
+    log_level_name = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    log_level      = getattr(logging, log_level_name, logging.INFO)
+    fmt = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+
+    root = logging.getLogger()
+    root.setLevel(log_level)
+
+    if os.environ.get('FLASK_ENV') == 'production':
+        log_dir = '/var/log/zenbid'
+        os.makedirs(log_dir, exist_ok=True)
+        fh = logging.handlers.TimedRotatingFileHandler(
+            f'{log_dir}/app.log', when='midnight', backupCount=14, encoding='utf-8')
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
+    else:
+        sh = logging.StreamHandler()
+        sh.setFormatter(fmt)
+        root.addHandler(sh)
+
+_configure_logging()
 
 # ─────────────────────────────────────────
 # DATABASE MODELS
@@ -211,6 +264,18 @@ class LineItem(db.Model):
     total_cost             = db.Column(db.Numeric(12, 2))
     trade                  = db.Column(db.String(100))
     notes                  = db.Column(db.Text)
+    # Session 22 — Estimate Table (TanStack) fields
+    company_id             = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    phase                  = db.Column(db.String(100))
+    csi_division           = db.Column(db.String(100))   # denormalized string for new API
+    ai_status              = db.Column(db.String(20), default='verified')
+    ai_confidence          = db.Column(db.Integer, default=100)
+    ai_note                = db.Column(db.Text)
+    is_deleted             = db.Column(db.Boolean, default=False)
+    # Data flywheel fields (TALLY_VISION.md)
+    ai_generated           = db.Column(db.Boolean, default=False)
+    estimator_action       = db.Column(db.String(20))   # accepted/edited/rejected/ignored
+    edit_delta             = db.Column(db.Text)         # JSON of {field: {from, to}} on edit
     created_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at             = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -298,6 +363,43 @@ class LineItemWBS(db.Model):
                                            name='uq_lineitem_wbs_property'),)
 
 # ─────────────────────────────────────────
+# FLYWHEEL: AI CALL LOG
+# ─────────────────────────────────────────
+
+class AICallLog(db.Model):
+    __tablename__ = 'ai_call_log'
+    id           = db.Column(db.Integer, primary_key=True)
+    route        = db.Column(db.String(50), nullable=False)
+    user_id      = db.Column(db.Integer, db.ForeignKey('users.id'))
+    company_id   = db.Column(db.Integer, db.ForeignKey('companies.id'))
+    project_id   = db.Column(db.Integer)
+    model        = db.Column(db.String(100))
+    input_tokens = db.Column(db.Integer)
+    output_tokens= db.Column(db.Integer)
+    latency_ms   = db.Column(db.Integer)
+    success      = db.Column(db.Boolean, default=True)
+    error_type   = db.Column(db.String(50))
+    created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+def log_ai_call(route, model, input_tokens, output_tokens, latency_ms,
+                project_id=None, success=True, error_type=None):
+    """Write one row to ai_call_log. Never raises — logging must not break the main flow."""
+    try:
+        uid = current_user.id if current_user and current_user.is_authenticated else None
+        cid = current_user.company_id if uid else None
+        db.session.add(AICallLog(
+            route=route, user_id=uid, company_id=cid, project_id=project_id,
+            model=model, input_tokens=input_tokens, output_tokens=output_tokens,
+            latency_ms=latency_ms, success=success, error_type=error_type,
+        ))
+        db.session.commit()
+    except Exception:
+        app.logger.exception('log_ai_call failed — swallowed')
+        db.session.rollback()
+
+
+# ─────────────────────────────────────────
 # TAKEOFF MODELS
 # ─────────────────────────────────────────
 
@@ -354,6 +456,7 @@ class TakeoffMeasurement(db.Model):
     points_json          = db.Column(db.Text, nullable=False)  # JSON array of {x,y} normalized 0-1
     calculated_value     = db.Column(db.Float, default=0.0)
     calculated_secondary = db.Column(db.Float, nullable=True)
+    measurement_type     = db.Column(db.String(30), nullable=False, default='linear')  # linear | area | count | linear_with_width
     created_at           = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 # ─────────────────────────────────────────
@@ -361,10 +464,11 @@ class TakeoffMeasurement(db.Model):
 # ─────────────────────────────────────────
 
 def admin_required(f):
-    """Restrict route to users with role='admin'."""
+    """Restrict route to platform superadmin (SUPERADMIN_EMAIL env var)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'admin':
+        superadmin_email = os.environ.get('SUPERADMIN_EMAIL', '')
+        if not current_user.is_authenticated or not superadmin_email or current_user.email != superadmin_email:
             abort(403)
         return f(*args, **kwargs)
     return decorated
@@ -421,8 +525,13 @@ def login():
             user = User.query.filter_by(username=email).first()
         if user and user.check_password(password):
             login_user(user, remember=remember)
+            app.logger.info('auth.login user_id=%s email=%s ip=%s',
+                            user.id, email, request.remote_addr)
             next_page = request.args.get('next')
+            if next_page and not next_page.startswith('/'):
+                next_page = None
             return redirect(next_page or url_for('index'))
+        app.logger.warning('auth.login_failed email=%s ip=%s', email, request.remote_addr)
         return render_template('login.html', error='Invalid email or password', email=email)
     return render_template('login.html')
 
@@ -451,12 +560,37 @@ def signup():
             company_id=company.id,
             username=full_name,     # use full name as display username
             email=email,
-            role='admin',
+            role='estimator',
         )
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
         login_user(user, remember=True)
+        app.logger.info('auth.signup user_id=%s email=%s company=%s ip=%s',
+                        user.id, email, company_name, request.remote_addr)
+        dashboard_url = url_for('index', _external=True)
+        try:
+            msg = Message(
+                subject='You\'re in — welcome to Zenbid beta',
+                recipients=[user.email],
+                body=(
+                    f'Hi {user.username},\n\n'
+                    f'Your Zenbid account is live. You\'re one of the first estimators '
+                    f'testing the platform — that means your feedback shapes what gets built next.\n\n'
+                    f'Start here: {dashboard_url}\n\n'
+                    f'A few things worth knowing:\n\n'
+                    f'  • Upload a plan PDF and let Tally pull a takeoff draft — '
+                    f'then edit it line by line until it\'s yours.\n'
+                    f'  • Every number you correct teaches the system what your work actually costs.\n'
+                    f'  • Hit reply on this email any time. I read every one.\n\n'
+                    f'Welcome aboard.\n\n'
+                    f'Thomas\n'
+                    f'Zenbid'
+                )
+            )
+            mail.send(msg)
+        except Exception:
+            app.logger.warning('welcome email failed user_id=%s', user.id)
         flash('Account created! Welcome to Zenbid.', 'success')
         return redirect(url_for('index'))
     return render_template('signup.html')
@@ -464,6 +598,7 @@ def signup():
 @app.route('/logout')
 @login_required
 def logout():
+    app.logger.info('auth.logout user_id=%s ip=%s', current_user.id, request.remote_addr)
     logout_user()
     return redirect(url_for('login'))
 
@@ -475,6 +610,7 @@ def logout():
 @login_required
 @admin_required
 def admin_panel():
+    app.logger.info('admin.panel_access user_id=%s ip=%s', current_user.id, request.remote_addr)
     companies = Company.query.order_by(Company.company_name).all()
     all_users = User.query.order_by(User.company_id, User.username).all()
     return render_template('admin.html', companies=companies, all_users=all_users)
@@ -1136,14 +1272,10 @@ def estimate_view(project_id):
                  'equipment_cost_per_unit': float(i.equipment_cost_per_unit or 0),
                  'notes': i.notes or ''} for i in lib_items]
 
-    return render_template('estimate.html',
+    return render_template('estimate_table.html',
                            project=project,
-                           items_json=json.dumps(items),
-                           assemblies_json=json.dumps(assemblies_data),
                            csi1_json=json.dumps(csi1_data),
-                           csi2_json=json.dumps(csi2_data),
-                           props_json=props_json,
-                           library_json=json.dumps(lib_data))
+                           csi2_json=json.dumps(csi2_data))
 
 @app.route('/assembly/<int:assembly_id>/update', methods=['POST'])
 @login_required
@@ -1201,6 +1333,182 @@ def delete_line_item(item_id):
     db.session.delete(item)
     db.session.commit()
     return jsonify({'success': True})
+
+# ─────────────────────────────────────────
+# API: LINE ITEMS — Session 22 (TanStack Table)
+# ─────────────────────────────────────────
+
+def _api_item_dict(item, csi1_map):
+    """Serialize a LineItem to the TanStack Table API shape."""
+    csi_div = item.csi_division or ''
+    if not csi_div:
+        csi1_id = item.csi_level_1_id
+        if not csi1_id and item.assembly_id:
+            asm = Assembly.query.get(item.assembly_id)
+            if asm:
+                csi1_id = asm.csi_level_1_id
+        if csi1_id and csi1_id in csi1_map:
+            csi = csi1_map[csi1_id]
+            csi_div = f"{csi.code} \u2014 {csi.title}"
+
+    qty        = float(item.quantity or 0)
+    labor_rate = float(item.labor_cost_per_unit or 0)
+    mat_cost   = float(item.material_cost_per_unit or 0)
+    line_total = round(qty * (labor_rate + mat_cost), 4)
+
+    return {
+        'id':            item.id,
+        'description':   item.description or '',
+        'csi_division':  csi_div,
+        'phase':         item.phase or '',
+        'trade':         item.trade or '',
+        'qty':           qty,
+        'unit':          item.unit or '',
+        'labor_rate':    labor_rate,
+        'mat_cost':      mat_cost,
+        'ai_status':     item.ai_status or 'verified',
+        'ai_confidence': item.ai_confidence if item.ai_confidence is not None else 100,
+        'ai_note':       item.ai_note,
+        'line_total':    line_total,
+        'assembly_id':   item.assembly_id,
+    }
+
+@app.route('/api/projects/<int:project_id>/line_items', methods=['GET'])
+@login_required
+def api_list_line_items(project_id):
+    project = get_project_or_403(project_id)
+    csi1_map = {d.id: d for d in CSILevel1.query.all()}
+
+    result = []
+    # Items via assemblies
+    for asm in Assembly.query.filter_by(project_id=project_id).all():
+        for item in asm.line_items:
+            if item.is_deleted:
+                continue
+            result.append(_api_item_dict(item, csi1_map))
+    # Direct items (no assembly)
+    for item in LineItem.query.filter_by(project_id=project_id, assembly_id=None).all():
+        if item.is_deleted:
+            continue
+        result.append(_api_item_dict(item, csi1_map))
+
+    return jsonify({'items': result, 'project': {'id': project.id, 'name': project.project_name}})
+
+@app.route('/api/projects/<int:project_id>/line_items', methods=['POST'])
+@login_required
+def api_create_line_item(project_id):
+    project = get_project_or_403(project_id)
+    data = request.get_json() or {}
+
+    description = (data.get('description') or '').strip()
+    if not description:
+        return jsonify({'error': 'description is required'}), 400
+
+    qty = data.get('qty', 0)
+    try:
+        qty = float(qty)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'qty must be a number'}), 400
+
+    labor_rate = data.get('labor_rate', 0)
+    mat_cost   = data.get('mat_cost', 0)
+    try:
+        labor_rate = float(labor_rate)
+        mat_cost   = float(mat_cost)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'labor_rate and mat_cost must be numbers'}), 400
+
+    item = LineItem(
+        project_id             = project_id,
+        company_id             = current_user.company_id,
+        description            = description,
+        csi_division           = (data.get('csi_division') or '').strip() or None,
+        phase                  = (data.get('phase') or '').strip() or None,
+        trade                  = (data.get('trade') or '').strip() or None,
+        quantity               = qty,
+        unit                   = (data.get('unit') or 'EA').strip(),
+        labor_cost_per_unit    = labor_rate,
+        material_cost_per_unit = mat_cost,
+        total_cost             = qty * (labor_rate + mat_cost),
+        ai_status              = 'verified',
+        ai_confidence          = 100,
+        is_deleted             = False,
+        ai_generated           = False,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    csi1_map = {d.id: d for d in CSILevel1.query.all()}
+    return jsonify(_api_item_dict(item, csi1_map)), 201
+
+# Allowed fields for PATCH and their internal model attribute names
+_PATCH_FIELD_MAP = {
+    'description': 'description',
+    'phase':       'phase',
+    'trade':       'trade',
+    'qty':         'quantity',
+    'unit':        'unit',
+    'labor_rate':  'labor_cost_per_unit',
+    'mat_cost':    'material_cost_per_unit',
+}
+_NUMERIC_PATCH_FIELDS = {'qty', 'labor_rate', 'mat_cost'}
+
+@app.route('/api/line_items/<int:item_id>', methods=['PATCH'])
+@login_required
+def api_patch_line_item(item_id):
+    item = get_lineitem_or_403(item_id)
+    data = request.get_json() or {}
+
+    # Capture pre-edit state for flywheel
+    delta_before = {}
+    delta_after  = {}
+
+    for api_field, model_attr in _PATCH_FIELD_MAP.items():
+        if api_field not in data:
+            continue
+        old_val = getattr(item, model_attr)
+        new_raw = data[api_field]
+        if api_field in _NUMERIC_PATCH_FIELDS:
+            try:
+                new_val = float(new_raw)
+            except (ValueError, TypeError):
+                continue
+        else:
+            new_val = (new_raw or '').strip() if new_raw is not None else ''
+        if str(old_val) != str(new_val):
+            delta_before[api_field] = str(old_val)
+            delta_after[api_field]  = str(new_val)
+        setattr(item, model_attr, new_val)
+
+    # Recompute line_total whenever qty/labor_rate/mat_cost changed
+    qty        = float(item.quantity or 0)
+    labor_rate = float(item.labor_cost_per_unit or 0)
+    mat_cost   = float(item.material_cost_per_unit or 0)
+    item.total_cost = qty * (labor_rate + mat_cost)
+
+    # Flywheel: record edit delta
+    if delta_before:
+        item.estimator_action = 'edited'
+        existing_delta = json.loads(item.edit_delta or '{}')
+        for f in delta_before:
+            existing_delta[f] = {'from': delta_before[f], 'to': delta_after[f]}
+        item.edit_delta = json.dumps(existing_delta)
+
+    item.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    csi1_map = {d.id: d for d in CSILevel1.query.all()}
+    return jsonify(_api_item_dict(item, csi1_map))
+
+@app.route('/api/line_items/<int:item_id>', methods=['DELETE'])
+@login_required
+def api_delete_line_item(item_id):
+    item = get_lineitem_or_403(item_id)
+    item.is_deleted      = True
+    item.estimator_action = 'rejected'
+    item.updated_at      = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({'deleted': True}), 204
 
 @app.route('/assembly/<int:assembly_id>/delete', methods=['POST'])
 @login_required
@@ -1424,7 +1732,8 @@ def save_assembly_builder(project_id):
             material_cost_per_unit=mat_per, material_cost=mat_cost,
             labor_hours=lab_hrs, labor_cost_per_hour=lab_hr, labor_cost=lab_cost,
             equipment_hours=equ_hrs, equipment_cost_per_hour=equ_hr, equipment_cost=equ_cost,
-            total_cost=total
+            total_cost=total,
+            ai_generated=True,
         ))
 
     db.session.commit()
@@ -2368,13 +2677,13 @@ def ai_chat():
                 total_hours     += hrs
                 total_cost      += tot
                 item_rows.append(
-                    f"  - [{it.id}] {it.description} | {float(it.quantity or 0)} {it.unit} "
+                    f"  - [{it.id}] <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} "
                     f"| type={it.item_type} prod_base={it.prod_base} "
                     f"rate={float(it.production_rate or 0)} | "
                     f"mat=${mat:.2f} lab=${lab:.2f} equ=${equ:.2f} hrs={hrs:.1f} total=${tot:.2f}"
                 )
             asm_blocks.append(
-                f"Assembly [id={asm.id}] {asm.assembly_label}: {asm.assembly_name} "
+                f"Assembly [id={asm.id}] {asm.assembly_label}: <assembly_name>{asm.assembly_name}</assembly_name> "
                 f"[CSI: {csi1_map.get(asm.csi_level_1_id, 'none')} / {csi2_map.get(asm.csi_level_2_id, 'none')}]\n"
                 + ("\n".join(item_rows) if item_rows else "  (no line items)")
             )
@@ -2395,7 +2704,7 @@ def ai_chat():
                 total_hours     += hrs
                 total_cost      += tot
                 direct_rows.append(
-                    f"  - [{it.id}] {it.description} | {float(it.quantity or 0)} {it.unit} "
+                    f"  - [{it.id}] <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} "
                     f"| total=${tot:.2f}"
                 )
             asm_blocks.append("Direct Line Items (no assembly):\n" + "\n".join(direct_rows))
@@ -2417,12 +2726,12 @@ def ai_chat():
 
 PROJECT CONTEXT
 ---------------
-Name:        {project.project_name}
+Name:        <project_name>{project.project_name}</project_name>
 Number:      {project.project_number or 'N/A'}
 Location:    {project.city or ''} {project.state or ''} {project.zip_code or ''}
 Type:        {props_map.get(project.project_type_id, 'N/A')}
 Sector:      {props_map.get(project.market_sector_id, 'N/A')}
-Description: {project.description or 'N/A'}
+Description: <description>{project.description or 'N/A'}</description>
 
 LIVE TOTALS
 -----------
@@ -2527,6 +2836,7 @@ BULK UPDATE multiple line items at once (useful for recalculate-all operations):
         system_prompt = """You are a knowledgeable construction industry assistant embedded in a project estimating tool. You help estimators with questions about materials, methods, costs, codes, and project management. Be concise and practical."""
 
     # ── Call Claude API ──────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -2536,10 +2846,18 @@ BULK UPDATE multiple line items at once (useful for recalculate-all operations):
             messages=[{'role': 'user', 'content': message}],
         )
         reply_text = response.content[0].text
+        log_ai_call('/ai/chat', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/chat', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_ai_call('/ai/chat', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
+        app.logger.exception('AI chat error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Extract write proposal if present ───────────────────────────────
     write_proposal = None
@@ -2685,6 +3003,8 @@ def ai_apply():
             equipment_cost_per_unit=float(li_data.get('equipment_cost_per_unit', 0) or 0),
             trade=li_data.get('trade') or None,
             notes=li_data.get('notes') or None,
+            ai_generated=True,
+            estimator_action='accepted',
         )
         calculate_item_costs(item)
         db.session.add(item)
@@ -2739,7 +3059,7 @@ Your task is to build a fully-costed assembly for the described scope of work.
 
 PROJECT CONTEXT
 ---------------
-Name:     {project.project_name}
+Name:     <project_name>{project.project_name}</project_name>
 Number:   {project.project_number or 'N/A'}
 Location: {project.city or ''} {project.state or ''} {project.zip_code or ''}
 Type:     {props_map.get(project.project_type_id, 'N/A')}
@@ -2798,6 +3118,7 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
 }}"""
 
     # ── Call Claude ───────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -2807,10 +3128,18 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
             messages=[{'role': 'user', 'content': description}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/build-assembly', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/build-assembly', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_ai_call('/ai/build-assembly', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
+        app.logger.exception('AI build-assembly error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON from Claude ────────────────────────────────────────────
     # Strip any accidental markdown fences
@@ -2821,10 +3150,9 @@ REQUIRED JSON FORMAT (return exactly this structure, nothing else):
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI build-assembly: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     asm_data   = result.get('assembly', {})
     items_data = result.get('line_items', [])
@@ -2963,12 +3291,12 @@ def ai_scope_gap():
             total_hours     += hrs
             total_cost      += tot
             item_rows.append(
-                f"    - {it.description} | {float(it.quantity or 0)} {it.unit} "
+                f"    - <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} "
                 f"| trade={it.trade or 'N/A'} | mat=${mat:.2f} lab=${lab:.2f} equ=${equ:.2f} total=${tot:.2f}"
             )
 
         asm_blocks.append(
-            f"  [{asm.assembly_label}] {asm.assembly_name}"
+            f"  [{asm.assembly_label}] <assembly_name>{asm.assembly_name}</assembly_name>"
             f" [CSI: {csi1_map.get(asm.csi_level_1_id, 'none')} / {csi2_map.get(asm.csi_level_2_id, 'none')}]\n"
             + ("\n".join(item_rows) if item_rows else "    (no line items)")
         )
@@ -2987,7 +3315,7 @@ def ai_scope_gap():
             total_equipment += equ
             total_cost      += tot
             direct_rows.append(
-                f"    - {it.description} | {float(it.quantity or 0)} {it.unit} | total=${tot:.2f}"
+                f"    - <line_item>{it.description}</line_item> | {float(it.quantity or 0)} {it.unit} | total=${tot:.2f}"
             )
         asm_blocks.append("  [Direct Line Items — no assembly]\n" + "\n".join(direct_rows))
 
@@ -3010,12 +3338,12 @@ Your job is to identify gaps, omissions, and missing scope — not to reprice it
 
 PROJECT DETAILS
 ---------------
-Name:        {project.project_name}
+Name:        <project_name>{project.project_name}</project_name>
 Number:      {project.project_number or 'N/A'}
 Location:    {project.city or ''} {project.state or ''} {project.zip_code or ''}
 Type:        {props_map.get(project.project_type_id, 'N/A')}
 Sector:      {props_map.get(project.market_sector_id, 'N/A')}
-Description: {project.description or 'N/A'}
+Description: <description>{project.description or 'N/A'}</description>
 
 LIVE ESTIMATE TOTALS
 --------------------
@@ -3058,7 +3386,7 @@ HIGH   — likely to cause a significant cost miss if submitted as-is
 MEDIUM — should be resolved before bid day
 LOW    — minor item or optional scope, flag for estimator awareness
 
-Also note regional considerations for {project.city or 'the project location'}, {project.state or ''} — permits, prevailing wage, specific trade requirements, or weather-related scope that may be missing.
+Also note regional considerations for <project_location>{project.city or 'the project location'}, {project.state or ''}</project_location> — permits, prevailing wage, specific trade requirements, or weather-related scope that may be missing.
 
 RESPONSE FORMAT
 ---------------
@@ -3088,6 +3416,7 @@ Level values must be one of: MISSING_LINE_ITEM, MISSING_ASSEMBLY, MISSING_CSI_DI
 Severity values must be one of: HIGH, MEDIUM, LOW"""
 
     # ── Call Claude ────────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -3097,10 +3426,18 @@ Severity values must be one of: HIGH, MEDIUM, LOW"""
             messages=[{'role': 'user', 'content': 'Please review this estimate for scope gaps and missing items.'}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/scope-gap', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/scope-gap', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_ai_call('/ai/scope-gap', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
+        app.logger.exception('AI scope-gap error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON from Claude ─────────────────────────────────────────────
     json_text = raw_text
@@ -3110,10 +3447,9 @@ Severity values must be one of: HIGH, MEDIUM, LOW"""
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI scope-gap: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     # ── Sort gaps: HIGH → MEDIUM → LOW ────────────────────────────────────
     severity_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
@@ -3233,7 +3569,7 @@ REQUIRED JSON FORMAT:
 }"""
 
     # ── User message ──────────────────────────────────────────────────────
-    user_message_parts = [f"QUESTION: {query}"]
+    user_message_parts = [f"QUESTION: <query>{query}</query>"]
     if location_context:
         user_message_parts.append(f"PROJECT LOCATION: {location_context}")
     user_message_parts.append(f"COMPANY TRADES ON FILE: {trades_text}")
@@ -3243,6 +3579,7 @@ REQUIRED JSON FORMAT:
     user_message = "\n\n".join(user_message_parts)
 
     # ── Call Claude ───────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -3252,10 +3589,18 @@ REQUIRED JSON FORMAT:
             messages=[{'role': 'user', 'content': user_message}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/production-rate', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/production-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_ai_call('/ai/production-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
+        app.logger.exception('AI generate-items error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON ────────────────────────────────────────────────────────
     json_text = raw_text
@@ -3265,10 +3610,9 @@ REQUIRED JSON FORMAT:
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI generate-items: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     return jsonify({'success': True, **result})
 
@@ -3340,7 +3684,7 @@ REQUIRED JSON FORMAT:
     # ── User message ──────────────────────────────────────────────────────
     li_block = (
         f"LINE ITEM TO VALIDATE:\n"
-        f"  Description: {item.description}\n"
+        f"  Description: <line_item>{item.description}</line_item>\n"
         f"  Quantity: {float(item.quantity or 0)} {item.unit or ''}\n"
         f"  Production rate: {current_rate} {item.unit or 'units'}/hr\n"
         f"  Item type: {item.item_type or 'labor_material'}\n"
@@ -3354,6 +3698,7 @@ REQUIRED JSON FORMAT:
     user_message = li_block + db_block
 
     # ── Call Claude ───────────────────────────────────────────────────────
+    _t0 = time.monotonic()
     try:
         client   = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -3363,10 +3708,18 @@ REQUIRED JSON FORMAT:
             messages=[{'role': 'user', 'content': user_message}],
         )
         raw_text = response.content[0].text.strip()
+        log_ai_call('/ai/validate-rate', response.model, response.usage.input_tokens,
+                    response.usage.output_tokens, int((time.monotonic() - _t0) * 1000),
+                    project_id=project_id)
     except anthropic.AuthenticationError:
+        log_ai_call('/ai/validate-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='auth')
         return jsonify({'success': False, 'error': 'Invalid ANTHROPIC_API_KEY'}), 500
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_ai_call('/ai/validate-rate', 'claude-sonnet-4-20250514', 0, 0,
+                    int((time.monotonic() - _t0) * 1000), success=False, error_type='exception')
+        app.logger.exception('AI validate-rate error')
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
     # ── Parse JSON ────────────────────────────────────────────────────────
     json_text = raw_text
@@ -3376,10 +3729,9 @@ REQUIRED JSON FORMAT:
 
     try:
         result = json.loads(json_text)
-    except (json.JSONDecodeError, ValueError) as e:
-        return jsonify({'success': False,
-                        'error': f'Claude returned invalid JSON: {str(e)}',
-                        'raw': raw_text}), 500
+    except (json.JSONDecodeError, ValueError):
+        app.logger.error('AI validate-rate: invalid JSON from Claude: %s', raw_text[:200])
+        return jsonify({'success': False, 'error': 'AI returned an unparseable response'}), 500
 
     return jsonify({'success': True, **result})
 
@@ -3603,6 +3955,35 @@ def run_migrations():
                 points_json TEXT NOT NULL,
                 calculated_value FLOAT DEFAULT 0.0,
                 calculated_secondary FLOAT,
+                measurement_type VARCHAR(30) NOT NULL DEFAULT 'linear',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            # Session 2 — measurement_type on existing rows
+            "ALTER TABLE takeoff_measurements ADD COLUMN IF NOT EXISTS measurement_type VARCHAR(30) NOT NULL DEFAULT 'linear'",
+            # Session 22 — Estimate Table (TanStack) — LineItem new columns
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS phase VARCHAR(100)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS csi_division VARCHAR(100)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_status VARCHAR(20) DEFAULT 'verified'",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_confidence INTEGER DEFAULT 100",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_note TEXT",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS estimator_action VARCHAR(20)",
+            "ALTER TABLE line_items ADD COLUMN IF NOT EXISTS edit_delta TEXT",
+            # D.1 — AI call log (flywheel telemetry)
+            """CREATE TABLE IF NOT EXISTS ai_call_log (
+                id SERIAL PRIMARY KEY,
+                route VARCHAR(50) NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                company_id INTEGER REFERENCES companies(id),
+                project_id INTEGER,
+                model VARCHAR(100),
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                latency_ms INTEGER,
+                success BOOLEAN DEFAULT TRUE,
+                error_type VARCHAR(50),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )""",
         ]
@@ -3610,8 +3991,9 @@ def run_migrations():
             try:
                 db.session.execute(db.text(sql))
                 db.session.commit()
-            except Exception:
+            except Exception as e:
                 db.session.rollback()
+                print(f"Migration failed: {sql[:80]!r} — {e}")
 
 def seed_production_rates():
     """Seed default production rate standards if table is empty."""
@@ -3646,6 +4028,47 @@ def seed_production_rates():
                 min_rate=min_r, typical_rate=typ_r, max_rate=max_r, source_notes=notes,
             ))
         db.session.commit()
+
+# ─────────────────────────────────────────
+# ERROR HANDLERS
+# ─────────────────────────────────────────
+
+@app.errorhandler(500)
+def internal_error(e):
+    app.logger.error('http.500 path=%s method=%s ip=%s',
+                     request.path, request.method, request.remote_addr)
+    return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.errorhandler(502)
+def bad_gateway(e):
+    app.logger.error('http.502 path=%s', request.path)
+    return jsonify({'success': False, 'error': 'Bad gateway'}), 502
+
+
+@app.errorhandler(503)
+def service_unavailable(e):
+    app.logger.error('http.503 path=%s', request.path)
+    return jsonify({'success': False, 'error': 'Service unavailable'}), 503
+
+
+# ─────────────────────────────────────────
+# DEBUG / HEALTH ROUTES (non-production only)
+# ─────────────────────────────────────────
+
+@app.route('/_health')
+def health_check():
+    """Lightweight health check for Uptime Kuma and load balancers."""
+    return jsonify({'status': 'ok'}), 200
+
+
+@app.route('/_sentry-test')
+def sentry_test():
+    """Deliberately raise an exception to verify Sentry wiring. Non-production only."""
+    if os.environ.get('FLASK_ENV') == 'production':
+        return jsonify({'error': 'not available in production'}), 404
+    raise RuntimeError('Sentry test exception — wiring verified')
+
 
 # ─────────────────────────────────────────
 # BLUEPRINT REGISTRATION

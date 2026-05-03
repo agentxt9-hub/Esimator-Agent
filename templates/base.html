@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}Zenbid - Build Smarter Estimates, Faster{% endblock %}</title>
+    <title>{% block title %}Zenbid — Construction Estimating, Full Workflow{% endblock %}</title>
     <style>
         /* RESET & BASE */
         * {
@@ -381,7 +381,7 @@
 <body>
     <!-- Waitlist Banner -->
     <div id="waitlist-banner" class="waitlist-banner">
-        🚀 Early Access is open — <a href="/waitlist">Join the waitlist</a> and be first in line.
+        Early access is open — first estimators test free. <a href="/waitlist">Reserve your spot →</a>
         <button class="waitlist-banner-dismiss" onclick="dismissBanner()" aria-label="Dismiss">✕</button>
     </div>
     <script>
@@ -419,7 +419,7 @@
                     <a href="/dashboard" class="btn btn-primary">Go to App →</a>
                 {% else %}
                     <a href="/login">Log In</a>
-                    <a href="/waitlist" class="btn btn-primary">Join Waitlist</a>
+                    <a href="/waitlist" class="btn btn-primary">Reserve beta access</a>
                 {% endif %}
             </div>
         </div>
@@ -445,8 +445,8 @@
                     </svg>
                     <span>ZEN<span class="bid-accent">BID</span></span>
                 </div>
-                <p class="footer-tagline">Build Smarter Estimates, Faster</p>
-                <p style="color: #9CA3AF; font-size: 0.875rem;">AI-powered construction estimating for modern contractors.</p>
+                <p class="footer-tagline">Takeoff to proposal. One tool.</p>
+                <p style="color: #9CA3AF; font-size: 0.875rem;">Construction estimating that runs the full workflow.</p>
             </div>
             <div>
                 <h4>Product</h4>

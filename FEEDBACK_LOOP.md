@@ -1,0 +1,140 @@
+# Feedback Loop
+
+This document captures continuous signal from users (founder + beta), QA automation, content performance, and routing decisions. The Orchestrator appends to this daily. Roles read it to inform their work.
+
+## How this document works
+
+- **Founder feedback** is logged when the founder uses the product or notices anything in chat with the Orchestrator
+- **Beta user feedback** is logged when Outreach Operator captures signal from real users (post-Sprint One)
+- **QA signals** are logged when Playwright tests fail, Sentry catches errors, Uptime Kuma alerts
+- **Content performance** is logged weekly by the Content Machine Operator (post-Sprint One)
+- **Routing decisions** are logged by the Orchestrator when feedback gets routed to a specific role/sprint
+
+Entries are timestamped. Old entries are not deleted — they're a historical record.
+
+---
+
+## 2026-05-02 — Foundation Sprint Day 1
+
+### From founder (workflow validation)
+
+- [2026-05-02] Staging confirmed live at https://staging.zenbid.io — separate DB, user pool, SSL, port 8001. Smoke-test passed.
+
+- [2026-05-02] **HIGH — Landing page brand-coherence failures (5 specific items). Blocks outreach activation.**
+  1. Hero CTA says "early access is open" + "join the waitlist" — must say "Start beta — $29/mo" (DEC-001 locked paid beta)
+  2. Subhead "AI-powered construction estimating" — banned phrase (Section 7 voice rules). Needs estimator-native language ("catch what you miss", "your numbers backed up", etc.)
+  3. H1 "Build Smarter Estimates, Faster" — generic SaaS copy. Needs locked voice.
+  4. Mock dashboard shows fake customer data ("Welcome back, Alex!", "$2.4M est value", "Medical Office Bldg Chicago") — dishonest on a beta-launch page. Remove or replace with real screenshots.
+  5. "3x" and "100%" stats — unsubstantiated. Remove until real metrics exist.
+  → Founder: "this MUST ship before any outreach activates. do all changes against staging first, then promote to prod once founder approves."
+
+- [2026-05-02] **LOW — Backlog: deploy/staging-setup.sh has bugs (no postgres detection, nginx server block issues). Not urgent — fix before next staging rebuild.**
+
+### From beta users
+*[empty — populates after Sprint One opens beta capture]*
+
+### From QA automation
+- 39/39 TanStack + API tests passing
+- 99/99 Takeoff tests passing
+- `test_login_only.py` requires live server — not part of standard suite; deferred to staging
+
+### From content performance
+*[empty — populates after Content Machine activates post-Foundation]*
+
+- [2026-05-02] **HIGH — Pricing model pivot: 2-stage beta. Remove all $29/mo from landing page now.**
+  DEC-001 amended: stage 1 (now) = free reserved beta, founder hand-curates first ~20 from warm network + inbound, free during validation in exchange for feedback. Stage 2 (when validated) = $29/mo paid beta with grandfathered offer to stage 1 users. Reasoning: selling $29/mo before product is validated by real estimators on real bids burns trust faster than a careful free-then-paid sequence.
+  Copy changes: banner → "Early access — reserve your spot. First estimators test free." | CTA → "Reserve beta access" | remove all $29/mo references from page.
+  DEC-005 added to queue: define stage 1 → stage 2 transition criteria. Founder recommends option (c): 3+ stage 1 users say "I'd pay for this."
+  Note for when outreach playbook is drafted: no $29/mo language in tier 1 or tier 2 outreach until stage 2 launches.
+
+- [2026-05-02] **HIGH — Production 502 post-incident: 3 process gaps identified.**
+  Root cause: Sprint Zero startup gate (`SECRET_KEY` strength check) enabled without rotating the existing weak key. Production went down on next service restart. Fixed: 64-char hex key generated, `.env` updated, service restored. Sessions invalidated as expected.
+  Gap 1: Startup gate + key rotation must be a single atomic operation. Gate enabled → key must be rotated in the same ops window. Never ship a gate without the rotation step.
+  Gap 2: systemd restart counter hit 2047 (tight loop, high CPU). Need `StartLimitBurst`/`StartLimitInterval` in the service unit so it gives up after N attempts and surfaces an alarm rather than infinite-looping.
+  Gap 3: No monitoring/alerting. Production was down and we only caught it via `update.sh` failure. Sentry + Uptime Kuma must be wired BEFORE any beta users hit the platform.
+  → All 3 logged as P1 backlog for Sprint One. `deploy/update.sh` guard added immediately.
+
+- [2026-05-02] **Process feedback — stale task plan.** Orchestrator reported Track A.1 as "on founder" when staging was already live and landing page already verified. Fix: verify ORCHESTRATOR_TASK_PLAN.md against `git log` on every `/status` run before reporting. Don't report work as outstanding if commits show it shipped.
+
+- [2026-05-02] Staging landing page copy approved by founder. "Reserve beta access", "Early access is open — first estimators test free" confirmed in browser. No $29/mo references. Approving for production promotion.
+
+- [2026-05-02] **D.1 confirmed shipped.** AICallLog model + run_migrations CREATE TABLE + log_ai_call() wired across all 5 AI routes. Flywheel data capture now complete: ai_generated, estimator_action, ai_call_log all populating in production going forward.
+
+- [2026-05-02] **HIGH — A.4 scope locked + reorder: A.4 (monitoring) goes BEFORE C.1 (Playwright).** Today's 502 incident proved we're blind to production outages. A.4 scope:
+  1. Sentry SDK + Flask error handlers + DSN from environment. Verify test exception surfaces in Sentry dashboard within 30s.
+  2. Uptime Kuma monitors for zenbid.io + staging.zenbid.io — 60s checks, alert on 2 consecutive failures. Alerts to thomas@zenbid.io + optional Slack/Discord webhook.
+  3. Structured logging via Flask config — /var/log/zenbid/app.log in prod, stdout in dev. Log level from env, default INFO.
+  4. Specifically log: auth events (login/logout/signup/failed login), admin panel access, every 5xx response. AI calls already covered by log_ai_call().
+  5. .env.example updated with SENTRY_DSN, LOG_LEVEL.
+  6. docs/MONITORING.md — wiring overview, alert destinations, how to test.
+  Verification gate: deliberately raise exception on staging → confirm Sentry receives it within 30s. Stop staging gunicorn → confirm Uptime Kuma fires alert. Only then mark A.4 complete.
+  C.1 (Playwright) unblocks after A.4 is verified.
+
+- [2026-05-02] **A.4 FULLY VERIFIED — COMPLETE.** Uptime Kuma live at status.zenbid.io, both monitors green at 60s intervals. Sentry verified: curl /_sentry-test → exception in dashboard within 15s. Alert test: stopped zenbid-staging → monitor red in 2 min, green in 1 min after restart.
+
+- [2026-05-02] **Sprint One backlog items flagged:**
+  1. **HIGH — CI/CD pipeline**: A.4 code merged to main but neither prod nor staging auto-deployed — had to manually fire update.sh. GitHub Actions workflow on push-to-main needed.
+  2. **LOW — Growth-hub admin recovery runbook**: NPM password recovery wasted 30+ min. Document container names, DB locations, bcrypt reset SQL in docs/GROWTH_HUB_RECOVERY.md.
+  3. **LOW — Notification channels deferred**: Uptime Kuma + Sentry email sufficient for current stage. Discord/Slack/SMS wiring deferred to Sprint One+.
+  4. **LOW — SENTRY_DSN rotation**: DSN was exposed in conversation log. Founder to rotate via Sentry dashboard and update both server .env files. No code change required.
+
+- [2026-05-02] **C.1 VERIFIED AGAINST STAGING — 25/25 passing in 31.2s.** baseURL log confirmed "[globalSetup] Using baseURL: https://staging.zenbid.io". All tests passed including cross-company isolation guard and brand assertions.
+
+- [2026-05-02] **Bug found + patched on droplet: global-setup.js baseURL propagation.** `config.use?.baseURL` does not propagate into Playwright globalSetup — must read `process.env.BASE_URL` directly. Patched on droplet; needs to be committed to repo. Fix: `const baseURL = process.env.BASE_URL || config.use?.baseURL || 'http://127.0.0.1:5000';` + console.log for visibility.
+
+- [2026-05-02] **A.4 Sentry SDK side verified via log evidence.** Staging journalctl showed "RuntimeError: Sentry test exception — wiring verified" + "Sentry is attempting to send 2 pending events" + "Waiting up to 2 seconds". SDK caught and shipped the exception. Founder to confirm issue visible in sentry.io browser dashboard.
+
+- [2026-05-02] **REAL GAP — A.4 Uptime Kuma alert notifications NOT verified.** Staging was stopped during Sentry test, not restarted, discovered after 30+ min outage via failed Playwright run. Kuma dashboard showed red but no notification fired (no channels wired). A.4 cannot be marked fully complete until: (1) Founder wires Discord webhook in Uptime Kuma, (2) Stop staging → confirm Discord/email alert fires end-to-end. Notification channel deferred status REVERSED — this is the gap that let a 30+ min outage go unnoticed.
+
+- [2026-05-02] **Revised priority confirmed:** (1) Founder: Sentry dashboard check, (2) Founder: wire Uptime Kuma notification channel, (3) Founder: rotate SENTRY_DSN. (4) Commit global-setup.js fix to repo. (5) B.2 in parallel. (6) Stop staging → verify end-to-end alert → A.4 fully closes. Tomorrow: B.3-B.5, A.3 (mono-repo last), engineering challenger pass, DEC-002 Sprint One scope.
+
+- [2026-05-02] **Day summary:** 6 tracks shipped (A.1, A.2, A.4 partial, B.1, C.1 verified, D.1) + survived 3 prod/staging incidents + stood up staging from scratch. Closing verification gaps tonight.
+
+- [2026-05-02] **Funnel mechanics verified, zero organic signups.** Prod waitlist has 10 entries — all founder test data. Founder cleaning up tonight (`DELETE FROM waitlist_entries`). Form works, all columns capture. Real bottleneck: awareness, not conversion. Waitlist stays empty until outreach activates.
+
+- [2026-05-02] **DEC-002 Sprint One scope directive:** Outreach playbook v1 activation is a required Sprint One track. Tier 1: 20-30 hand-curated warm-network contacts (LinkedIn), personal DM with demo clip. Tier 2: targeted LinkedIn public posts, faceless brand, demo clips of working features. Tier 3: forum/subreddit/discord presence — NOT NOW, too unfocused. Gate: DO NOT touch tier 1 until A.4 alerts verified, B.3 welcome email, B.4 demo script, B.5 brand checklist are all locked. Welcome-mat must be coherent before strangers walk through it. Target: 5+ stage 1 active users by Sprint One close.
+
+- [2026-05-02] **Day 1 close.** Session handoff written for context continuity. Founder's planned tomorrow queue: A.4 alert wiring + SENTRY_DSN rotation + waitlist test data cleanup → B.3 welcome email refresh → B.4-B.5 brand polish → A.3 mono-repo → sprint close. Note: B.3, B.4, B.5 all shipped tonight in this session — tomorrow queue collapses to: A.4 alert wiring (founder action) + SENTRY_DSN rotation + waitlist cleanup → A.3 mono-repo → sprint close.
+
+### Routing decisions made today
+- Sprint Zero items (all 11) routed to Foundation Engineer → shipped in single session
+- DEC-001 amended (2026-05-02): 2-stage beta model. Stage 1 free validation → stage 2 paid $29/mo
+- DEC-005 added: stage 1 → stage 2 transition criteria (founder-recommended: feedback trigger)
+- Landing page $29/mo copy routed to Track B → fixing now
+- `docs/00_FOUNDER_CONTEXT.md` missing from repo — noted as coverage gap, not blocking Foundation Sprint
+
+---
+
+## 2026-05-03 — E.1/E.2 Founder Walkthrough (Sprint One)
+
+*Founder doing a fresh-user walkthrough on staging.zenbid.io as a real estimator. Log every friction point, confusion, missing feature, copy mismatch, or clunk below. No filter — if it bothered you for even a second, log it.*
+
+### E.1 — Fresh-user friction log
+
+**Step 1 — Landing page**
+*(no entries yet)*
+
+**Step 2 — Signup flow**
+*(no entries yet)*
+
+**Step 3 — Welcome email**
+*(no entries yet)*
+
+**Step 4 — Create first project**
+*(no entries yet)*
+
+**Step 5 — Manual line items**
+*(no entries yet)*
+
+**Step 6 — Assembly Builder**
+*(no entries yet)*
+
+**Step 7 — Tally (AI co-estimator)**
+*(no entries yet)*
+
+**Step 8 — Proposal view**
+*(no entries yet)*
+
+### E.2 — Workflow correctness notes (25-year estimator perspective)
+*(Does this workflow match how you'd actually estimate a job? What's wrong with the model? Log here.)*
+*(no entries yet)*

@@ -1,232 +1,165 @@
-# Feature Roadmap - Zenbid
+# Feature Roadmap — Zenbid
 
-> **Purpose:** High-level strategic planning and feature prioritization.  
-> **Last Updated:** Session 12 (2026-03-15)  
-> **Source:** Agent_MD.md Strategic Roadmap section
-
-> **Note:** Bugs and QA tasks are tracked in GitHub Issues. This file is for features and strategic planning only.
-
----
-
-## 🚨 CURRENT BLOCKER
-
-**DigitalOcean / zenbid.io is unreachable**
-- Domain is down, droplet access locked
-- Support ticket open with DigitalOcean
-- All Session 12 work code-complete locally but not deployed
-- No new deployments possible until resolved
-
-**GitHub Issue:** #[create issue with label: bug, critical, deployment]
+> **Purpose:** Strategic planning and feature prioritization.
+> **Last Updated:** 2026-04-13 (Pass 1 — Realignment)
+> **Source of architectural decisions:** `DECISIONS.md`
+> **Bugs and QA tasks:** tracked in GitHub Issues
 
 ---
 
-## 🔥 CRITICAL PRIORITY
-**Must Resolve Before Beta Users**
+## The Four-Pass Sequence
 
-| Feature | Status | GitHub Issue | Notes |
-|---------|--------|--------------|-------|
-| **Password Reset** | ✅ Done | - | Session 12; needs MAIL_PASSWORD on server to send emails |
-| **CSRF Protection** | ✅ Done | - | Session 12; all forms + fetch monkey-patch |
-| **Rate Limiting** | ✅ Done | - | Session 12; AI routes + login; in-memory (fine for now) |
-| **Privacy Policy & Terms** | ❌ Open | #[create] | Placeholder routes return plain text; need real legal docs |
-| **ANTHROPIC_API_KEY on server** | ⚠️ Config | - | Needs verification after DigitalOcean is back up |
+The next four sessions follow a deliberate sequence. Each pass has a clear scope that feeds the next.
 
----
-
-## 🎯 HIGH PRIORITY
-**MVP for Paying Users - Ship Within 4 Weeks**
-
-| Feature | Status | Effort | GitHub Issue | Notes |
-|---------|--------|--------|--------------|-------|
-| **Edit Project Fields UI** | ⚠️ Partial | Small | #[create] | Route exists (`POST /project/<id>/update`); Edit Project modal missing city/state/zip/type/sector fields |
-| **Welcome Email on Signup** | ❌ Open | Small | #[create] | Flask-Mail wired; just add `mail.send()` in `/signup` route |
-| **Contact Page** | ❌ Open | Small | #[create] | Currently placeholder |
-| **Viewer Role Enforcement** | ❌ Open | Medium | #[create] | Role checked only for `/admin`; viewers can currently write data |
-| **Proposal PDF Export** | ❌ Open | Large | #[create] | Print-to-PDF works; server-side PDF needs weasyprint or headless Chrome |
-| **Proposal Route Isolation** | ❌ Open | Small | #[create] | `GET /project/<id>/proposal` uses bare `Project.query.get()` not `get_project_or_403()` - security issue |
-| **Subscription / Billing** | ❌ Open | XL | #[create] | Stripe Checkout + webhook integration |
+| Pass | Session | Scope | Status |
+|------|---------|-------|--------|
+| **Pass 1** | Current | Realignment — docs only. Contradiction report + doc updates to match repo reality and encode product direction. No code. | ✅ In progress |
+| **Pass 2** | Next | 90-Second Confidence Study — scoped Playwright/manual walkthrough of zzTakeoff, produce a punch list for the upload→scale→first-measurement flow only. Diverge after that. No code changes. | ⏳ Queued |
+| **Pass 3** | Session 23+ | Bridge + Table Migration — combined. TanStack becomes canonical, legacy table retired, AgentX purged. Measurement→line_item link implemented with one-way+traceability semantics (ADR-025). Dual-costing expandable row designed and built (ADR-022). Tally stub hooks placed on both surfaces (ADR-027). Flywheel fields added to TakeoffMeasurement (ADR-026). | ⏳ Queued |
+| **Pass 4** | Session 24+ | Tally Intelligence Wiring — backend for Passive/Reactive/Generative modes against the hooks Pass 3 placed. | ⏳ Queued |
 
 ---
 
-## 📊 MEDIUM PRIORITY
-**Core SaaS Features - Post-MVP**
+## Pass 3 — Bridge + Table Migration (Detailed Scope)
 
-| Feature | Effort | GitHub Issue | Notes |
-|---------|--------|--------------|-------|
-| **Free Trial Gate** | Medium | #[create] | Limit projects/features for new signups |
-| **In-App Onboarding** | Large | #[create] | Empty state CTAs, first-time user guide |
-| **About / Blog / Careers Pages** | Small | #[create] | Footer links currently return plain text |
-| **Delete Buttons in Estimate Table** | Small | #[create] | Currently must go to project page to delete line items |
-| **Audit Logging** | Large | #[create] | Enterprise compliance, debug support, track all CRUD operations |
-| **Mobile-Responsive Estimate View** | Large | #[create] | Currently desktop-only; need tablet/mobile breakpoints |
+This is the most complex session. Scope is fixed here so it does not grow.
+
+### TanStack Migration
+- [ ] Port Prod Rate, Labor Hrs, Labor $, Material $ columns into TanStack API response as assembly-mode columns
+- [ ] Port Assembly grouping behavior from legacy table
+- [ ] Retire legacy inline estimate table from `project.html`
+- [ ] Delete or archive orphaned `estimate.html`
+
+### AgentX Retirement
+- [ ] Remove AgentX side tab button and panel from all live templates
+- [ ] Remove or rename `agentx_panel.html`
+- [ ] Keep `/ai/chat`, `/ai/apply` etc. routes but remove the UI entry point that calls them "AgentX"
+
+### Takeoff → Estimate Bridge
+- [ ] `POST /api/projects/<id>/line_items` — accept measurement_id parameter to create a linked line item
+- [ ] Store measurement linkage on LineItem (new FK column: `measurement_id` nullable)
+- [ ] Divergence tracking: detect when `line_item.qty ≠ measurement.calculated_value` and surface in UI
+- [ ] Flywheel fields added to TakeoffMeasurement (`ai_generated`, `estimator_action`, `edit_delta`)
+
+### Dual Costing Expandable Row
+- [ ] Design spike: expandable row interaction pattern (chevron → reveal assembly build-up fields)
+- [ ] Implement in `estimate_table.js`
+
+### Tally Stub Hooks
+- [ ] Estimate: wire Reactive Q&A stub panel to the Tally footer "Review All" button
+- [ ] Estimate: add Generative mode "Ask Tally" explicit entry point button
+- [ ] Takeoff: "Verify scale" stub button in status bar
+- [ ] Takeoff: Tally icon on measurement toolbar tools
 
 ---
 
-## 🔮 FUTURE PRIORITY
-**Post-Launch - Innovation & Scale**
+## 🚨 CRITICAL — Must Resolve Before Beta Users
 
-| Feature | Category | Notes |
-|---------|----------|-------|
-| **Subcontractor Bid Requests** | Workflow | Send line items to subs, receive quotes, compare in-app |
-| **Takeoff File Import** | AI/Automation | PDF/DWG → auto-populate assemblies via AI parsing |
-| **Public API** | Integration | Webhook / REST for firm integrations, Procore/Autodesk sync |
-| **Streaming AI Responses** | Performance | Token-by-token output via SSE (Server-Sent Events) |
-| **AgentX Conversation Memory** | AI Enhancement | `axHistory[]` array; multi-turn context across sessions |
-| **Quick-Action Chips** | UX | Zero-backend prompt shortcuts in AgentX panel |
-| **Bulk Import for Production Rates** | Data | CSV upload to populate production_rate_standards table |
-| **Regional Cost Intelligence** | Strategic | Use accumulated estimate data for regional pricing insights |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Privacy Policy page** | ❌ Open | `/privacy` returns placeholder text — need real legal page |
+| **Terms of Service page** | ❌ Open | `/terms` returns placeholder text — need real legal page |
+| **ANTHROPIC_API_KEY startup validation** | ❌ Open | No startup check; app starts silently with missing key |
+| **SSL certificate** | ⚠️ Unconfirmed | Site operational but HTTPS status not confirmed post-deployment |
 
 ---
 
-## ✅ SHIPPED (Recent Sessions)
+## 🎯 HIGH PRIORITY — Pre-First-Paying-User
 
-### Session 12 (2026-03-15)
-- ✅ CSRF protection (flask-wtf, meta tag, fetch monkey-patch)
-- ✅ Rate limiting (flask-limiter on login + 5 AI routes)
-- ✅ Password reset via email (flask-mail, /forgot-password, /reset-password/<token>)
+| Feature | Status | Effort | Notes |
+|---------|--------|--------|-------|
+| **Edit Project Fields UI** | ⚠️ Partial | Small | Route exists; modal missing city/state/zip/type/sector fields |
+| **Welcome Email on Signup** | ❌ Open | Small | Flask-Mail wired; just needs `mail.send()` in `/signup` |
+| **Proposal Route Isolation** | ❌ Open | Small | `GET /project/<id>/proposal` uses bare `Project.query.get_or_404()` — security gap |
+| **Viewer Role Enforcement** | ❌ Open | Medium | Role checked only for `/admin`; viewers can currently write data |
+| **Contact Page** | ❌ Open | Small | Placeholder |
 
-### Session 11c (2026-03-14)
-- ✅ Marketing site + dark theme re-skin (CSS vars)
-- ✅ Production deployment to zenbid.io (Gunicorn+Nginx+systemd)
-- ✅ Login via email support
-- ✅ /signup route
+---
 
-### Session 11b (2026-03-14)
-- ✅ WBS value inline editing + drag-to-reorder
-- ✅ AI rate lookup panel
-- ✅ Validate rate feature (right-click context menu)
-- ✅ requirements.txt generated
+## ✅ RECENTLY COMPLETED
 
-### Session 11 (2026-03-13)
-- ✅ project.html inline table overhaul
-- ✅ Inline cell editing
-- ✅ Multi-select Group By
-- ✅ WBS in Edit Project modal
-- ✅ Location 1/2/3 (renamed from Area)
+| Feature | Session | Notes |
+|---------|---------|-------|
+| **Estimate Table — TanStack Table v8** | 22 | Full grid: inline edit, grouping, sort, column reorder/resize/show-hide, CSV+Excel export, AI badges, Tally footer, Add Item panel, flywheel fields |
+| **Takeoff — Drawing Tools (Session 2)** | 21 | Scale, linear, area, count, ortho, properties panel, totals; 99/99 tests |
+| **Takeoff — Foundation + Konva migration** | 18–19 | PDF upload, 3-layer canvas, multi-page, thumbnails; Blueprint architecture |
+| **Password Reset via Email** | 12 | flask-mail, /forgot-password, /reset-password |
+| **CSRF + Rate Limiting** | 12 | flask-wtf, fetch monkey-patch, flask-limiter |
+| **Auth + Multi-Tenancy** | 7 | Flask-Login, Company/User models, company_id isolation |
+| **Waitlist Flow + Micro-Survey** | 15–16 | WaitlistEntry + WaitlistSurvey models, n8n webhook integration |
+| **Marketing Site + Production Deploy** | 11c–13 | zenbid.io live, Gunicorn+Nginx+systemd, SendGrid, Concept C logo |
 
-### Session 10 (2026-03-12)
-- ✅ AgentX extracted to partial (agentx_panel.html)
-- ✅ Context-aware mode init (Estimate mode only on /project/<id>)
-- ✅ Fixed Jinja recursion bug
+---
 
-### Session 9 (2026-03-12)
-- ✅ AgentX AI panel (Claude API integration)
-- ✅ /ai/chat + /ai/apply routes
-- ✅ Voice input (Web Speech API)
-- ✅ Removed Ollama dependency
+## 📊 MEDIUM PRIORITY — Post-MVP
 
-### Session 8 (2026-03-11)
-- ✅ Bid Proposal template
-- ✅ Production Rate Standards CRUD + lookup modal
+| Feature | Effort | Notes |
+|---------|--------|-------|
+| **Subscription / Billing** | XL | Stripe Checkout + webhook |
+| **Free Trial Gate** | Medium | Limit projects/features for new signups |
+| **In-App Onboarding** | Large | Empty state CTAs, first-time user guide |
+| **Proposal PDF Export** | Large | Print-to-PDF works; server-side needs weasyprint or headless Chrome |
+| **Audit Logging** | Large | Enterprise compliance; `edit_delta` flywheel field already captured |
+| **Mobile-Responsive Estimate View** | Large | Currently desktop-only |
+| **About / Blog / Careers / Contact Pages** | Small | Footer links currently plain text |
+| **Delete Button in Estimate Grid** | Small | Soft-delete API built (Session 22); needs UI button |
 
-### Session 7 (2026-03-11)
-- ✅ Authentication + Multi-Tenancy (Flask-Login)
-- ✅ Company/User models
-- ✅ Full data isolation by company_id
+---
+
+## 🔮 LATER — Post-Launch / Innovation
+
+These items are real but do not fit in the four-pass sequence. Labeled honestly.
+
+| Feature | Notes |
+|---------|-------|
+| **Tally Reactive Mode** | On-demand Q&A and division summaries — intelligence wired in Pass 4 |
+| **Tally Generative Mode** | Natural-language line item creation — intelligence wired in Pass 4 |
+| **Regional Cost Intelligence** | Flywheel data → regional pricing benchmarks; requires sufficient data volume |
+| **AI Conversation Memory** | Multi-turn context across sessions (currently stateless per request) |
+| **Subcontractor Bid Requests** | Send line items to subs, receive quotes, compare in-app |
+| **Public API** | REST/webhook for firm integrations (Procore, Autodesk) |
+| **Streaming AI Responses** | Token-by-token output via SSE |
+| **Bulk Import for Production Rates** | CSV upload to populate `production_rate_standards` table |
+| **Multi-Page Scale Inheritance** | Copy scale from page 1 to all pages in a plan set |
+| **Snap-to-Vertex** | Functional vertex snapping (currently visual toggle only) |
+| **Undo/Redo for Drawing Steps** | Ctrl+Z / Ctrl+Y on the Takeoff canvas |
+| **Zoom-to-Measurement** | Click item in sidebar → canvas zooms to first measurement |
+| **Cost Intelligence Fine-Tuned Model** | LLM fine-tuned on proprietary flywheel dataset; premium tier |
+| **MFA for App Users** | TOTP for admin role; required for enterprise sales |
+| **Account Deletion Route** | `/account/delete` for GDPR compliance |
 
 ---
 
 ## 🗑️ NOT BUILDING
 
-### Real-Time Collaboration (Google Docs style)
-- **Why Rejected:** Too complex for MVP; most estimators work solo
-- **Revisit:** If users explicitly request it after launch
-
-### Mobile App First
-- **Why Rejected:** Web-first faster to ship; field estimating is niche use case
-- **Revisit:** After web traction proven (500+ active users)
-
-### Offline-First / Local Ollama
-- **Why Rejected:** Claude API vastly superior (speed + quality)
-- **Decision Date:** Session 9 (2026-03-12)
-- **Reference:** Agent_MD.md Session History, ADR in DECISIONS.md
+| Feature | Why Rejected |
+|---------|-------------|
+| **Real-Time Collaboration (Google Docs style)** | Too complex for MVP; most estimators work solo |
+| **Mobile App First** | Web-first faster to ship; field estimating is niche |
+| **Offline-First / Local Ollama** | Claude API superior (speed + quality); ADR-001 |
 
 ---
 
-## 📊 SUCCESS METRICS (Post-Launch)
+## 📊 SUCCESS METRICS
 
-**By End of Q2 2025:**
+**Pre-revenue (current focus):**
+- [ ] All CRITICAL security items resolved
+- [ ] First paying customer onboarded
+- [ ] Four-pass sequence complete
+
+**Post-launch:**
 - [ ] 50 active users
 - [ ] 500 estimates created
-- [ ] DigitalOcean deployment stable
-- [ ] All CRITICAL priority items resolved
-- [ ] All HIGH priority items shipped
-
-**By End of 2025:**
-- [ ] 500 active users
-- [ ] 5,000 estimates (training data for future ML features)
 - [ ] Regional pricing intelligence beta
-- [ ] Revenue: $5K MRR
-- [ ] Cost Intelligence Database concept validated
-
----
-
-## 🔄 WORKFLOW
-
-### Weekly Planning (Monday)
-1. Review this roadmap
-2. Create GitHub issues for sprint features
-3. Add labels: `enhancement` + priority label + feature area
-4. Assign to milestone if using milestones
-
-### Feature Kickoff
-1. Create GitHub issue (use Feature Request template)
-2. Reference issue in Claude Code prompt
-3. Build incrementally, test locally
-4. Deploy when ready
-
-### Feature Complete
-1. Test thoroughly (create QA issue if needed)
-2. Deploy to production
-3. Close GitHub issue
-4. Move to SHIPPED section in this file
-5. Update Agent_MD.md if architectural change
-
----
-
-## 💡 DECISION CRITERIA
-
-**CRITICAL Priority:**
-- Blocks beta launch
-- Security/legal requirement
-- Data integrity risk
-
-**HIGH Priority:**
-- Needed for first 50 paying customers
-- High ROI / low effort
-- Competitive parity feature
-
-**MEDIUM Priority:**
-- Nice to have for growth
-- Improves retention
-- Standard SaaS feature
-
-**FUTURE Priority:**
-- Innovation / differentiation
-- Needs validation first
-- Resource-intensive
-
----
-
-## 🎯 NORTH STAR GOALS
-
-From NORTHSTAR.md philosophy:
-
-1. **Flexibility Over Dogma** - Tool adapts to user's mental model
-2. **AI as Optional Augmentation** - Never mandatory, always available
-3. **Predictable Output, Unpredictable Process** - Professional reports regardless of workflow
-4. **Institutional Knowledge at Your Fingertips** - Level the playing field for junior estimators
-5. **Generational Inclusivity** - Works for 60yo Excel estimator AND 28yo AI-native
-
-**The Test:**
-> *Could a rigid (Excel-minded) estimator use this comfortably? Could a flexible (AI-native) estimator use this expressively?* If either answer is "no," reconsider the design.
+- [ ] $5K MRR
 
 ---
 
 ## 📖 REFERENCES
 
-- **Agent_MD.md** - Master reference document, current state, session history
-- **NORTHSTAR.md** - Product philosophy and architectural principles
-- **CLAUDE.md** - Claude Code project instructions
-- **GitHub Issues** - Individual features, bugs, and QA tasks
-- **DECISIONS.md** - Architecture Decision Record (ADR)
+- `Agent_MD.md` — Master reference, current state, session history
+- `NORTHSTAR.md` — Product philosophy and product principles
+- `DECISIONS.md` — Architecture Decision Records
+- `TALLY_VISION.md` — Tally AI layer specification
+- `SECURITY.md` — Security framework and gap backlog
+- `CLAUDE.md` — Claude Code project instructions
