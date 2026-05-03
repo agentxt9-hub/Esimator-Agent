@@ -40,16 +40,16 @@
 
 ## Track D — Data & AI (Data/AI Engineer)
 
-### D.3 — Prompt injection audit: P0 — GATE ON OUTREACH
-*CLAUDE.md hard constraint: AI prompts must wrap user input in delimiters. Bare interpolation = prompt injection risk. Must close before F.1 outreach begins.*
-- [ ] Audit `/ai/chat` — identify every user-supplied variable interpolated into the prompt; wrap in delimiters
-- [ ] Audit `/ai/build-assembly` — same
-- [ ] Audit `/ai/scope-gap` — same
-- [ ] Audit `/ai/production-rate` — same
-- [ ] Audit `/ai/validate-rate` — same
-- [ ] Fix all violations in place (no refactor; surgical delimiter wraps)
-- [ ] Document the pattern in `docs/AI_PROMPT_PATTERNS.md` (what delimiters, why, how to add a new AI route)
-- [ ] Commit + tests still green
+### D.3 — Prompt injection audit: COMPLETE ✓
+*Commit: `0302fbc`. 14 violations found and fixed across all 5 routes. Pattern in `docs/AI_PROMPT_PATTERNS.md`.*
+- [x] Audit `/ai/chat` — 5 violations fixed (`project_name`, `description`, `line_item` ×2, `assembly_name`)
+- [x] Audit `/ai/build-assembly` — 1 violation fixed (`project_name`)
+- [x] Audit `/ai/scope-gap` — 6 violations fixed (`project_name`, `description`, `line_item` ×2, `assembly_name`, `project_location`)
+- [x] Audit `/ai/production-rate` — 1 violation fixed (`query`)
+- [x] Audit `/ai/validate-rate` — 1 violation fixed (`line_item`)
+- [x] All violations fixed in place — surgical delimiter wraps only
+- [x] Pattern documented in `docs/AI_PROMPT_PATTERNS.md`
+- [x] Tests: 39/39 pytest + 99/99 takeoff green
 
 ### D.2 — Flywheel field writes tests: P2
 - [ ] Tests confirming `ai_generated=True` sets when AI creates data
