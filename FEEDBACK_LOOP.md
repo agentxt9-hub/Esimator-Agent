@@ -90,6 +90,12 @@ Entries are timestamped. Old entries are not deleted — they're a historical re
 
 - [2026-05-02] **Day summary:** 6 tracks shipped (A.1, A.2, A.4 partial, B.1, C.1 verified, D.1) + survived 3 prod/staging incidents + stood up staging from scratch. Closing verification gaps tonight.
 
+- [2026-05-02] **Funnel mechanics verified, zero organic signups.** Prod waitlist has 10 entries — all founder test data. Founder cleaning up tonight (`DELETE FROM waitlist_entries`). Form works, all columns capture. Real bottleneck: awareness, not conversion. Waitlist stays empty until outreach activates.
+
+- [2026-05-02] **DEC-002 Sprint One scope directive:** Outreach playbook v1 activation is a required Sprint One track. Tier 1: 20-30 hand-curated warm-network contacts (LinkedIn), personal DM with demo clip. Tier 2: targeted LinkedIn public posts, faceless brand, demo clips of working features. Tier 3: forum/subreddit/discord presence — NOT NOW, too unfocused. Gate: DO NOT touch tier 1 until A.4 alerts verified, B.3 welcome email, B.4 demo script, B.5 brand checklist are all locked. Welcome-mat must be coherent before strangers walk through it. Target: 5+ stage 1 active users by Sprint One close.
+
+- [2026-05-02] **Day 1 close.** Session handoff written for context continuity. Founder's planned tomorrow queue: A.4 alert wiring + SENTRY_DSN rotation + waitlist test data cleanup → B.3 welcome email refresh → B.4-B.5 brand polish → A.3 mono-repo → sprint close. Note: B.3, B.4, B.5 all shipped tonight in this session — tomorrow queue collapses to: A.4 alert wiring (founder action) + SENTRY_DSN rotation + waitlist cleanup → A.3 mono-repo → sprint close.
+
 ### Routing decisions made today
 - Sprint Zero items (all 11) routed to Foundation Engineer → shipped in single session
 - DEC-001 amended (2026-05-02): 2-stage beta model. Stage 1 free validation → stage 2 paid $29/mo
