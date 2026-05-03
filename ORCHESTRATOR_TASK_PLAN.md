@@ -69,10 +69,17 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 - [x] Footer tagline and page title updated
 - [ ] **Production promotion needed** — founder approved; run `bash /var/www/zenbid/deploy/update.sh` on production server
 
-### B.2 — In-app copy audit and alignment: pending
-### B.3 — Welcome email refresh: pending
-### B.4 — Demo script lock: pending
-### B.5 — Brand coherence checklist (`brand/COHERENCE_CHECKLIST.md`): pending
+### B.2 — In-app copy audit and alignment: COMPLETE ✓
+*Commit: in-session. AgentX → Tally across all user-facing strings. Banned phrases removed. `index.html` subtitle rewritten.*
+
+### B.3 — Welcome email refresh: COMPLETE ✓
+*Commit: `e60a5f4`. Plain-text welcome email fires on signup. Brand-aligned, Tally named, reply-to founder, mail failures silenced with warning log.*
+
+### B.4 — Demo script lock: COMPLETE ✓
+*Commit: `e8a0b96`. `brand/demo_script.md` — 90s demo, 3 beats, voice rules, clip variants.*
+
+### B.5 — Brand coherence checklist: COMPLETE ✓
+*Commit: `e8a0b96`. `brand/COHERENCE_CHECKLIST.md` — 7 sections: naming, banned phrases, claims/proof, beta/pricing, tone, surface-specific, outreach gate.*
 
 ---
 
@@ -121,6 +128,8 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 | `d85be43` | data: D.1 — ai_call_log + log_ai_call() wired into all 5 AI routes |
 | `6c060d9` | ops: A.4 — Sentry + structured logging + auth event logging + error handlers |
 | `784e6f1` | test: C.1 — Playwright E2E scaffolding — 25/25 passing |
+| `e60a5f4` | sprint(B.3): welcome email on signup |
+| `e8a0b96` | sprint(B.4+B.5): demo script lock + brand coherence checklist |
 
 ## Blocked
 
@@ -128,9 +137,10 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Next up
 
-1. **Track B.2** — In-app copy audit (brand coherence across authenticated surfaces)
-2. **Track C.2** — API test suite expansion (widen Playwright coverage to assembly builder, AI routes with mocked API key)
-3. **Track A.3** — Mono-repo restructure (unblocked)
+1. **Outreach gate check** — All 4 gate items in `brand/COHERENCE_CHECKLIST.md` Section 7 now met: A.4 code verified (notification gap is founder action), B.3 welcome email live, B.4 demo script locked, B.5 checklist committed. A.4 fully closes when founder wires Uptime Kuma webhook. Once that's done: tier 1 outreach can begin.
+2. **DEC-002 final confirm** — `/sprint-close` to lock Foundation Sprint and open Sprint One.
+3. **Track C.2** — Playwright coverage expansion (assembly builder, AI routes with mocked key)
+4. **Track A.3** — Mono-repo restructure (low urgency, last)
 
 ## Backlog
 
