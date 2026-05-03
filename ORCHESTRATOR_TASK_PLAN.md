@@ -77,7 +77,8 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Track C — Test Infrastructure (QA / Test Automation Engineer)
 
-### C.1 — Playwright E2E + API scaffolding: in progress
+### C.1 — Playwright E2E + API scaffolding: COMPLETE ✓
+*Commit: `784e6f1`. 25/25 E2E tests passing locally. 39/39 pytest + 99/99 takeoff still green.*
 ### C.2 — API test suite: pending
 ### C.3 — Monitoring infrastructure: pending
 ### C.4 — Test documentation: pending
@@ -118,6 +119,7 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 | `50cfde5` | ops: deploy script hardening — SECRET_KEY guard + systemd restart rate limits |
 | `d85be43` | data: D.1 — ai_call_log + log_ai_call() wired into all 5 AI routes |
 | `6c060d9` | ops: A.4 — Sentry + structured logging + auth event logging + error handlers |
+| `784e6f1` | test: C.1 — Playwright E2E scaffolding — 25/25 passing |
 
 ## Blocked
 
@@ -125,8 +127,9 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 
 ## Next up
 
-1. **Track C.1** — Playwright E2E + API scaffolding (in progress)
-2. **Track B.2** — In-app copy audit (can run in parallel with C.1)
+1. **Track B.2** — In-app copy audit (brand coherence across authenticated surfaces)
+2. **Track C.2** — API test suite expansion (widen Playwright coverage to assembly builder, AI routes with mocked API key)
+3. **Track A.3** — Mono-repo restructure (unblocked)
 
 ## Backlog
 
