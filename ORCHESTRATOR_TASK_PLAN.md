@@ -1,121 +1,84 @@
 # Orchestrator Task Plan
 
-*Last updated: 2026-05-02 — reconciled against git log*
+*Last updated: 2026-05-03 — Foundation Sprint closed, Sprint One open*
 
 ## Current sprint
 
-**Foundation Sprint**
-**Started:** 2026-05-02
-**Target close:** 2026-05-16
-**Scope summary:** Stand up staging environment, ship the eleven Sprint Zero items, restructure the repo to mono-repo v2 layout, establish Playwright + monitoring infrastructure, lock brand coherence across landing/in-app/email surfaces, prepare the founder for first-beta-user testing.
-
-Full scope detail lives in `FOUNDATION_SPRINT.md`.
+**Sprint One: Outreach Activation**
+**Started:** 2026-05-03
+**Target close:** 2026-05-17
+**Scope summary:** Activate Tier 1 warm-network outreach (Track F). Clear the four founder-action gates first. Carry over deferred Foundation Sprint technical items in parallel. Target: 5+ stage 1 active users by close.
 
 ---
 
-## Track A — Infrastructure (Foundation Engineer)
+## Pre-outreach gates (founder actions — must clear before F.1 begins)
 
-### A.1 — Staging environment: COMPLETE ✓
-*Commit: `abf105b`. Staging confirmed live by founder 2026-05-02.*
-- [x] DEC-003 resolved: same-droplet staging
-- [x] `deploy/staging-setup.sh` — one-time setup script
-- [x] `deploy/staging-update.sh` — code deploy script
-- [x] `docs/STAGING.md` — full ops documentation
-- [x] `.env.staging.example` — staging env template
-- [x] `.env.example` updated with new env vars
-- [x] Server provisioned: `staging.zenbid.io` live, SSL, separate DB, port 8001
-
-### A.2 — Sprint Zero (11 items): COMPLETE ✓
-*Commit: `5bbe8da`. Tests: 39/39, 99/99.*
-- [x] Admin panel multi-tenancy breach closed (`SUPERADMIN_EMAIL` gate)
-- [x] Self-service signup: `role='admin'` → `role='estimator'`
-- [x] `/ai/apply` flywheel writes: `ai_generated=True`, `estimator_action='accepted'`
-- [x] `save_assembly_builder()` flywheel write: `ai_generated=True`
-- [x] `deploy/update.sh`: `master` → `main` + dirty-tree guard
-- [x] `SECRET_KEY` startup gate
-- [x] `DATABASE_URL` startup gate
-- [x] Open redirect fix on `next_page`
-- [x] Session cookie flags: `HTTPONLY`, `SECURE` (production), `SAMESITE=Lax`
-- [x] Exception leakage: all `str(e)` replaced + `app.logger.exception()`
-- [x] `requests>=2.31,<3.0` added to `requirements.txt`
-- [x] `routes.py` deleted
-- [x] Migration failure logging
-
-### A.3 — Mono-repo restructure: pending
-*Depends on: A.1 complete (now unblocked).*
-
-### A.4 — Monitoring + structured logging: CODE VERIFIED — notification gap pending closure
-*Commit: `6c060d9`. Most of A.4 verified. One gap remaining.*
-- [x] Sentry SDK verified via log: "Sentry is attempting to send 2 pending events" + "Waiting up to 2 seconds". Founder to confirm issue appears in sentry.io dashboard.
-- [x] Uptime Kuma at status.zenbid.io — both monitors green, 60s checks
-- [x] Structured logging active — journalctl + /var/log/zenbid/app.log
-- [x] Auth events, admin access, 5xx handlers, `/_health` all wired
-- [ ] **GAP: Uptime Kuma notification channel not wired.** 30+ min staging outage went unnoticed. Founder to: wire Discord/email webhook in Uptime Kuma → stop staging → confirm alert fires end-to-end → mark A.4 COMPLETE.
-- [ ] **Founder action: rotate SENTRY_DSN** — exposed in session log. Update both server .env files, restart both services.
+- [ ] **Gate 1 — B.1 production promotion:** Run `bash /var/www/zenbid/deploy/update.sh` on production server. Landing page must be live at zenbid.io.
+- [ ] **Gate 2 — A.4 alert verification:** Wire Discord/email webhook in Uptime Kuma → stop staging → confirm alert fires → mark A.4 fully complete.
+- [ ] **Gate 3 — SENTRY_DSN rotation:** Rotate via Sentry dashboard. Update both server `.env` files. Restart both services.
+- [ ] **Gate 4 — systemd restart rate limits on production service:** SSH to production, edit `/etc/systemd/system/zenbid.service` to add `StartLimitBurst=3`, `StartLimitInterval=60s`, `Restart=on-failure`, `RestartSec=5`. Run `systemctl daemon-reload`.
 
 ---
 
-## Track B — Brand Coherence (Frontend/Design Engineer)
+## Track F — Outreach Playbook v1 (Outreach Operator)
 
-### B.1 — Landing page: APPROVED ON STAGING ✓ — pending production promotion
-*Commits: `e25db7b`, `ff373a6`. Founder verified in browser 2026-05-02.*
-- [x] H1 rewritten: estimator-native ("Measure. Price. Catch what you missed.")
-- [x] Subhead: "AI-powered" removed, estimator-native language
-- [x] Fake mock dashboard removed, replaced with honest feature checklist
-- [x] Unsubstantiated stats ("3x", "100%") removed
-- [x] All `$29/mo` references removed (2-stage beta, DEC-001 amended)
-- [x] CTA everywhere: "Reserve beta access"
-- [x] Banner: "Early access is open — first estimators test free."
-- [x] Footer tagline and page title updated
-- [ ] **Production promotion needed** — founder approved; run `bash /var/www/zenbid/deploy/update.sh` on production server
+*Activates after all 4 gates above are cleared.*
 
-### B.2 — In-app copy audit and alignment: COMPLETE ✓
-*Commit: in-session. AgentX → Tally across all user-facing strings. Banned phrases removed. `index.html` subtitle rewritten.*
+### F.1 — Tier 1 warm-network outreach: pending
+- [ ] Build contact list: 20–30 LinkedIn construction/estimating contacts
+- [ ] Personal DM template with demo clip
+- [ ] Track responses in FEEDBACK_LOOP.md
 
-### B.3 — Welcome email refresh: COMPLETE ✓
-*Commit: `e60a5f4`. Plain-text welcome email fires on signup. Brand-aligned, Tally named, reply-to founder, mail failures silenced with warning log.*
+### F.2 — Tier 2 LinkedIn content: pending
+- [ ] Targeted public posts, faceless brand voice
+- [ ] Demo clips of product features actually working
 
-### B.4 — Demo script lock: COMPLETE ✓
-*Commit: `e8a0b96`. `brand/demo_script.md` — 90s demo, 3 beats, voice rules, clip variants.*
-
-### B.5 — Brand coherence checklist: COMPLETE ✓
-*Commit: `e8a0b96`. `brand/COHERENCE_CHECKLIST.md` — 7 sections: naming, banned phrases, claims/proof, beta/pricing, tone, surface-specific, outreach gate.*
+### F.3 — Tier 3 (forum/subreddit/Discord): EXPLICITLY DEFERRED
+*Too unfocused for stage 1. Re-evaluate at Sprint Two.*
 
 ---
 
-## Track C — Test Infrastructure (QA / Test Automation Engineer)
+## Sprint One carry-over from Foundation Sprint
 
-### C.1 — Playwright E2E + API scaffolding: COMPLETE ✓
-*Commit: `784e6f1`. 25/25 E2E tests passing locally. 39/39 pytest + 99/99 takeoff still green.*
-### C.2 — API test suite: pending
-### C.3 — Monitoring infrastructure: pending
-### C.4 — Test documentation: pending
+### D.3 — Prompt construction discipline audit: P0
+*CLAUDE.md hard constraint violation — bare user-input interpolation may exist in production.*
+- [ ] Audit all AI routes for bare user input in prompts
+- [ ] Wrap inputs in delimiters (`<project_name>`, `<description>`, `<line_item>`)
+- [ ] Document pattern in `docs/AI_PROMPT_PATTERNS.md`
+
+### E.1/E.2 — Founder walkthrough + workflow validation: P1
+*Foundation Sprint exit criteria not met. Required before beta users arrive.*
+- [ ] Fresh-user signup on staging
+- [ ] Receive and review welcome email from clean state
+- [ ] Build a project, add line items, use Tally, use Assembly Builder
+- [ ] Log every friction point to FEEDBACK_LOOP.md
+- [ ] Validate workflow as 25-year estimator
+
+### C.2 — API security tests: P1
+- [ ] Auth/cross-tenant tests at the API layer (401/403 on unauth, 403 on cross-company)
+- [ ] Regression coverage for A.2 multi-tenancy fix
+
+### D.2 — Flywheel field writes tests: P2
+- [ ] Tests confirming `ai_generated=True` sets when AI creates data
+- [ ] Tests confirming `estimator_action` captures correctly
+
+### C.3 — CI/CD GitHub Actions pipeline: P2
+- [ ] Workflow on push-to-main: run pytest + test_takeoff.py + Playwright
+- [ ] Auto-deploy to staging on merge to main
+
+### C.4 — Test documentation: P3
+- [ ] `tests/README.md` updated with structure, run instructions, how to add a test
+
+### A.3 — Mono-repo restructure: P4 (last)
+*Low urgency. No user-visible impact.*
 
 ---
 
-## Track D — Data & AI Foundation (Data/AI Engineer)
+## Foundation Sprint — CLOSED 2026-05-03
 
-### D.1 — `ai_call_log` table + `log_ai_call()`: COMPLETE ✓
-*Commit: `d85be43`. AICallLog model, migration, helper wired into all 5 AI routes.*
-### D.2 — Flywheel field writes review: unblocked (A.2 shipped)
-### D.3 — Prompt construction discipline audit: pending
+*See SPRINT_LOG.md for full closure entry and CHALLENGE_REPORT_SPRINT_01.md for findings.*
 
----
-
-## Outreach Operator
-*Not active in Foundation Sprint. Activates at Sprint One open. DEC-001 amended: 2-stage beta — stage 1 free reserved access now; stage 2 $29/mo when 3+ stage 1 users say they'd pay (DEC-005). No $29/mo in outreach until stage 2.*
-
-## Founder
-- [x] DEC-001 resolved and amended (2-stage beta model)
-- [x] DEC-003 resolved (same-droplet staging)
-- [x] DEC-005 resolved (feedback trigger for stage 1→2)
-- [ ] Walk through user journey on staging as a real estimator (Track E.1)
-- [ ] Validate workflow correctness as 25-year estimator (Track E.2)
-- [ ] Run `bash /var/www/zenbid/deploy/update.sh` on production server to promote landing page changes
-
----
-
-## Shipped (2026-05-02)
+### Shipped (Foundation Sprint)
 
 | Commit | What |
 |---|---|
@@ -129,37 +92,16 @@ Full scope detail lives in `FOUNDATION_SPRINT.md`.
 | `6c060d9` | ops: A.4 — Sentry + structured logging + auth event logging + error handlers |
 | `784e6f1` | test: C.1 — Playwright E2E scaffolding — 25/25 passing |
 | `e60a5f4` | sprint(B.3): welcome email on signup |
+| `59b29f7` | brand: B.2 — rename AgentX → Tally + banned phrases removed |
 | `e8a0b96` | sprint(B.4+B.5): demo script lock + brand coherence checklist |
 
-## Blocked
+---
 
-*Nothing blocked.*
-
-## Next up
-
-1. **Outreach gate check** — All 4 gate items in `brand/COHERENCE_CHECKLIST.md` Section 7 now met: A.4 code verified (notification gap is founder action), B.3 welcome email live, B.4 demo script locked, B.5 checklist committed. A.4 fully closes when founder wires Uptime Kuma webhook. Once that's done: tier 1 outreach can begin.
-2. **DEC-002 final confirm** — `/sprint-close` to lock Foundation Sprint and open Sprint One.
-3. **Track C.2** — Playwright coverage expansion (assembly builder, AI routes with mocked key)
-4. **Track A.3** — Mono-repo restructure (low urgency, last)
-
-## Backlog
+## Backlog / Persistent
 
 - `deploy/staging-setup.sh` bugs: no postgres detection before createdb; nginx server block issues. Fix before next staging rebuild.
 - Growth-hub admin recovery runbook: NPM password recovery wasted 30+ min. Document container names, DB locations, bcrypt reset SQL in `docs/GROWTH_HUB_RECOVERY.md`.
-- Notification channels: Uptime Kuma + Sentry email sufficient now. Discord/Slack/SMS deferred to Sprint One+.
-- SENTRY_DSN: DSN was exposed in session log. Founder to rotate via Sentry dashboard, update both server .env files, restart both services.
-
-### P1 — Sprint One (from 2026-05-02 production 502 post-incident)
-
-1. **Startup gate + key rotation atomicity** — Document the required ops sequence: rotate `SECRET_KEY` first, verify strong key in `.env`, THEN enable the startup gate and restart. Never ship the gate without rotating. Add to `docs/OPERATIONS.md` runbook before Sprint One opens.
-
-2. **systemd restart rate limit on live production service** — `deploy/setup.sh` and `deploy/staging-setup.sh` now have `StartLimitBurst=3 / StartLimitInterval=60s / Restart=on-failure / RestartSec=5` in the service template, but the **live production `/etc/systemd/system/zenbid.service`** needs these values applied manually. Founder action: SSH to production, edit the service file, run `systemctl daemon-reload`.
-
-3. ~~**Sentry + Uptime Kuma before any beta users**~~ — DONE: A.4 verified 2026-05-02.
-
-4. **CI/CD pipeline** — Code merged to main but neither prod nor staging auto-deployed; had to manually run update.sh. GitHub Actions workflow on push-to-main needed for Sprint One.
-
-## Coverage gaps
-
-- `docs/00_FOUNDER_CONTEXT.md` missing from repo. Brand voice guidance covered by `06_ENGAGEMENT_PLAN.md` Section 7 for now.
+- Startup gate + key rotation atomicity: document required ops sequence in `docs/OPERATIONS.md`.
+- `docs/00_FOUNDER_CONTEXT.md` missing from repo. Brand voice covered by `06_ENGAGEMENT_PLAN.md` Section 7 for now.
 - `test_login_only.py` requires live server — excluded from standard `pytest tests/` run.
+- SQLAlchemy LegacyAPIWarning (Query.get() deprecated) — 72 warnings in test suite; low-priority cleanup.

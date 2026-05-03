@@ -59,16 +59,33 @@ Decisions awaiting founder input. The Orchestrator surfaces decisions here. The 
 
 ---
 
-### DEC-002: Sprint One scope (drafted at Foundation closure)
+### DEC-002: Sprint One scope
 
-**Surfaced:** *[Will be surfaced when Foundation Sprint closes]*
-**Surfaced by:** Orchestrator (sprint closure)
+**Surfaced:** 2026-05-02
+**Surfaced by:** Founder (pre-close direction)
 
-**Context:** Foundation Sprint closes with `FEEDBACK_LOOP.md` populated by founder walkthrough. Sprint One scope draws from: (a) most-pressing items from founder feedback, (b) Sprint Two items from `docs/06_ENGAGEMENT_PLAN.md` (design system close, AI identity unification), (c) Content Machine + Outreach Operator activation if not blocked.
+**Context:** Foundation Sprint is closing. Real bottleneck is awareness, not conversion — waitlist funnel mechanics are healthy but zero organic signups. Sprint One must activate outreach. All welcome-mat work (B.3–B.5, A.4 alerts) must land first so strangers have something coherent to land on.
 
-**Options:** *[to be drafted by Orchestrator at closure]*
-**Founder decision:** *[to be filled]*
-**Decided on:** *[to be filled]*
+**Proposed Sprint One scope (founder-directed):**
+
+**Track F — Outreach Playbook v1 (Outreach Operator)**
+- F.1: Tier 1 playbook — 20–30 warm-network contacts (LinkedIn construction/estimating), personal DM template with demo clip. Gate: B.3 + B.4 + B.5 + A.4 alerts all locked first.
+- F.2: Tier 2 content — targeted LinkedIn public posts, faceless brand voice, demo clips of product features actually working. Content Machine Operator.
+- F.3: Tier 3 (forum/subreddit/Discord) — explicitly deferred. Too unfocused for stage 1.
+- Target: 5+ stage 1 active users by Sprint One close. Transition criteria (DEC-005): 3+ say "I would pay for this."
+
+**Remaining Foundation Sprint carry-over into Sprint One:**
+- A.4 notification gap (Uptime Kuma alert end-to-end) — founder action, close first
+- B.3 welcome email refresh — in progress
+- B.4 demo script lock — pending
+- B.5 brand coherence checklist — pending
+- A.3 mono-repo restructure — last (low urgency, no user-visible impact)
+- C.2 Playwright coverage expansion — parallel
+- CI/CD GitHub Actions pipeline — P1 backlog item
+
+**Founder decision:** Confirmed at Foundation Sprint closure (2026-05-03). Sprint One opens with Track F (Outreach Playbook v1) as the primary track. Carry-over items from Foundation Sprint added to Sprint One scope per Challenge Report findings: D.3 (prompt discipline audit, P0), A.4 alert verification (founder action gate), B.1 production promotion (founder action gate), C.2 API security tests (P1), E.1/E.2 founder walkthrough (P1). B.3, B.4, B.5 are shipped; they drop from carry-over. Outreach gate: A.4 alerts verified + B.1 in production + D.3 audited + E.1 walkthrough complete.
+
+**Decided on:** 2026-05-03
 
 ---
 
