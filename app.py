@@ -568,6 +568,29 @@ def signup():
         login_user(user, remember=True)
         app.logger.info('auth.signup user_id=%s email=%s company=%s ip=%s',
                         user.id, email, company_name, request.remote_addr)
+        dashboard_url = url_for('index', _external=True)
+        try:
+            msg = Message(
+                subject='You\'re in — welcome to Zenbid beta',
+                recipients=[user.email],
+                body=(
+                    f'Hi {user.username},\n\n'
+                    f'Your Zenbid account is live. You\'re one of the first estimators '
+                    f'testing the platform — that means your feedback shapes what gets built next.\n\n'
+                    f'Start here: {dashboard_url}\n\n'
+                    f'A few things worth knowing:\n\n'
+                    f'  • Upload a plan PDF and let Tally pull a takeoff draft — '
+                    f'then edit it line by line until it\'s yours.\n'
+                    f'  • Every number you correct teaches the system what your work actually costs.\n'
+                    f'  • Hit reply on this email any time. I read every one.\n\n'
+                    f'Welcome aboard.\n\n'
+                    f'Thomas\n'
+                    f'Zenbid'
+                )
+            )
+            mail.send(msg)
+        except Exception:
+            app.logger.warning('welcome email failed user_id=%s', user.id)
         flash('Account created! Welcome to Zenbid.', 'success')
         return redirect(url_for('index'))
     return render_template('signup.html')
